@@ -1,2 +1,2 @@
 # chpeg
-PEG byte code based parser/compiler library
+PEG bytecode based parser/compiler library
