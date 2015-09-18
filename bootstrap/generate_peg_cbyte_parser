@@ -1,0 +1,109 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'pp'
+
+require File.join(File.dirname(__FILE__), 'peg_cbyte')
+
+module CH::TopDown
+
+class PegCByteParserGenerator
+    def self.parse_args(args)
+        options = {}
+        [:grammar, :name, :prefix, :base, :dir, :verbose].each do |k|
+            options[k] = nil 
+        end
+
+        opt_parser = OptionParser.new do |opts|
+            opts.banner = "Usage: #{$0} [OPTIONS] PEG_GRAMMAR_FILE"
+
+            opts.separator ""
+            opts.separator "Options:"
+
+            opts.on("-n", "--name NAME", "Use NAME for all default names and prefixes") do |name|
+                options[:name] = name
+            end
+            opts.on("-p", "--prefix PREFIX", "Use PREFIX for generated prefixes in code") do |prefix|
+                options[:prefix] = prefix
+            end
+            opts.on("-b", "--base NAME", "Use NAME for base name of output filenames (.c, .h)") do |base|
+                options[:base] = base
+            end
+            opts.on("-d", "--dir DIR", "Use DIR for output directory") do |dir|
+                options[:dir] = dir
+            end
+            opts.on("-v", "--verbose", "Enable verbose information") do |verbose|
+                options[:verbose] = verbose
+            end
+        end
+        opt_parser.parse!(args)
+
+        # make sure we have grammar file
+        if args.length != 1
+            STDERR.puts opt_parser.banner
+            exit
+        end
+        options[:grammar] = args[0]
+
+        # name defaults to grammar basename without extension
+        unless options[:name]
+            file = options[:grammar]
+            options[:name] = File.basename(file, File.extname(file))
+        end
+
+        # outdir dir defaults to dirname of grammar file
+        unless options[:dir]
+            options[:dir] = File.dirname(options[:grammar])
+        end
+
+        # prefix defaults to name
+        unless options[:prefix]
+            options[:prefix] = options[:name] 
+        end
+
+        # base defaults to name
+        unless options[:base]
+            options[:base] = options[:name] 
+        end
+
+        options
+    end
+    def initialize(options)
+        @options = options
+        if @options[:verbose]
+            pp @options
+        end
+    end
+    def run()
+        parser = Parser.new(
+            Peg::PegGrammar,
+            Peg::NodeAllocator.new(
+                Peg::CByte::Nodes,
+                Peg::CByte::Nodes::Node))
+        File.open(@options[:grammar], "r") do |file|
+            input = file.read()
+            node = parser.parse(input, :Grammar, 5);
+            if node
+                node.setup
+                node.post_setup
+                node.reduce
+                node.post_reduce
+                node.rule_setup
+                if @options[:verbose]
+                    node.print
+                end
+                node.check_data(input)
+                gen = Peg::CByte::ParserGenerator.new(@options[:dir], @options[:base], @options[:prefix], node)
+                gen.output_parser()
+            else
+                parser.print_error
+            end
+        end
+    end
+end
+
+options = PegCByteParserGenerator.parse_args(ARGV)
+parser_gen = PegCByteParserGenerator.new(options)
+parser_gen.run()
+
+end

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+export MALLOC_TRACE=tmp/peg_compiler_malloc.trace
+
+gcc -o tmp/peg_compiler -std=c99 -g -Wall -I./tmp -I../src ../src/peg_cbyte_parser.c ../src/peg_cbyte_compiler.c peg_compiler_main.c && tmp/peg_compiler "$1"
+
+mtrace tmp/peg_compiler "$MALLOC_TRACE"
+

@@ -1,0 +1,4 @@
+#!/bin/sh
+
+./generate_peg_cbyte_parser -b peg_cbyte_parser -p peg -d ../src ../grammars/cbyte.peg
+
