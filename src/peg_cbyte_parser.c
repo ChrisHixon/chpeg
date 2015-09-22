@@ -446,28 +446,24 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
     int flags = self->flags;
     unsigned char *data = esc_string(&input[self->offset], self->length, 40);
     const char *def_name = Parser_def_name(parser, self->def); 
-    char *indent = malloc(depth*2+1); 
-    memset(indent, ' ', depth*2);
-    indent[depth*2] = '\0';
 
     if (depth == 0) {
         printf("---------------------------------------------------------------------------------\n"); 
         printf(" Begin    Len  DefID  Flags  Def. Name / Data\n");
         printf("---------------------------------------------------------------------------------\n"); 
     }
-    printf("%6d %6d %6d | %s%s%s | %s%s \"%s\"\n",
+    printf("%6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
         self->offset,
         self->length,
         self->def,
         flags & STOP ? "S" : " ",
         flags & IGNORE ? "I" : " ",
         flags & LEAF ? "L" : " ",
-        indent,
+        depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : (unsigned char *)""
         );
     if (data) { free(data); data = NULL; }
-    if (indent) { free(indent); indent = NULL; }
     for (Node *p = self->head; p; p = p->next) {
         Node_print(p, parser, input, depth + 1);
     }

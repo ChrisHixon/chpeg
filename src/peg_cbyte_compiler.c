@@ -77,9 +77,7 @@ void GNode_print(GNode *self, CompilationUnit *cu, const unsigned char *input, i
     int flags = 0;
     unsigned char *data = NULL;
     const char *def_name = Parser_def_name(cu->parser, self->type); 
-    char *indent = malloc(depth*2+1); 
-    memset(indent, ' ', depth*2);
-    indent[depth*2] = '\0';
+
     Node *node = self->node;
     if (node) {
         data = esc_string(&input[node->offset], node->length, 40);
@@ -91,7 +89,7 @@ void GNode_print(GNode *self, CompilationUnit *cu, const unsigned char *input, i
         printf(" Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
         printf("---------------------------------------------------------------------------------\n"); 
     }
-    printf("%6d %6d %6d | %6d %6d %6d | %s%s%s | %s%s \"%s\"\n",
+    printf("%6d %6d %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
         self->type,
@@ -101,12 +99,11 @@ void GNode_print(GNode *self, CompilationUnit *cu, const unsigned char *input, i
         flags & STOP ? "S" : " ",
         flags & IGNORE ? "I" : " ",
         flags & LEAF ? "L" : " ",
-        indent,
+        depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : (unsigned char *)""
         );
     if (data) { free(data); data = NULL; }
-    if (indent) { free(indent); indent = 0; }
 
     for (GNode *p = self->head; p; p = p->next) {
         GNode_print(p, cu, input, depth + 1);
