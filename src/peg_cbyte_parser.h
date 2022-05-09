@@ -162,4 +162,4 @@ void Parser_print_error(Parser *self, const unsigned char *input);
 #define PEG_REPOP 17
 #define PEG_DOT 18
 #define PEG_S 19
-ByteCode peg_byte_code;
+extern ByteCode peg_byte_code;
