@@ -1,4 +1,4 @@
-require 'ch/top_down/peg'
+require_relative 'peg'
 
 
 module CH::TopDown::Peg
@@ -26,7 +26,7 @@ module CH::TopDown::Peg
             attr_reader :c, :h, :basename
             def initialize(basename)
                 @basename = basename
-                @c = OutStream.new("#{basename}.c") 
+                @c = OutStream.new("#{basename}.c")
                 @h = OutStream.new("#{basename}.h")
             end
             def close

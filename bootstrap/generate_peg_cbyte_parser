@@ -3,7 +3,7 @@
 require 'optparse'
 require 'pp'
 
-require File.join(File.dirname(__FILE__), 'peg_cbyte')
+require_relative 'peg_cbyte'
 
 module CH::TopDown
 
@@ -11,7 +11,7 @@ class PegCByteParserGenerator
     def self.parse_args(args)
         options = {}
         [:grammar, :name, :prefix, :base, :dir, :verbose].each do |k|
-            options[k] = nil 
+            options[k] = nil
         end
 
         opt_parser = OptionParser.new do |opts|
@@ -58,12 +58,12 @@ class PegCByteParserGenerator
 
         # prefix defaults to name
         unless options[:prefix]
-            options[:prefix] = options[:name] 
+            options[:prefix] = options[:name]
         end
 
         # base defaults to name
         unless options[:base]
-            options[:base] = options[:name] 
+            options[:base] = options[:name]
         end
 
         options

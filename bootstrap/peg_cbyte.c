@@ -101,12 +101,12 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
 {
     int flags = self->flags;
     unsigned char *data = esc_string(&input[self->offset], self->length, 40);
-    const char *def_name = Parser_def_name(parser, self->def); 
+    const char *def_name = Parser_def_name(parser, self->def);
 
     if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n"); 
+        printf("---------------------------------------------------------------------------------\n");
         printf(" Begin    Len  DefID  Flags  Def. Name / Data\n");
-        printf("---------------------------------------------------------------------------------\n"); 
+        printf("---------------------------------------------------------------------------------\n");
     }
     printf("%6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
         self->offset,
@@ -123,7 +123,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
     for (Node *p = self->head; p; p = p->next) {
         Node_print(p, parser, input, depth + 1);
     }
-} 
+}
 
 Node *Node_new(int def, int offset, int length, int flags)
 {
@@ -173,7 +173,7 @@ Node *Node_unwrap(Node *self)
     if (!(self->flags & (STOP|LEAF)) && self->num_children == 1) {
         Node *tmp = Node_unwrap(self->head);
         self->head = NULL;
-        Node_free(self); 
+        Node_free(self);
         return tmp;
     }
     Node *p = self->head; self->head = NULL;
@@ -245,8 +245,8 @@ void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset
 void Parser_print_error(Parser *self, const unsigned char *input)
 {
 #if ERRORS
-    const char *parent_def_name = Parser_def_name(self, self->error_parent_def); 
-    const char *def_name = Parser_def_name(self, self->error_def); 
+    const char *parent_def_name = Parser_def_name(self, self->error_parent_def);
+    const char *def_name = Parser_def_name(self, self->error_def);
 
     if (self->error_offset >= 0) {
         if (self->error_inst >= 0) {
@@ -322,7 +322,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 
     const int *instructions = self->instructions;
 
-    int op = 0, arg = 0, pc = 0; 
+    int op = 0, arg = 0, pc = 0;
 
     if (size < 0) { return INVALID_SIZE; }
 
@@ -340,7 +340,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 #endif
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
-        
+
         /*
         printf("pc=%d op=%d arg=%d top=%d tt=%d stack: ", pc, op, arg, top, tree_top);
         for (int i = 0; i <= top; i++) {
@@ -355,7 +355,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 
 // Identifier
             case IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
-                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW; 
+                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
                 if (!locked) {
                     if (tree_top >= self->max_tree_depth - 2) return TREE_STACK_OVERFLOW;
                     if (self->def_flags[arg] & (LEAF | IGNORE)) {
@@ -385,7 +385,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (self->def_flags[arg] & IGNORE) { 
+                    if (self->def_flags[arg] & IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) return TREE_STACK_UNDERFLOW;
 #endif
@@ -447,9 +447,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 
 // Repeat +
             case RPBEG:
-                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW; 
+                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
 #if ERRORS && ERROR_REPEAT_INHIBIT
-                stack[++top] = 0; // used to inhibit error tracking after 1st rep 
+                stack[++top] = 0; // used to inhibit error tracking after 1st rep
 #endif
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // offset - backtrack point
@@ -464,7 +464,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                     pc = arg; // continue looping
 #if ERRORS && ERROR_REPEAT_INHIBIT
                     if (!err_locked) { // inhibit error tracking after 1st rep
-                        stack[top-3] = 1; err_locked = 1; 
+                        stack[top-3] = 1; err_locked = 1;
                     }
 #endif
                 }
@@ -495,10 +495,10 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (!err_locked) { // inhibit error tracking
-                    stack[++top] = 1; err_locked = 1; 
+                    stack[++top] = 1; err_locked = 1;
                 }
                 else {
-                    stack[++top] = 0; 
+                    stack[++top] = 0;
                 }
 #endif
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -528,7 +528,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 break;
 
 // Repeat ?
-            case RQMAT: // no looping for ? 
+            case RQMAT: // no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
                 break;
@@ -542,17 +542,17 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 stack[++top] = offset; // save offset for backtrack
 #if ERRORS
 #if ERRORS_PRED
-                stack[++top] = pc + 1; // 1st child inst address for error 
+                stack[++top] = pc + 1; // 1st child inst address for error
 #endif
                 if (!err_locked) {
-                    stack[++top] = 1; err_locked = 1; 
+                    stack[++top] = 1; err_locked = 1;
                 }
                 else {
-                    stack[++top] = 0; 
+                    stack[++top] = 0;
                 }
 #endif
                 break;
-            
+
             case PMATCHF: // Predicate matched, match is considered failure, arg = failure address
             case PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
 #if ERRORS && ERRORS_PRED
