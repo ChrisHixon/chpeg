@@ -552,6 +552,8 @@ Parser *Parser_new(const ByteCode *byte_code)
     self->tree_root = NULL;
     self->max_tree_depth = 256;
     self->max_stack_size = 256 * 8;
+    self->lineno = 1;
+    self->lineno_offset = 0;
     self->error_offset = -1;
     self->error_parent_def = -1;
     self->error_def = -1;
@@ -610,11 +612,11 @@ void Parser_print_error(Parser *self, const unsigned char *input)
                     esc = esc_string((unsigned char *)&self->error_inst, sizeof(int), 20);
                     break;
             }
-            printf("%s \"%s\" in %s at offset %d\n",
+            printf("%s \"%s\" in %s at offset %d in line %d:%d\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? (unsigned char *)str : esc,
                     def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    self->error_offset, self->lineno, self->error_offset-self->lineno_offset);
             if (esc) {
                 free(esc);
                 esc = NULL;
@@ -622,17 +624,17 @@ void Parser_print_error(Parser *self, const unsigned char *input)
         }
         else {
             if (parent_def_name) {
-                printf("%s %s in %s at offset %d\n",
+                printf("%s %s in %s at offset %d in line %d:%d\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
-                        self->error_offset);
+                        self->error_offset, self->lineno, self->error_offset-self->lineno_offset);
             }
             else {
-                printf("%s %s at offset %d\n",
+                printf("%s %s at offset %d in line %d:%d\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
-                        self->error_offset);
+                        self->error_offset, self->lineno, self->error_offset-self->lineno_offset);
             }
         }
     }
@@ -941,13 +943,13 @@ pred_cleanup:
                         const unsigned char *mstr = self->strings[arg];
                         for (i = 0; i < mlen; ++i) {
                             if (mstr[i] == input[offset]) {
-                                ++offset;
+                                if(input[offset++] == '\n') {++self->lineno; self->lineno_offset=offset;}
                                 ++pc;
                                 break;
                             }
                             if ((i < mlen - 2) && (mstr[i+1] == '-')) {
                                 if ((input[offset] >= mstr[i]) && (input[offset] <= mstr[i+2])) {
-                                    ++offset;
+                                    if(input[offset++] == '\n') {++self->lineno; self->lineno_offset=offset;}
                                     ++pc;
                                     break;
                                 }
@@ -993,7 +995,7 @@ pred_cleanup:
 
 // Dot
             case DOT: // arg = fail addr; match any char; goto addr on failure
-                if (offset < size) { offset++; break; }
+                if (offset < size) { if(input[offset++] == '\n') {++self->lineno; self->lineno_offset=offset;} break; }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
                     Parser_expected(self,
