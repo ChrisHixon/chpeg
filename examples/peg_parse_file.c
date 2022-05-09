@@ -82,7 +82,7 @@ done:
         input = NULL;
     }
 
-    if (fd >= 0) { 
+    if (fd >= 0) {
         close(fd);
         fd = -1;
     }
@@ -93,51 +93,59 @@ done:
 
 int main(int argc, char *argv[])
 {
-    unsigned char *input = NULL; 
+    unsigned char *input = NULL;
     int length = -1;
-    ByteCode *byte_code = NULL; 
+    ByteCode *byte_code = NULL;
     Parser *parser = NULL;
     int parse_result = 0;
     int ret = 0;
+    int arg_idx_input = 2;
 
 #ifdef DEBUG_MEM
     mtrace();
 #endif
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s <grammar> <file>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s <grammar> [<file>]\n", argv[0]);
         ret = 1;
         goto done;
     }
 
-    // Read the grammar file into input
-    input = (unsigned char *)read_file(argv[1], &length);
-    if (!input) {
-        fprintf(stderr, "Could not read grammar file: %s\n", argv[1]);
-        ret = 2;
-        goto done;
-    }
+    if(argc == 3) { // Grammar and input file
+        // Read the grammar file into input
+        input = (unsigned char *)read_file(argv[1], &length);
+        if (!input) {
+            fprintf(stderr, "Could not read grammar file: %s\n", argv[1]);
+            ret = 2;
+            goto done;
+        }
 
-    // Compile the grammar file into byte_code
+        // Compile the grammar file into byte_code
 
-    byte_code = Compiler_compile(input, length, &parse_result, 1);
-    if (!byte_code) {
-        fprintf(stderr, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
-        ret = 3;
-        goto done;
+        byte_code = Compiler_compile(input, length, &parse_result, 1);
+        if (!byte_code) {
+            fprintf(stderr, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
+            ret = 3;
+            goto done;
+        }
+        else {
+            fprintf(stderr, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
+        }
+
+        free(input);
     }
     else {
-        fprintf(stderr, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
+        arg_idx_input = 1;
+        byte_code = &peg_byte_code;
     }
 
-    free(input);
     input = NULL;
     length = -1;
 
     // Read the file to parse into input
-    input = (unsigned char *)read_file(argv[2], &length);
+    input = (unsigned char *)read_file(argv[arg_idx_input], &length);
     if (!input) {
-        fprintf(stderr, "Could not read file: %s\n", argv[2]);
+        fprintf(stderr, "Could not read file: %s\n", argv[arg_idx_input]);
         ret = 4;
         goto done;
     }
@@ -158,13 +166,13 @@ int main(int argc, char *argv[])
         printf("parse failed with result: %d\n", parse_result);
         Parser_print_error(parser, input);
         ret = 5;
-        goto done; 
+        goto done;
     }
 
     ret = 0;
 done:
 
-    if (byte_code) {
+    if (byte_code && (argc == 3)) {
         ByteCode_free(byte_code);
         byte_code = NULL;
     }
