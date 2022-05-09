@@ -127,6 +127,8 @@ typedef struct _Parser
     Node *tree_root;
     int max_tree_depth;
     int max_stack_size;
+    int lineno;
+    int lineno_offset;
     int error_offset;
     int error_def;
     int error_parent_def;
