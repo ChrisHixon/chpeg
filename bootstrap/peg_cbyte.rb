@@ -26,7 +26,7 @@ module CH::TopDown::Peg
             attr_reader :c, :h, :basename
             def initialize(basename)
                 @basename = basename
-                @c = OutStream.new("#{basename}.c") 
+                @c = OutStream.new("#{basename}.c")
                 @h = OutStream.new("#{basename}.h")
             end
             def close
@@ -232,7 +232,7 @@ module CH::TopDown::Peg
                     out.c.puts "#{pre}_str_len,"
                     out.c.indent -= 1
                     out.c.puts "};"
-                    out.h.puts "ByteCode #{pre}_byte_code;"
+                    out.h.puts "extern ByteCode #{pre}_byte_code;"
                 end
             end
 
