@@ -1,3 +1,43 @@
+#ifndef SANITY_CHECKS
+#define SANITY_CHECKS 1
+#endif
+
+#ifndef DEBUG_ERRORS
+#define DEBUG_ERRORS 0
+#endif
+
+// Set ERRORS to non-zero to enable error tracking. Without error tracking, errors are still detected, but it can't tell you where an error occurred.
+#ifndef ERRORS
+#define ERRORS 1
+#endif
+
+#ifndef ERRORS_PRED
+#define ERRORS_PRED 1
+#endif
+
+#ifndef ERRORS_IDENT
+#define ERRORS_IDENT 1
+#endif
+
+#ifndef ERRORS_TERMINALS
+#define ERRORS_TERMINALS 1
+#endif
+
+#define ERROR_REPEAT_INHIBIT 0 // probably flawed idea or implementation, don't enable
+
+// VM_TRACE:
+// Set to non-zero to compile in support for tracing parser VM instruction execution.
+// To use, set parser->vm_trace to non-zero before calling Parser_parse()
+#ifndef VM_TRACE
+#define VM_TRACE 0
+#endif
+
+// VM_PRINT_TREE:
+// Set to non-zero to compile in support for printing the parse tree as it is being built.
+// To use, set parser->vm_print_tree to non-zero before calling Parser_parse()
+#ifndef VM_PRINT_TREE
+#define VM_PRINT_TREE 0
+#endif
 
 // rule/node flags AKA options
 enum Flags {
@@ -50,6 +90,7 @@ enum ErrorCodes
     TREE_STACK_UNDERFLOW = -8,
     UNEXPECTED_STACK_DATA = -9,
     UNEXPECTED_TREE_STACK_DATA = -10,
+    INVALID_IDENTIFIER = -11,
 };
 
 #define INST(op, arg) (((arg) << 8) | (op))
@@ -132,6 +173,14 @@ typedef struct _Parser
     int error_parent_def;
     int error_inst;
     int error_expected;
+
+#if VM_TRACE
+    int vm_trace;
+#endif
+#if VM_PRINT_TREE
+    int vm_print_tree;
+#endif
+
 } Parser;
 
 Parser *Parser_new(const ByteCode *byte);
