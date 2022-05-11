@@ -191,3 +191,9 @@ const char *Parser_def_name(Parser *self, int index);
 void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected);
 void Parser_print_error(Parser *self, const unsigned char *input);
 
+#ifndef CHPEG_MALLOC
+#define CHPEG_MALLOC(sz) malloc(sz)
+#define CHPEG_REALLOC(ptr, sz) realloc(ptr, sz)
+#define CHPEG_CALLOC(count, sz) calloc(count, sz)
+#define CHPEG_FREE(ptr) free(ptr)
+#endif

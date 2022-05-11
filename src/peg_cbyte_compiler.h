@@ -1,4 +1,5 @@
-
+#ifndef PEG_CBYTE_COMPILER_H
+#define PEG_CBYTE_COMPILER_H
 //
 // Grammar tree Node (temporary use during compilation)
 //
@@ -45,5 +46,6 @@ typedef struct _CompilationUnit
     int strings_allocated;
 } CompilationUnit;
 
-ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose);
+extern ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose);
 
+#endif //PEG_CBYTE_COMPILER_H

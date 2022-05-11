@@ -12,7 +12,7 @@
 
 GNode *GNode_new()
 {
-    GNode *self = (GNode *)malloc(sizeof(GNode));
+    GNode *self = (GNode *)CHPEG_MALLOC(sizeof(GNode));
 
     self->node = NULL;
     self->type = -1;
@@ -38,7 +38,7 @@ void GNode_free(GNode *self)
         GNode_free(p);
     }
     self->head = NULL;
-    free(self);
+    CHPEG_FREE(self);
 }
 
 GNode *GNode_push_child(GNode *self, GNode *child)
@@ -103,7 +103,7 @@ void GNode_print(GNode *self, CompilationUnit *cu, const unsigned char *input, i
         def_name ? def_name : "<N/A>",
         data ? data : (unsigned char *)""
         );
-    if (data) { free(data); data = NULL; }
+    if (data) { CHPEG_FREE(data); data = NULL; }
 
     for (GNode *p = self->head; p; p = p->next) {
         GNode_print(p, cu, input, depth + 1);
@@ -124,16 +124,16 @@ void Compiler_setup_defs(CompilationUnit *cu)
     printf("Compiler_setup_defs: num_defs=%d\n", cu->bc->num_defs);
 #endif
 
-    cu->bc->def_names = (char **)malloc(cu->bc->num_defs * sizeof(char *));
-    cu->bc->def_flags = (int *)malloc(cu->bc->num_defs * sizeof(int));
-    cu->bc->def_addrs = (int *)malloc(cu->bc->num_defs * sizeof(int));
+    cu->bc->def_names = (char **)CHPEG_MALLOC(cu->bc->num_defs * sizeof(char *));
+    cu->bc->def_flags = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
+    cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
         if (PEG_DEFINITION != p->def) { continue; }
 
         Node *tmp = p->head; // Identifier, definition name
         if (NULL == tmp || PEG_IDENTIFIER != tmp->def) { continue; }
-        cu->bc->def_names[i] = (char *)malloc(1 + tmp->length);
+        cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
         cu->bc->def_names[i][tmp->length] = '\0';
 
@@ -361,16 +361,16 @@ int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len
     if (NULL == cu->bc->strings) {
         cu->bc->num_strings = 0; 
         cu->strings_allocated = 16; 
-        cu->bc->strings = (unsigned char **)malloc(cu->strings_allocated * sizeof(unsigned char *));
-        cu->bc->str_len = (int *)malloc(cu->strings_allocated * sizeof(int));
+        cu->bc->strings = (unsigned char **)CHPEG_MALLOC(cu->strings_allocated * sizeof(unsigned char *));
+        cu->bc->str_len = (int *)CHPEG_MALLOC(cu->strings_allocated * sizeof(int));
     }
     if (cu->bc->num_strings == cu->strings_allocated) {
         cu->strings_allocated *= 2; 
-        cu->bc->strings = (unsigned char **)realloc(cu->bc->strings, cu->strings_allocated * sizeof(unsigned char *));
-        cu->bc->str_len = (int *)realloc(cu->bc->str_len, cu->strings_allocated * sizeof(int));
+        cu->bc->strings = (unsigned char **)CHPEG_REALLOC(cu->bc->strings, cu->strings_allocated * sizeof(unsigned char *));
+        cu->bc->str_len = (int *)CHPEG_REALLOC(cu->bc->str_len, cu->strings_allocated * sizeof(int));
     }
     int idx = cu->bc->num_strings++;
-    cu->bc->strings[idx] = (unsigned char *)malloc(len + 1);
+    cu->bc->strings[idx] = (unsigned char *)CHPEG_MALLOC(len + 1);
     memcpy(cu->bc->strings[idx], str, len);
     cu->bc->strings[idx][len] = '\0'; // safety
     cu->bc->str_len[idx] = len; 
@@ -388,7 +388,7 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
                     Compiler_alloc_strings(cu, p);
                     len += p->value_len;
                 }
-                unsigned char *str = (unsigned char *)malloc(len);
+                unsigned char *str = (unsigned char *)CHPEG_MALLOC(len);
                 for (GNode *p = gp->head; p; p = p->next) {
                     memcpy(str+offset, p->val.cval, p->value_len);
                     offset += p->value_len;
@@ -397,9 +397,9 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #if DEBUG_COMPILER
                 unsigned char *tmp = esc_string(str, len, 20);
                 printf("PEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
-                free(tmp);
+                CHPEG_FREE(tmp);
 #endif
-                free(str);
+                CHPEG_FREE(str);
             }
             break;
         case PEG_CHARRANGE:
@@ -414,7 +414,7 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #if DEBUG_COMPILER
                 unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
                 printf("PEG_CHARRANGE %s\n", tmp);
-                free(tmp);
+                CHPEG_FREE(tmp);
 #endif
             }
             break;
@@ -425,7 +425,7 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #if DEBUG_COMPILER
                 unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
                 printf("PEG_PLAINCHAR %s\n", tmp);
-                free(tmp);
+                CHPEG_FREE(tmp);
 #endif
             }
             break;
@@ -441,7 +441,7 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #if DEBUG_COMPILER
                 unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
                 printf("PEG_ESCCHAR %s\n", tmp);
-                free(tmp);
+                CHPEG_FREE(tmp);
 #endif
             }
             break;
@@ -457,7 +457,7 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #if DEBUG_COMPILER
                 unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
                 printf("PEG_OCTCHAR %s\n", tmp);
-                free(tmp);
+                CHPEG_FREE(tmp);
 #endif
             }
             break;
@@ -522,7 +522,7 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
 #if DEBUG_COMPILER
     printf("instructions alloc'd: %d\n", cu.bc->num_instructions);
 #endif
-    cu.bc->instructions = (int *)calloc(cu.bc->num_instructions, sizeof(int));
+    cu.bc->instructions = (int *)CHPEG_CALLOC(cu.bc->num_instructions, sizeof(int));
 
     cu.bc->num_instructions = 0; 
     Compiler_add_instructions(&cu, cu.root);
