@@ -410,7 +410,7 @@ unsigned char *esc_string(const unsigned char *str, int str_length, int limit)
     clen = i;
     if (trunc) { len += 3; }
 
-    res = (unsigned char *)malloc(len + 1);
+    res = (unsigned char *)CHPEG_MALLOC(len + 1);
     unsigned char *p = res;
     for (i = 0; i < clen; ++i) {
         c = str[i];
@@ -460,7 +460,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
         def_name ? def_name : "<N/A>",
         data ? data : (unsigned char *)"<NULL>"
         );
-    if (data) { free(data); data = NULL; }
+    if (data) { CHPEG_FREE(data); data = NULL; }
     for (Node *p = self->head; p; p = p->next) {
         Node_print(p, parser, input, depth + 1);
     }
@@ -471,7 +471,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
 
 Node *Node_new(int def, int offset, int length, int flags)
 {
-    Node *self = (Node *)malloc(sizeof(Node));
+    Node *self = (Node *)CHPEG_MALLOC(sizeof(Node));
     self->def = def;
     self->offset = offset;
     self->length = length;
@@ -490,7 +490,7 @@ void Node_free(Node *self)
         Node_free(p);
     }
     self->head = NULL;
-    free(self);
+    CHPEG_FREE(self);
 }
 
 Node *Node_push_child(Node *self, int def, int offset, int length, int flags)
@@ -541,7 +541,7 @@ Node *Node_unwrap(Node *self)
 
 Parser *Parser_new(const ByteCode *byte_code)
 {
-    Parser *self = (Parser *)malloc(sizeof(Parser));
+    Parser *self = (Parser *)CHPEG_MALLOC(sizeof(Parser));
 
     self->num_defs = byte_code->num_defs;
     self->def_names = byte_code->def_names;
@@ -578,7 +578,7 @@ void Parser_free(Parser *self)
         Node_free(self->tree_root);
         self->tree_root = NULL;
     }
-    free(self);
+    CHPEG_FREE(self);
 }
 
 void Parser_print_tree(Parser *self, const unsigned char *input)
@@ -627,7 +627,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
                     def_name ? def_name : "<N/A>",
                     self->error_offset);
             if (esc) {
-                free(esc);
+                CHPEG_FREE(esc);
                 esc = NULL;
             }
         }
@@ -733,7 +733,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                     fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s\"%s\"\n",
                         cnt, offset, pc, op_name(op), arg, tree_top*2, "",
                         tmp ? tmp : (unsigned char *)"<NULL>");
-                    free(tmp);
+                    CHPEG_FREE(tmp);
                     tmp = NULL;
                     break;
                 default:
@@ -1174,7 +1174,7 @@ pred_cleanup:
 
 ByteCode *ByteCode_new()
 {
-    ByteCode *self = (ByteCode *)malloc(sizeof(ByteCode));
+    ByteCode *self = (ByteCode *)CHPEG_MALLOC(sizeof(ByteCode));
     if (NULL == self) { return self; }
     self->num_defs = 0;
     self->def_names = NULL;
@@ -1194,18 +1194,18 @@ void ByteCode_free(ByteCode *self)
 
     if (self->num_defs > 0) {
         for (i = 0; i < self->num_defs; ++i) {
-            free(self->def_names[i]);
+            CHPEG_FREE(self->def_names[i]);
         }
         if (self->def_names) {
-            free(self->def_names);
+            CHPEG_FREE(self->def_names);
             self->def_names = NULL;
         }
         if (self->def_flags) {
-            free(self->def_flags);
+            CHPEG_FREE(self->def_flags);
             self->def_flags = NULL;
         }
         if (self->def_addrs) {
-            free(self->def_addrs);
+            CHPEG_FREE(self->def_addrs);
             self->def_addrs = NULL;
         }
         self->num_defs = 0;
@@ -1213,7 +1213,7 @@ void ByteCode_free(ByteCode *self)
 
     if (self->num_instructions > 0) {
         if (self->instructions) {
-            free(self->instructions);
+            CHPEG_FREE(self->instructions);
             self->instructions = NULL;
         }
         self->num_instructions = 0;
@@ -1221,13 +1221,13 @@ void ByteCode_free(ByteCode *self)
 
     if (self->num_strings > 0) {
         for (i = 0; i < self->num_strings; ++i) {
-            free(self->strings[i]);
+            CHPEG_FREE(self->strings[i]);
         }
-        free(self->strings);
-        free(self->str_len);
+        CHPEG_FREE(self->strings);
+        CHPEG_FREE(self->str_len);
         self->num_strings = 0;
     }
-    free(self);
+    CHPEG_FREE(self);
 }
 
 const char *ByteCode_def_name(ByteCode *self, int index)
@@ -1259,7 +1259,7 @@ void ByteCode_print_instructions(ByteCode *self)
                     self->strings[arg], self->str_len[arg], 256);
                 printf("INST %8d %12s %8d \"%s\"\n", i, op_name(op), arg,
                     tmp ? tmp : (unsigned char *)"<NULL>");
-                if (tmp) { free(tmp); tmp = NULL; }
+                if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
                 break;
             default:
                 arg_str = "";
@@ -1282,7 +1282,7 @@ void ByteCode_print_strings(ByteCode *self)
         tmp = esc_string(self->strings[i], self->str_len[i], 256);
         printf("STR  %8d %8d \"%s\"\n", i, self->str_len[i],
             tmp ? tmp : (unsigned char *)"<NULL>");
-        if (tmp) { free(tmp); tmp = NULL; }
+        if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
     }
 }
 
@@ -1354,11 +1354,11 @@ int ByteCode_compare(ByteCode *a, ByteCode *b)
             tmp = esc_string(a->strings[i], a->str_len[i], 256);
             printf("a->strings[%d] = \"%s\" (len=%d)\n", i,
                 tmp ? tmp : (unsigned char *)"<NULL>", a->str_len[i]);
-            if (tmp) { free(tmp); tmp = NULL; }
+            if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
             tmp = esc_string(b->strings[i], b->str_len[i], 256);
             printf("b->strings[%d] = \"%s\" (len=%d)\n", i,
                 tmp ? tmp : (unsigned char *)"<NULL>", b->str_len[i]);
-            if (tmp) { free(tmp); tmp = NULL; }
+            if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
             return 8;
         }
     }

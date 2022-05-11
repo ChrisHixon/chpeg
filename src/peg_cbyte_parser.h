@@ -1,3 +1,6 @@
+#ifndef PEG_CBYTE_PARSER_H
+#define PEG_CBYTE_PARSER_H
+
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
 #endif
@@ -191,6 +194,13 @@ const char *Parser_def_name(Parser *self, int index);
 void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected);
 void Parser_print_error(Parser *self, const unsigned char *input);
 
+#ifndef CHPEG_MALLOC
+#define CHPEG_MALLOC(sz) malloc(sz)
+#define CHPEG_REALLOC(ptr, sz) realloc(ptr, sz)
+#define CHPEG_CALLOC(count, sz) calloc(count, sz)
+#define CHPEG_FREE(ptr) free(ptr)
+#endif
+
 #define PEG_GRAMMAR 0
 #define PEG_DEFINITION 1
 #define PEG_CHOICE 2
@@ -212,3 +222,5 @@ void Parser_print_error(Parser *self, const unsigned char *input);
 #define PEG_DOT 18
 #define PEG_S 19
 extern ByteCode peg_byte_code;
+
+#endif //PEG_CBYTE_PARSER_H
