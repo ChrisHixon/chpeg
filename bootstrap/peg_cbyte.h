@@ -1,3 +1,6 @@
+#ifndef PEG_CBYTE_PARSER_H
+#define PEG_CBYTE_PARSER_H
+
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
 #endif
