@@ -142,6 +142,9 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
         }
 
+        // uncomment to print a dump of the byte code (defs, instructions, and strings)
+        //ByteCode_print(byte_code);
+
         free(input);
         input = NULL;
         length = -1;
@@ -162,6 +165,17 @@ int main(int argc, char *argv[])
 
     // Parse the data file using byte_code
     parser = Parser_new(byte_code);
+
+#if VM_TRACE
+    // set to non-zero to enable VM instruction execution tracing
+    parser->vm_trace = 0;
+#endif
+
+#if VM_PRINT_TREE
+    // set to non-zero to print parse tree as it is being built
+    parser->vm_print_tree = 0;
+#endif
+
     parse_result = Parser_parse(parser, input, length);
     if (parse_result >= 0) {
         if (parse_result == length) {

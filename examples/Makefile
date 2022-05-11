@@ -3,7 +3,7 @@ SHELL=/bin/sh
 .SUFFIXES: .c .o
 
 CC=gcc
-CFLAGS=-Wall -std=c99
+CFLAGS=-Wall -std=c99 -O3
 INCLUDES=-I$(CHPEG_SRC)
 LDFLAGS=
 
@@ -21,7 +21,7 @@ EXAMPLES_SOURCES=$(patsubst %,%.c,$(EXAMPLES))
 EXAMPLES_OBJECTS=$(patsubst %.c,$(EXAMPLES_OBJDIR)/%.o,$(EXAMPLES_SOURCES))
 
 # rules
-all: $(EXAMPLES) 
+all: $(EXAMPLES)
 
 $(EXAMPLES): $(EXAMPLES_OBJECTS)
 $(EXAMPLES_OBJECTS): $(CHPEG_OBJECTS)

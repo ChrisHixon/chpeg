@@ -342,14 +342,6 @@ ByteCode peg_byte_code = {
     (unsigned char **)peg_strings,
     peg_str_len,
 };
-#define SANITY_CHECKS 1
-#define DEBUG_ERRORS 0
-#define ERRORS 1
-#define ERRORS_PRED 1
-#define ERRORS_IDENT 1
-#define ERRORS_TERMINALS 1
-#define ERROR_REPEAT_INHIBIT 0 // probably flawed idea, don't enable
-
 static char *OpNames[] =
 {
     "GOTO",
@@ -380,6 +372,11 @@ static char *OpNames[] =
     "SUCC",
     "FAIL"
 };
+
+static inline const char *op_name(int op)
+{
+    return (op >= 0 && op < NUM_OPS) ? OpNames[op] : "N/A";
+}
 
 // debugging print helper, caller must free() returned value
 unsigned char *esc_string(const unsigned char *str, int str_length, int limit)
@@ -461,11 +458,14 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
         flags & LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
-        data ? data : (unsigned char *)""
+        data ? data : (unsigned char *)"<NULL>"
         );
     if (data) { free(data); data = NULL; }
     for (Node *p = self->head; p; p = p->next) {
         Node_print(p, parser, input, depth + 1);
+    }
+    if (depth == 0) {
+        printf("---------------------------------------------------------------------------------\n");
     }
 }
 
@@ -512,6 +512,10 @@ void Node_pop_child(Node *self)
     }
 }
 
+// 'Unwrap' a Node, recursively removing unnecessary intermediate nodes containing only one child.
+// In the process, this reverses the reverse node insertion used in tree building, so should only
+// be called once on the tree root after a successful parse.
+// TODO: better explanation
 Node *Node_unwrap(Node *self)
 {
     if (!(self->flags & (STOP|LEAF)) && self->num_children == 1) {
@@ -557,6 +561,13 @@ Parser *Parser_new(const ByteCode *byte_code)
     self->error_def = -1;
     self->error_inst = -1;
     self->error_expected = -1;
+
+#if VM_TRACE
+    self->vm_trace = 0;
+#endif
+#if VM_PRINT_TREE
+    self->vm_print_tree = 0;
+#endif
 
     return self;
 }
@@ -612,7 +623,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
             }
             printf("%s \"%s\" in %s at offset %d\n",
                     self->error_expected ? "Expected" : "Unexpected",
-                    str ? (unsigned char *)str : esc,
+                    str ? (unsigned char *)str : (esc ? esc : (unsigned char *)"<NULL>"),
                     def_name ? def_name : "<N/A>",
                     self->error_offset);
             if (esc) {
@@ -655,10 +666,14 @@ const char *Parser_def_name(Parser *self, int index)
 // TODO: check sanity checks and overflow checks, make macros to make it easier
 int Parser_parse(Parser *self, const unsigned char *input, int size)
 {
-    int offset = 0, locked = 0;
+    int offset = 0, locked = 0, retval = 0;
 
 #if ERRORS
     int err_locked = 0;
+#endif
+
+#if VM_PRINT_TREE
+    int tree_changed = 0;
 #endif
 
     int stack[self->max_stack_size]; int top = -1;
@@ -676,12 +691,14 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 
     unsigned long long cnt = 0, cnt_max = 0;
     cnt_max = (size <= 2642245) ? (size < 128 ? 2097152 : size * size * size) : (unsigned long long)-1LL;
+
 #if SANITY_CHECKS
     int num_inst = self->num_instructions;
-    for(cnt = 0; cnt < cnt_max && pc < num_inst; ++cnt, ++pc) {
+    for(cnt = 0; cnt < cnt_max && pc < num_inst; ++cnt, ++pc)
 #else
-    for(cnt = 0; cnt < cnt_max; ++cnt, ++pc) {
+    for(cnt = 0; cnt < cnt_max; ++cnt, ++pc)
 #endif
+    {
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
 
@@ -693,15 +710,62 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
         printf("\n");
         */
 
+#if VM_TRACE
+        if (self->vm_trace) {
+            if (cnt == 0) {
+                fprintf(stderr, "=     CNT   OFFSET       PC           OP   ARG\n");
+            }
+            unsigned char *tmp;
+            const char *def_name;
+            switch (op) {
+                case IDENT:
+                case ISUCC:
+                    def_name = Parser_def_name(self, arg);
+                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s%s\n",
+                        cnt, offset, pc, op_name(op), arg, tree_top*2, "",
+                        def_name ? def_name : "<INVALID>");
+                    def_name = NULL;
+                    break;
+                case LIT:
+                case CHRCLS:
+                    tmp = esc_string(
+                        self->strings[arg], self->str_len[arg], 28);
+                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s\"%s\"\n",
+                        cnt, offset, pc, op_name(op), arg, tree_top*2, "",
+                        tmp ? tmp : (unsigned char *)"<NULL>");
+                    free(tmp);
+                    tmp = NULL;
+                    break;
+                default:
+                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s-\n",
+                        cnt, offset, pc, op_name(op), arg, tree_top*2, "");
+            }
+        }
+#endif
+
+#if VM_PRINT_TREE
+        tree_changed = 0;
+#endif
+
+        // Note: don't return from inside this switch, set pc = -1, retval = return value, then break;
+        // This is to allow finalization like tree printing (if enabled)
+
         switch (op) {
             case GOTO: // arg = addr; GOTO addr; pc is set to addr
                 pc = arg; break;
 
 // Identifier
             case IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
-                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
+                if (arg < 0) {
+                    pc = -1; retval = INVALID_IDENTIFIER; break;
+                }
+                if (top >= self->max_stack_size - 4) {
+                    pc = -1; retval = STACK_OVERFLOW; break;
+                }
                 if (!locked) {
-                    if (tree_top >= self->max_tree_depth - 2) return TREE_STACK_OVERFLOW;
+                    if (tree_top >= self->max_tree_depth - 2) {
+                        pc = -1; retval = TREE_STACK_OVERFLOW; break;
+                    }
                     if (self->def_flags[arg] & (LEAF | IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
@@ -717,11 +781,16 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 stack[++top] = offset;
                 stack[++top] = pc;
                 pc = self->def_addrs[arg];
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
             case ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
 #if SANITY_CHECKS
-                if (top < 2) return STACK_UNDERFLOW;
+                if (top < 2) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
                 pc = stack[top--] + 1;
                 --top;
@@ -731,16 +800,23 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                     --tree_top;
                     if (self->def_flags[arg] & IGNORE) {
 #if SANITY_CHECKS
-                        if (tree_top < 0) return TREE_STACK_UNDERFLOW;
+                        if (tree_top < 0) {
+                            pc = -1; retval = TREE_STACK_UNDERFLOW; break;
+                        }
 #endif
                         Node_pop_child(tree_stack[tree_top]);
                     }
                 }
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
             case IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
 #if SANITY_CHECKS
-                if (top < 2) return STACK_UNDERFLOW;
+                if (top < 2) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
                 pc = stack[top--];
                 offset = stack[top--];
@@ -759,15 +835,22 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 if (stack[top--] == 1) { locked = 0; }
                 if (!locked) {
 #if SANITY_CHECKS
-                    if (tree_top < 0) return TREE_STACK_UNDERFLOW;
+                    if (tree_top < 0) {
+                        pc = -1; retval = TREE_STACK_UNDERFLOW; break;
+                    }
 #endif
                     Node_pop_child(tree_stack[--tree_top]);
                 }
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
 // Choice
             case CHOICE:
-                if (top >= self->max_stack_size - 3) return STACK_OVERFLOW;
+                if (top >= self->max_stack_size - 3) {
+                    pc = -1; retval = STACK_OVERFLOW; break;
+                }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
                 break;
@@ -775,7 +858,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
             case CISUCC: // arg = success/fail pc addr
             case CFAIL:
 #if SANITY_CHECKS
-                if (top < 1) return STACK_UNDERFLOW;
+                if (top < 1) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
                 top -= 2;
                 pc = arg;
@@ -786,12 +871,17 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     Node_pop_child(tree_stack[tree_top]);
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
 
 // Repeat +
             case RPBEG:
-                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
+                if (top >= self->max_stack_size - 4) {
+                    pc = -1; retval = STACK_OVERFLOW; break;
+                }
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 stack[++top] = 0; // used to inhibit error tracking after 1st rep
 #endif
@@ -816,7 +906,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 
             case RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
-                if (top < 3) return STACK_UNDERFLOW;
+                if (top < 3) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
                 offset = stack[top-1];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-2]; i > 0; --i)
@@ -831,12 +923,17 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
 #endif
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
 // Repeat *|?
             case RSBEG:
             case RQBEG:
-                if (top >= self->max_stack_size - 4) return STACK_OVERFLOW;
+                if (top >= self->max_stack_size - 4) {
+                    pc = -1; retval = STACK_OVERFLOW; break;
+                }
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (!err_locked) { // inhibit error tracking
                     stack[++top] = 1; err_locked = 1;
@@ -860,7 +957,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
             case RSDONE: // * always succeeds, proceeds to next instr.
             case RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
-                if (top < 2) return STACK_UNDERFLOW;
+                if (top < 2) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
@@ -868,6 +967,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 top -= 2;
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
+#endif
+#if VM_PRINT_TREE
+                tree_changed = 1;
 #endif
                 break;
 
@@ -881,7 +983,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
             case PRED:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
-                if (top >= self->max_stack_size - 3) return STACK_OVERFLOW;
+                if (top >= self->max_stack_size - 3) {
+                    pc = -1; retval = STACK_OVERFLOW; break;
+                }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
 #if ERRORS
@@ -920,7 +1024,9 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
             case PNOMATS: // Predicate not matched, not match is considered success
 pred_cleanup:
 #if SANITY_CHECKS
-                if (top < 2) return STACK_UNDERFLOW;
+                if (top < 2) {
+                    pc = -1; retval = STACK_UNDERFLOW; break;
+                }
 #endif
 #if ERRORS
                 if (stack[top--]) { err_locked = 0; }
@@ -931,6 +1037,9 @@ pred_cleanup:
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (int i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
                     Node_pop_child(tree_stack[tree_top]);
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
                 break;
 
 // CharClass
@@ -1009,23 +1118,53 @@ pred_cleanup:
 
 // End
             case SUCC: // overall success
+                pc = -1; // we're done
 #if SANITY_CHECKS
-                if (tree_top < 0) return TREE_STACK_UNDERFLOW;
+                if (tree_top < 0) {
+                    retval = TREE_STACK_UNDERFLOW; break;
+                }
 #endif
                 tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                 --tree_top;
+
+                // clean up the parse tree, reversing the reverse node insertion in the process
                 self->tree_root = Node_unwrap(self->tree_root);
-                if (top != -1) return UNEXPECTED_STACK_DATA;
-                if (tree_top != -1) return UNEXPECTED_TREE_STACK_DATA;
-                return offset;
+#if VM_PRINT_TREE
+                tree_changed = 1;
+#endif
+
+                if (top != -1) {
+                    retval = UNEXPECTED_STACK_DATA;
+                }
+                else if (tree_top != -1) {
+                    retval = UNEXPECTED_TREE_STACK_DATA;
+                }
+                else {
+                    retval = offset;
+                }
+                break;
 
             case FAIL: // overall failure
-                return arg < 0 ? arg : PARSE_FAILED;
+                pc = -1; // we're done
+                retval = arg < 0 ? arg : PARSE_FAILED;
+                break;
 
             default:
-                return UNKNOWN_INSTRUCTION;
+                pc = -1; // we're done
+                retval = UNKNOWN_INSTRUCTION;
+                break;
+        }
+
+#if VM_PRINT_TREE
+        if (self->vm_print_tree && tree_changed) {
+            Parser_print_tree(self, input);
+        }
+#endif
+        if (pc < 0) {
+            return retval;
         }
     }
+
     return RUNAWAY;
 }
 
@@ -1091,16 +1230,41 @@ void ByteCode_free(ByteCode *self)
     free(self);
 }
 
-
-static inline const char *op_name(int op)
+const char *ByteCode_def_name(ByteCode *self, int index)
 {
-    return (op >= 0 && op < NUM_OPS) ? OpNames[op] : "N/A";
+    if (index >= 0 && index < self->num_defs) {
+        return self->def_names[index];
+    }
+    return 0;
 }
 
 void ByteCode_print_instructions(ByteCode *self)
 {
+    const char *arg_str = NULL;
+    unsigned char *tmp = NULL;
+    int op, arg;
     for (int i = 0; i < self->num_instructions; ++i) {
-        printf("INST %8d %12s %8d\n", i, op_name(self->instructions[i] & 0xff), self->instructions[i] >> 8);
+        op = self->instructions[i] & 0xff;
+        arg = self->instructions[i] >> 8;
+        switch (op) {
+            case IDENT:
+            case ISUCC:
+                arg_str = ByteCode_def_name(self, arg);
+                printf("INST %8d %12s %8d %s\n",
+                    i, op_name(op), arg, arg_str ? arg_str : "<N/A>");
+                break;
+            case LIT:
+            case CHRCLS:
+                tmp = esc_string(
+                    self->strings[arg], self->str_len[arg], 256);
+                printf("INST %8d %12s %8d \"%s\"\n", i, op_name(op), arg,
+                    tmp ? tmp : (unsigned char *)"<NULL>");
+                if (tmp) { free(tmp); tmp = NULL; }
+                break;
+            default:
+                arg_str = "";
+                printf("INST %8d %12s %8d\n", i, op_name(op), arg);
+        }
     }
 }
 
@@ -1116,8 +1280,9 @@ void ByteCode_print_strings(ByteCode *self)
     unsigned char *tmp;
     for (int i = 0; i < self->num_strings; ++i) {
         tmp = esc_string(self->strings[i], self->str_len[i], 256);
-        printf("STR  %8d %8d \"%s\"\n", i, self->str_len[i], tmp);
-        free(tmp);
+        printf("STR  %8d %8d \"%s\"\n", i, self->str_len[i],
+            tmp ? tmp : (unsigned char *)"<NULL>");
+        if (tmp) { free(tmp); tmp = NULL; }
     }
 }
 
@@ -1187,11 +1352,13 @@ int ByteCode_compare(ByteCode *a, ByteCode *b)
         if (a->str_len[i] != b->str_len[i] || memcmp(a->strings[i], b->strings[i], a->str_len[i])) {
             unsigned char *tmp;
             tmp = esc_string(a->strings[i], a->str_len[i], 256);
-            printf("a->strings[%d] = \"%s\" (len=%d)\n", i, tmp, a->str_len[i]);
-            free(tmp);
+            printf("a->strings[%d] = \"%s\" (len=%d)\n", i,
+                tmp ? tmp : (unsigned char *)"<NULL>", a->str_len[i]);
+            if (tmp) { free(tmp); tmp = NULL; }
             tmp = esc_string(b->strings[i], b->str_len[i], 256);
-            printf("b->strings[%d] = \"%s\" (len=%d)\n", i, tmp, b->str_len[i]);
-            free(tmp);
+            printf("b->strings[%d] = \"%s\" (len=%d)\n", i,
+                tmp ? tmp : (unsigned char *)"<NULL>", b->str_len[i]);
+            if (tmp) { free(tmp); tmp = NULL; }
             return 8;
         }
     }

@@ -354,7 +354,7 @@ void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
 int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len)
 {
     for (int i = 0; i < cu->bc->num_strings; ++i) {
-        if (0 == memcmp(cu->bc->strings[i], str, len)) {
+        if (len == cu->bc->str_len[i] && 0 == memcmp(cu->bc->strings[i], str, len)) {
             return i;
         }
     }
