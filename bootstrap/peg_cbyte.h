@@ -200,3 +200,4 @@ void Parser_print_error(Parser *self, const unsigned char *input);
 #define CHPEG_CALLOC(count, sz) calloc(count, sz)
 #define CHPEG_FREE(ptr) free(ptr)
 #endif
+
