@@ -14,6 +14,7 @@
     #include <mcheck.h>
 #endif
 
+#include "mem.h"
 #include "parser.h"
 #include "compiler.h"
 
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
         goto done;
     }
 
-    input = (unsigned char*)malloc(st.st_size);
+    input = (unsigned char*)CHPEG_MALLOC(st.st_size);
     if (!input) {
         ret = 255;
         goto done;
@@ -75,7 +76,7 @@ done:
         ByteCode_free(byte_code);
     }
     if (input) {
-        free(input);
+        CHPEG_FREE(input);
     }
     if (fd >= 0) {
         close(fd);

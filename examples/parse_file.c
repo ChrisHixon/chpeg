@@ -11,6 +11,7 @@
     #include <mcheck.h>
 #endif
 
+#include "mem.h"
 #include "parser.h"
 #include "compiler.h"
 
@@ -37,7 +38,7 @@ char *read_file(char *filename, int *length_return)
         goto done;
     }
 
-    input = (char *)malloc((size_t)length);
+    input = (char *)CHPEG_MALLOC((size_t)length);
     if (!input) {
         fprintf(stderr, "%s: cannot allocate memory for file\n", filename);
         goto done;
@@ -78,7 +79,7 @@ char *read_file(char *filename, int *length_return)
 
 done:
     if (input) {
-        free(input);
+        CHPEG_FREE(input);
         input = NULL;
     }
 
@@ -145,7 +146,7 @@ int main(int argc, char *argv[])
         // uncomment to print a dump of the byte code (defs, instructions, and strings)
         //ByteCode_print(byte_code);
 
-        free(input);
+        CHPEG_FREE(input);
         input = NULL;
         length = -1;
     }
@@ -200,7 +201,7 @@ done:
         byte_code = NULL;
     }
     if (input) {
-        free(input);
+        CHPEG_FREE(input);
         input = NULL;
     }
     if (parser) {
