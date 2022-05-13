@@ -11,8 +11,8 @@
     #include <mcheck.h>
 #endif
 
-#include "peg_cbyte_parser.h"
-#include "peg_cbyte_compiler.h"
+#include "parser.h"
+#include "compiler.h"
 
 #define READ_FILE_BUF_SIZE 1024
 char *read_file(char *filename, int *length_return)
@@ -152,7 +152,6 @@ int main(int argc, char *argv[])
     // Otherwise, use default chpeg grammar
     else {
         fprintf(stderr, "Using default chpeg grammar\n");
-        byte_code = &peg_byte_code;
     }
 
     // Read the file to parse into input
@@ -163,8 +162,8 @@ int main(int argc, char *argv[])
         goto done;
     }
 
-    // Parse the data file using byte_code
-    parser = Parser_new(byte_code);
+    // Parse the data file using byte code
+    parser = Parser_new(byte_code ? byte_code : Compiler_bytecode());
 
 #if VM_TRACE
     // set to non-zero to enable VM instruction execution tracing

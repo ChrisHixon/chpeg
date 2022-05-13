@@ -1,16 +1,43 @@
-#define DEBUG_COMPILER 0
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "peg_cbyte_parser.h"
-#include "peg_cbyte_compiler.h"
+
+#include "mem.h"
+#include "parser.h"
+#include "compiler.h"
+
+#include "opcodes.h"
+#include "chpeg_bytecode.h"
+
+#ifndef DEBUG_COMPILER
+#define DEBUG_COMPILER 0
+#endif
 
 //
-// Gnode
+// Gnode: grammar tree node (temporary use during compilation)
 //
 
-GNode *GNode_new()
+typedef struct _GNode
+{
+    Node *node;
+    int type;
+
+    int parse_state;
+    int parent_next_state;
+    int parent_fail_state;
+
+    union {
+        unsigned char cval[4];
+        int ival;
+    } val;
+    int value_len;
+
+    int num_children;
+    struct _GNode *head;
+    struct _GNode *next;
+} GNode;
+
+static GNode *GNode_new()
 {
     GNode *self = (GNode *)CHPEG_MALLOC(sizeof(GNode));
 
@@ -30,7 +57,7 @@ GNode *GNode_new()
     return self;
 }
 
-void GNode_free(GNode *self)
+static void GNode_free(GNode *self)
 {
     GNode *tmp;
     for (GNode *p = self->head; p; p = tmp) {
@@ -41,7 +68,7 @@ void GNode_free(GNode *self)
     CHPEG_FREE(self);
 }
 
-GNode *GNode_push_child(GNode *self, GNode *child)
+static GNode *GNode_push_child(GNode *self, GNode *child)
 {
     child->next = self->head;
     self->head = child;
@@ -49,7 +76,9 @@ GNode *GNode_push_child(GNode *self, GNode *child)
     return child;
 }
 
-void GNode_pop_child(GNode *self)
+// unused
+#if 0
+static void GNode_pop_child(GNode *self)
 {
     if (self->head) {
         GNode *tmp = self->head;
@@ -58,8 +87,9 @@ void GNode_pop_child(GNode *self)
         --(self->num_children);
     }
 }
+#endif
 
-GNode *GNode_reverse(GNode *self)
+static GNode *GNode_reverse(GNode *self)
 {
     GNode *p = self->head; self->head = NULL;
     GNode *tmp;
@@ -72,49 +102,60 @@ GNode *GNode_reverse(GNode *self)
     return self;
 }
 
-void GNode_print(GNode *self, CompilationUnit *cu, const unsigned char *input, int depth)
+//
+// Compiler
+//
+
+typedef struct _CompilationUnit
+{
+    Parser *parser;
+    const unsigned char *input;
+    ByteCode *bc;
+    GNode *root;
+    int strings_allocated;
+} CompilationUnit;
+
+#if DEBUG_COMPILER
+static void CompilationUnit_print(CompilationUnit *cu, GNode *gnode, const unsigned char *input, int depth)
 {
     int flags = 0;
-    unsigned char *data = NULL;
-    const char *def_name = Parser_def_name(cu->parser, self->type); 
+    char *data = NULL;
+    const char *def_name = Parser_def_name(cu->parser, gnode->type);
 
-    Node *node = self->node;
+    Node *node = gnode->node;
     if (node) {
-        data = esc_string(&input[node->offset], node->length, 40);
+        data = esc_bytes(&input[node->offset], node->length, 40);
         flags = node->flags;
     }
 
     if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n"); 
+        printf("---------------------------------------------------------------------------------\n");
         printf(" Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
-        printf("---------------------------------------------------------------------------------\n"); 
+        printf("---------------------------------------------------------------------------------\n");
     }
     printf("%6d %6d %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
-        self->type,
-        self->parse_state,
-        self->parent_next_state,
-        self->parent_fail_state,
+        gnode->type,
+        gnode->parse_state,
+        gnode->parent_next_state,
+        gnode->parent_fail_state,
         flags & STOP ? "S" : " ",
         flags & IGNORE ? "I" : " ",
         flags & LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
-        data ? data : (unsigned char *)""
+        data ? data : ""
         );
     if (data) { CHPEG_FREE(data); data = NULL; }
 
-    for (GNode *p = self->head; p; p = p->next) {
-        GNode_print(p, cu, input, depth + 1);
+    for (GNode *p = gnode->head; p; p = p->next) {
+        CompilationUnit_print(cu, p, input, depth + 1);
     }
-} 
+}
+#endif
 
-//
-// Compiler
-//
-
-void Compiler_setup_defs(CompilationUnit *cu)
+static void Compiler_setup_defs(CompilationUnit *cu)
 {
     Node *p = NULL;
     int i = 0, j = 0;
@@ -129,17 +170,17 @@ void Compiler_setup_defs(CompilationUnit *cu)
     cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
-        if (PEG_DEFINITION != p->def) { continue; }
+        if (CHPEG_DEFINITION != p->def) { continue; }
 
         Node *tmp = p->head; // Identifier, definition name
-        if (NULL == tmp || PEG_IDENTIFIER != tmp->def) { continue; }
+        if (NULL == tmp || CHPEG_IDENTIFIER != tmp->def) { continue; }
         cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
         cu->bc->def_names[i][tmp->length] = '\0';
 
         int flags = 0;
         tmp = tmp->next; // Options, flags
-        if (NULL != tmp && PEG_OPTIONS == tmp->def) {
+        if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
                     case 'S': flags |= STOP; break;
@@ -157,7 +198,7 @@ void Compiler_setup_defs(CompilationUnit *cu)
     }
 }
 
-void Compiler_setup_def_addrs(CompilationUnit *cu)
+static void Compiler_setup_def_addrs(CompilationUnit *cu)
 {
     int i = 0;
     GNode *p = NULL;
@@ -166,7 +207,7 @@ void Compiler_setup_def_addrs(CompilationUnit *cu)
     }
 }
 
-int Compiler_find_def(CompilationUnit *cu, Node *ident)
+static int Compiler_find_def(CompilationUnit *cu, Node *ident)
 {
     char buf[ident->length + 1];
     memcpy(buf, cu->input + ident->offset, ident->length);
@@ -179,7 +220,7 @@ int Compiler_find_def(CompilationUnit *cu, Node *ident)
     return -1;
 }
 
-void Compiler_build_tree(CompilationUnit *cu, Node *np, GNode *gp)
+static void Compiler_build_tree(CompilationUnit *cu, Node *np, GNode *gp)
 {
     if (NULL == np) { np = cu->parser->tree_root; }
     if (NULL == gp) { gp = cu->root; }
@@ -197,10 +238,10 @@ static inline int Compiler_alloc_inst(CompilationUnit *cu)
     return cu->bc->num_instructions++;
 }
 
-void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
+static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case PEG_GRAMMAR:
+        case CHPEG_GRAMMAR:
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
@@ -208,12 +249,12 @@ void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
                 Compiler_alloc_instructions(cu, p);
             }
             break;
-        case PEG_DEFINITION:
+        case CHPEG_DEFINITION:
             Compiler_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->next->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case PEG_CHOICE:
+        case CHPEG_CHOICE:
             gp->parse_state = Compiler_alloc_inst(cu);
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_alloc_instructions(cu, p);
@@ -222,30 +263,30 @@ void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
             }
             Compiler_alloc_inst(cu);
             break;
-        case PEG_SEQUENCE:
+        case CHPEG_SEQUENCE:
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_alloc_instructions(cu, p);
             }
             gp->parse_state = gp->head->parse_state;
             break;
-        case PEG_REPEAT:
+        case CHPEG_REPEAT:
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case PEG_PREDICATE:
+        case CHPEG_PREDICATE:
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->next->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case PEG_DOT:
+        case CHPEG_DOT:
             gp->parse_state = Compiler_alloc_inst(cu);
             break;
-        case PEG_IDENTIFIER:
-        case PEG_CHARCLASS:
-        case PEG_LITERAL:
+        case CHPEG_IDENTIFIER:
+        case CHPEG_CHARCLASS:
+        case CHPEG_LITERAL:
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
             break;
@@ -257,10 +298,10 @@ static inline void Compiler_add_inst(CompilationUnit *cu, int inst)
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
 
-void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
+static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case PEG_GRAMMAR:
+        case CHPEG_GRAMMAR:
             Compiler_add_inst(cu, INST(IDENT, 0));
             Compiler_add_inst(cu, INST(FAIL, 0));
             Compiler_add_inst(cu, INST(SUCC, 0));
@@ -268,12 +309,12 @@ void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 Compiler_add_instructions(cu, p);
             }
             break;
-        case PEG_DEFINITION:
+        case CHPEG_DEFINITION:
             Compiler_add_instructions(cu, gp->head->next);
             Compiler_add_inst(cu, INST(ISUCC, Compiler_find_def(cu, gp->head->node)));
             Compiler_add_inst(cu, INST(IFAIL, 0));
             break;
-        case PEG_CHOICE:
+        case CHPEG_CHOICE:
             Compiler_add_inst(cu, INST(CHOICE, 0));
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_add_instructions(cu, p);
@@ -282,14 +323,14 @@ void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
             }
             Compiler_add_inst(cu, INST(CFAIL, gp->parent_fail_state - 1));
             break;
-        case PEG_SEQUENCE:
+        case CHPEG_SEQUENCE:
             for (GNode *p = gp->head; p; p = p->next) {
                 p->parent_next_state = p->next ? p->next->parse_state : gp->parent_next_state;
                 p->parent_fail_state = gp->parent_fail_state;
                 Compiler_add_instructions(cu, p);
             }
             break;
-        case PEG_REPEAT:
+        case CHPEG_REPEAT:
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
                 switch (op) {
@@ -314,7 +355,7 @@ void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 }
             }
             break;
-        case PEG_PREDICATE:
+        case CHPEG_PREDICATE:
             {
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
@@ -333,25 +374,25 @@ void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 }
             }
             break;
-        case PEG_DOT:
+        case CHPEG_DOT:
             Compiler_add_inst(cu, INST(DOT, gp->parent_fail_state - 1));
             break;
-        case PEG_IDENTIFIER:
+        case CHPEG_IDENTIFIER:
             Compiler_add_inst(cu, INST(IDENT, Compiler_find_def(cu, gp->node)));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
-        case PEG_CHARCLASS:
+        case CHPEG_CHARCLASS:
             Compiler_add_inst(cu, INST(CHRCLS, gp->val.ival));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
-        case PEG_LITERAL:
+        case CHPEG_LITERAL:
             Compiler_add_inst(cu, INST(LIT, gp->val.ival));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
     }
 }
 
-int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len)
+static int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len)
 {
     for (int i = 0; i < cu->bc->num_strings; ++i) {
         if (len == cu->bc->str_len[i] && 0 == memcmp(cu->bc->strings[i], str, len)) {
@@ -359,13 +400,13 @@ int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len
         }
     }
     if (NULL == cu->bc->strings) {
-        cu->bc->num_strings = 0; 
-        cu->strings_allocated = 16; 
+        cu->bc->num_strings = 0;
+        cu->strings_allocated = 16;
         cu->bc->strings = (unsigned char **)CHPEG_MALLOC(cu->strings_allocated * sizeof(unsigned char *));
         cu->bc->str_len = (int *)CHPEG_MALLOC(cu->strings_allocated * sizeof(int));
     }
     if (cu->bc->num_strings == cu->strings_allocated) {
-        cu->strings_allocated *= 2; 
+        cu->strings_allocated *= 2;
         cu->bc->strings = (unsigned char **)CHPEG_REALLOC(cu->bc->strings, cu->strings_allocated * sizeof(unsigned char *));
         cu->bc->str_len = (int *)CHPEG_REALLOC(cu->bc->str_len, cu->strings_allocated * sizeof(int));
     }
@@ -373,15 +414,15 @@ int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len
     cu->bc->strings[idx] = (unsigned char *)CHPEG_MALLOC(len + 1);
     memcpy(cu->bc->strings[idx], str, len);
     cu->bc->strings[idx][len] = '\0'; // safety
-    cu->bc->str_len[idx] = len; 
+    cu->bc->str_len[idx] = len;
     return idx;
 }
 
-void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
+static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case PEG_LITERAL:
-        case PEG_CHARCLASS:
+        case CHPEG_LITERAL:
+        case CHPEG_CHARCLASS:
             {
                 int len = 0, offset = 0;
                 for (GNode *p = gp->head; p; p = p->next) {
@@ -395,41 +436,41 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
                 }
                 gp->val.ival = Compiler_alloc_string(cu, str, len);
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(str, len, 20);
+                char *tmp = esc_bytes(str, len, 20);
                 printf("PEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
                 CHPEG_FREE(tmp);
 #endif
                 CHPEG_FREE(str);
             }
             break;
-        case PEG_CHARRANGE:
+        case CHPEG_CHARRANGE:
             {
                 for (GNode *p = gp->head; p; p = p->next) {
                     Compiler_alloc_strings(cu, p);
                 }
-                gp->val.cval[0] = gp->head->val.cval[0]; 
-                gp->val.cval[1] = '-'; 
-                gp->val.cval[2] = gp->head->next->val.cval[0]; 
+                gp->val.cval[0] = gp->head->val.cval[0];
+                gp->val.cval[1] = '-';
+                gp->val.cval[2] = gp->head->next->val.cval[0];
                 gp->value_len = 3;
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
-                printf("PEG_CHARRANGE %s\n", tmp);
+                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_CHARRANGE %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case PEG_PLAINCHAR:
+        case CHPEG_PLAINCHAR:
             {
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
-                printf("PEG_PLAINCHAR %s\n", tmp);
+                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_PLAINCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case PEG_ESCCHAR:
+        case CHPEG_ESCCHAR:
             {
                 gp->val.cval[0] = cu->input[gp->node->offset + 1];
                 gp->value_len = 1;
@@ -439,13 +480,13 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
                     case 't': gp->val.cval[0] = '\t'; break;
                 }
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
-                printf("PEG_ESCCHAR %s\n", tmp);
+                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_ESCCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case PEG_OCTCHAR:
+        case CHPEG_OCTCHAR:
             {
                 int val = 0; int len = gp->node->length - 1;
                 const unsigned char *ip = cu->input + gp->node->offset + 1;
@@ -455,8 +496,8 @@ void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
                 gp->val.cval[0] = val & 255;
                 gp->value_len = 1;
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
-                printf("PEG_OCTCHAR %s\n", tmp);
+                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_OCTCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -473,7 +514,7 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
 {
     CompilationUnit cu;
 
-    cu.parser = Parser_new(&peg_byte_code);
+    cu.parser = Parser_new(Compiler_bytecode());
     cu.input = input;
     cu.bc = NULL;
     cu.root = NULL;
@@ -499,7 +540,7 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
         else {
             printf("parse failed with result: %d\n", result);
             Parser_print_error(cu.parser, input);
-            goto done; 
+            goto done;
         }
     }
     else {
@@ -524,7 +565,7 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
 #endif
     cu.bc->instructions = (int *)CHPEG_CALLOC(cu.bc->num_instructions, sizeof(int));
 
-    cu.bc->num_instructions = 0; 
+    cu.bc->num_instructions = 0;
     Compiler_add_instructions(&cu, cu.root);
 #if DEBUG_COMPILER
     printf("instructions after add: %d\n", cu.bc->num_instructions);
@@ -533,11 +574,16 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
     Compiler_setup_def_addrs(&cu);
 
 #if DEBUG_COMPILER
-    GNode_print(cu.root, &cu, input, 0);
+    CompilationUnit_print(&cu, cu.root, input, 0);
 #endif
 
 done:
     if (cu.parser) { Parser_free(cu.parser); }
     if (cu.root) { GNode_free(cu.root); }
     return cu.bc;
+}
+
+const ByteCode *Compiler_bytecode()
+{
+    return &chpeg_bytecode;
 }
