@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "mem.h"
+#include "util.h"
 #include "parser.h"
 #include "opcodes.h"
 

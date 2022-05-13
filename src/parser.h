@@ -18,8 +18,6 @@ enum ErrorCodes
     INVALID_IDENTIFIER = -11,
 };
 
-char *esc_bytes(const unsigned char *bytes, int length, int limit);
-
 struct _CompilationUnit;
 struct _Parser;
 
