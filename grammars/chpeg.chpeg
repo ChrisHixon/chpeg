@@ -1,7 +1,9 @@
-# Extended PEG grammar for chpeg bytecode parser/compiler
+# Extended PEG grammar for chpeg bytecode parser/compiler, defined in its own grammar.
 #
-# The effective grammar is basically the same as the original PEG grammar from
+# The effective grammar is the same as the original PEG grammar from
 # Bryan Ford's paper, but with Options added in front of <- to guide parse tree building.
+#
+# This grammar is optimized for chpeg and generates the AST the compiler expects
 
 # Hierarchical syntax
 Grammar     {S} <- S Definition+ !.

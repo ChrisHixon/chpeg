@@ -1,3 +1,5 @@
+# original PEG grammar from Bryan Ford's paper
+
 # Hierarchical syntax
 Grammar     <- Spacing Definition+ EndOfFile
 Definition  <- Identifier LEFTARROW Expression
