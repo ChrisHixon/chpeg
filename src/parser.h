@@ -1,7 +1,9 @@
 #ifndef CHPEG_PARSER_H
 #define CHPEG_PARSER_H
 
+#ifndef CHPEG_AMALGAMATION
 #include "bytecode.h"
+#endif /*CHPEG_AMALGAMATION*/
 
 enum ErrorCodes
 {
@@ -36,14 +38,14 @@ typedef struct _Node
     struct _Node *next;
 } Node;
 
-Node *Node_new(int def, int offset, int length, int flags);
-void Node_free(Node *self);
-Node *Node_push_child(Node *self, int def, int offset, int length, int flags);
-void Node_pop_child(Node *self);
-Node *Node_unwrap(Node *self);
+CHPEG_API Node *Node_new(int def, int offset, int length, int flags);
+CHPEG_API void Node_free(Node *self);
+CHPEG_API Node *Node_push_child(Node *self, int def, int offset, int length, int flags);
+CHPEG_API void Node_pop_child(Node *self);
+CHPEG_API Node *Node_unwrap(Node *self);
 
 // debugging / dev aid. TODO: should disappear based on some DEBUG/NDEBUG macro
-void Node_print(Node *self, struct _Parser *parser, const unsigned char *input, int depth);
+CHPEG_API void Node_print(Node *self, struct _Parser *parser, const unsigned char *input, int depth);
 
 //
 // Parser
@@ -71,12 +73,12 @@ typedef struct _Parser
 
 } Parser;
 
-Parser *Parser_new(const ByteCode *byte);
-void Parser_free(Parser *self);
-int Parser_parse(Parser *self, const unsigned char *input, int size);
-void Parser_print_tree(Parser *self, const unsigned char *input);
-const char *Parser_def_name(Parser *self, int index);
-void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected);
-void Parser_print_error(Parser *self, const unsigned char *input);
+CHPEG_API Parser *Parser_new(const ByteCode *byte);
+CHPEG_API void Parser_free(Parser *self);
+CHPEG_API int Parser_parse(Parser *self, const unsigned char *input, int size);
+CHPEG_API void Parser_print_tree(Parser *self, const unsigned char *input);
+CHPEG_API const char *Parser_def_name(Parser *self, int index);
+CHPEG_API void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected);
+CHPEG_API void Parser_print_error(Parser *self, const unsigned char *input);
 
 #endif // #ifndef CHPEG_PARSER_H

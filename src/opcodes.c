@@ -1,6 +1,9 @@
+#ifndef CHPEG_AMALGAMATION
 #include "opcodes.h"
+#include "bytecode.h"
+#endif /*CHPEG_AMALGAMATION*/
 
-const char *OpNames[NUM_OPS] =
+CHPEG_API const char *OpNames[NUM_OPS] =
 {
     "GOTO",
     "IDENT",

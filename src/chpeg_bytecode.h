@@ -1,8 +1,10 @@
 #ifndef CHPEG_CHPEG_BYTECODE_H
 #define CHPEG_CHPEG_BYTECODE_H
 
+#ifndef CHPEG_AMALGAMATION
 #include "bytecode.h"
 #include "opcodes.h"
+#endif /*CHPEG_AMALGAMATION*/
 
 #define CHPEG_GRAMMAR 0
 #define CHPEG_DEFINITION 1
@@ -25,6 +27,6 @@
 #define CHPEG_DOT 18
 #define CHPEG_S 19
 
-extern const ByteCode chpeg_bytecode;
+CHPEG_API const ByteCode chpeg_bytecode;
 
 #endif // CHPEG_CHPEG_BYTECODE_H

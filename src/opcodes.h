@@ -1,6 +1,10 @@
 #ifndef CHPEG_OPCODES_H
 #define CHPEG_OPCODES_H
 
+#ifndef CHPEG_AMALGAMATION
+#include "bytecode.h"
+#endif /*CHPEG_AMALGAMATION*/
+
 enum OpCodes
 {
     GOTO,
@@ -33,7 +37,7 @@ enum OpCodes
     NUM_OPS
 };
 
-extern const char *OpNames[NUM_OPS];
+CHPEG_API const char *OpNames[NUM_OPS];
 
 static inline const char *op_name(int op)
 {

@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 
+#ifndef CHPEG_API
+#define CHPEG_API
+#endif //CHPEG_API
+
 #define INST(op, arg) (((arg) << 8) | (op))
 
 //
@@ -22,16 +26,16 @@ typedef struct _ByteCode
     int *str_len;
 } ByteCode;
 
-extern ByteCode *ByteCode_new();
-extern void ByteCode_free(ByteCode *self);
+CHPEG_API ByteCode *ByteCode_new();
+CHPEG_API void ByteCode_free(ByteCode *self);
 
-extern int ByteCode_compare(const ByteCode *a, const ByteCode *b);
-extern void ByteCode_print_instructions(const ByteCode *self);
-extern void ByteCode_print_defs(const ByteCode *self);
-extern void ByteCode_print(const ByteCode *self);
-extern void ByteCode_output_h(const ByteCode *self, FILE *fp,
+CHPEG_API int ByteCode_compare(const ByteCode *a, const ByteCode *b);
+CHPEG_API void ByteCode_print_instructions(const ByteCode *self);
+CHPEG_API void ByteCode_print_defs(const ByteCode *self);
+CHPEG_API void ByteCode_print(const ByteCode *self);
+CHPEG_API void ByteCode_output_h(const ByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
-extern void ByteCode_output_c(const ByteCode *self, FILE *fp,
+CHPEG_API void ByteCode_output_c(const ByteCode *self, FILE *fp,
     const char *basename, const char *varname);
 
 // rule/node flags AKA options

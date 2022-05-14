@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef CHPEG_AMALGAMATION
 #include "mem.h"
 #include "util.h"
 #include "parser.h"
 #include "opcodes.h"
+#endif /*CHPEG_AMALGAMATION*/
 
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
@@ -52,7 +54,7 @@
 // Node
 //
 
-void Node_print(Node *self, Parser *parser, const unsigned char *input, int depth)
+CHPEG_API void Node_print(Node *self, Parser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
     char *data = esc_bytes(&input[self->offset], self->length, 40);
@@ -83,7 +85,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
     }
 }
 
-Node *Node_new(int def, int offset, int length, int flags)
+CHPEG_API Node *Node_new(int def, int offset, int length, int flags)
 {
     Node *self = (Node *)CHPEG_MALLOC(sizeof(Node));
     self->def = def;
@@ -96,7 +98,7 @@ Node *Node_new(int def, int offset, int length, int flags)
     return self;
 }
 
-void Node_free(Node *self)
+CHPEG_API void Node_free(Node *self)
 {
     Node *tmp;
     for (Node *p = self->head; p; p = tmp) {
@@ -107,7 +109,7 @@ void Node_free(Node *self)
     CHPEG_FREE(self);
 }
 
-Node *Node_push_child(Node *self, int def, int offset, int length, int flags)
+CHPEG_API Node *Node_push_child(Node *self, int def, int offset, int length, int flags)
 {
     Node *node = Node_new(def, offset, length, flags);
     node->next = self->head;
@@ -116,7 +118,7 @@ Node *Node_push_child(Node *self, int def, int offset, int length, int flags)
     return node;
 }
 
-void Node_pop_child(Node *self)
+CHPEG_API void Node_pop_child(Node *self)
 {
     if (self->head) {
         Node *tmp = self->head;
@@ -129,7 +131,7 @@ void Node_pop_child(Node *self)
 // 'Unwrap' a Node, recursively removing unnecessary parent nodes containing only one child.
 // In the process, this reverses the reverse node insertion used in tree building, so should only
 // be called once on the tree root after a successful parse.
-Node *Node_unwrap(Node *self)
+CHPEG_API Node *Node_unwrap(Node *self)
 {
     if (!(self->flags & (STOP|LEAF)) && self->num_children == 1) {
         Node *tmp = Node_unwrap(self->head);
@@ -152,7 +154,7 @@ Node *Node_unwrap(Node *self)
 // Parser
 //
 
-Parser *Parser_new(const ByteCode *byte_code)
+CHPEG_API Parser *Parser_new(const ByteCode *byte_code)
 {
     Parser *self = (Parser *)CHPEG_MALLOC(sizeof(Parser));
 
@@ -177,7 +179,7 @@ Parser *Parser_new(const ByteCode *byte_code)
     return self;
 }
 
-void Parser_free(Parser *self)
+CHPEG_API void Parser_free(Parser *self)
 {
     if (self->tree_root) {
         Node_free(self->tree_root);
@@ -186,12 +188,12 @@ void Parser_free(Parser *self)
     CHPEG_FREE(self);
 }
 
-void Parser_print_tree(Parser *self, const unsigned char *input)
+CHPEG_API void Parser_print_tree(Parser *self, const unsigned char *input)
 {
     Node_print(self->tree_root, self, input, 0);
 }
 
-void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected)
+CHPEG_API void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected)
 {
     if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
         self->error_offset = offset;
@@ -202,7 +204,7 @@ void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset
     }
 }
 
-void Parser_print_error(Parser *self, const unsigned char *input)
+CHPEG_API void Parser_print_error(Parser *self, const unsigned char *input)
 {
 #if ERRORS
     const char *parent_def_name = Parser_def_name(self, self->error_parent_def);
@@ -260,7 +262,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
 #endif
 }
 
-const char *Parser_def_name(Parser *self, int index)
+CHPEG_API const char *Parser_def_name(Parser *self, int index)
 {
     if (index >= 0 && index < self->bc->num_defs) {
         return self->bc->def_names[index];
@@ -269,7 +271,7 @@ const char *Parser_def_name(Parser *self, int index)
 }
 
 // TODO: check sanity checks and overflow checks, make macros to make it easier
-int Parser_parse(Parser *self, const unsigned char *input, int size)
+CHPEG_API int Parser_parse(Parser *self, const unsigned char *input, int size)
 {
     int offset = 0, locked = 0, retval = 0;
 

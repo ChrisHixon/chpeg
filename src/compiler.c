@@ -2,12 +2,14 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifndef CHPEG_AMALGAMATION
 #include "mem.h"
 #include "parser.h"
 #include "compiler.h"
 
 #include "opcodes.h"
 #include "chpeg_bytecode.h"
+#endif /*CHPEG_AMALGAMATION*/
 
 #ifndef DEBUG_COMPILER
 #define DEBUG_COMPILER 0
@@ -510,7 +512,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
     }
 }
 
-ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose)
+CHPEG_API ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose)
 {
     CompilationUnit cu;
 
@@ -583,7 +585,7 @@ done:
     return cu.bc;
 }
 
-const ByteCode *Compiler_bytecode()
+CHPEG_API const ByteCode *Compiler_bytecode()
 {
     return &chpeg_bytecode;
 }

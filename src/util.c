@@ -1,12 +1,14 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifndef CHPEG_AMALGAMATION
 #include "mem.h"
 #include "util.h"
+#endif /*CHPEG_AMALGAMATION*/
 
 // escape bytes like a C literal string, optionally truncating to limit, adding "..." at the end
 // caller must free() returned value
-char *esc_bytes(const unsigned char *bytes, int length, int limit)
+CHPEG_API char *esc_bytes(const unsigned char *bytes, int length, int limit)
 {
     static const char *hex_digit = "0123456789ABCDEF";
     static const char *esc_chars = "\\\"\t\r\n";
