@@ -25,6 +25,6 @@
 #define CHPEG_DOT 18
 #define CHPEG_S 19
 
-extern ByteCode chpeg_bytecode;
+extern const ByteCode chpeg_bytecode;
 
 #endif // CHPEG_CHPEG_BYTECODE_H

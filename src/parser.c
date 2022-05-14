@@ -156,15 +156,7 @@ Parser *Parser_new(const ByteCode *byte_code)
 {
     Parser *self = (Parser *)CHPEG_MALLOC(sizeof(Parser));
 
-    self->num_defs = byte_code->num_defs;
-    self->def_names = byte_code->def_names;
-    self->def_flags = byte_code->def_flags;
-    self->def_addrs = byte_code->def_addrs;
-    self->num_instructions = byte_code->num_instructions;
-    self->instructions = byte_code->instructions;
-    self->num_strings = byte_code->num_strings;
-    self->strings = byte_code->strings;
-    self->str_len = byte_code->str_len;
+    self->bc = byte_code;
 
     self->tree_root = NULL;
     self->max_tree_depth = 256;
@@ -228,7 +220,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
                 case IDENT:
                     str = Parser_def_name(self, arg); break;
                 case LIT:
-                    esc = esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
+                    esc = esc_bytes((unsigned char *)self->bc->strings[arg], self->bc->str_len[arg], 20);
                     break;
                 default: // unhandled op, show instruction in <> for debugging
                     esc = esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
@@ -270,8 +262,8 @@ void Parser_print_error(Parser *self, const unsigned char *input)
 
 const char *Parser_def_name(Parser *self, int index)
 {
-    if (index >= 0 && index < self->num_defs) {
-        return self->def_names[index];
+    if (index >= 0 && index < self->bc->num_defs) {
+        return self->bc->def_names[index];
     }
     return 0;
 }
@@ -292,7 +284,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
     int stack[self->max_stack_size]; int top = -1;
     Node *tree_stack[self->max_tree_depth]; int tree_top = -1;
 
-    const int *instructions = self->instructions;
+    const int *instructions = self->bc->instructions;
 
     int op = 0, arg = 0, pc = 0;
 
@@ -306,7 +298,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
     cnt_max = (size <= 2642245) ? (size < 128 ? 2097152 : size * size * size) : (unsigned long long)-1LL;
 
 #if SANITY_CHECKS
-    int num_inst = self->num_instructions;
+    int num_inst = self->bc->num_instructions;
     for(cnt = 0; cnt < cnt_max && pc < num_inst; ++cnt, ++pc)
 #else
     for(cnt = 0; cnt < cnt_max; ++cnt, ++pc)
@@ -379,13 +371,13 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                     if (tree_top >= self->max_tree_depth - 2) {
                         pc = -1; retval = TREE_STACK_OVERFLOW; break;
                     }
-                    if (self->def_flags[arg] & (LEAF | IGNORE)) {
+                    if (self->bc->def_flags[arg] & (LEAF | IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
                     else {
                         stack[++top] = 0;
                     }
-                    tree_stack[tree_top+1] = Node_push_child(tree_stack[tree_top], arg, offset, -1, self->def_flags[arg]);
+                    tree_stack[tree_top+1] = Node_push_child(tree_stack[tree_top], arg, offset, -1, self->bc->def_flags[arg]);
                     ++tree_top;
                 }
                 else {
@@ -393,7 +385,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 }
                 stack[++top] = offset;
                 stack[++top] = pc;
-                pc = self->def_addrs[arg];
+                pc = self->bc->def_addrs[arg];
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -411,7 +403,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (self->def_flags[arg] & IGNORE) {
+                    if (self->bc->def_flags[arg] & IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
                             pc = -1; retval = TREE_STACK_UNDERFLOW; break;
@@ -659,8 +651,8 @@ pred_cleanup:
             case CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
                 {
                     if (offset < size) {
-                        int mlen = self->str_len[arg], i;
-                        const unsigned char *mstr = self->strings[arg];
+                        int mlen = self->bc->str_len[arg], i;
+                        const unsigned char *mstr = self->bc->strings[arg];
                         for (i = 0; i < mlen; ++i) {
                             if (mstr[i] == input[offset]) {
                                 ++offset;
@@ -694,8 +686,8 @@ pred_cleanup:
 // Literal
             case LIT: // arg = str_id; match literal string; skip next instruction on match
                 {
-                    int len = self->str_len[arg];
-                    if ((offset < (size - (len - 1))) && !memcmp(&input[offset], self->strings[arg], len)) {
+                    int len = self->bc->str_len[arg];
+                    if ((offset < (size - (len - 1))) && !memcmp(&input[offset], self->bc->strings[arg], len)) {
                         offset += len;
                         ++pc;
                         break;

@@ -158,15 +158,7 @@ int ByteCode_compare(ByteCode *a, ByteCode *b);
 
 typedef struct _Parser
 {
-    int num_defs;
-    char **def_names;
-    int *def_flags;
-    int *def_addrs;
-    int num_instructions;
-    int *instructions;
-    int num_strings;
-    unsigned char **strings;
-    int *str_len;
+    const ByteCode *bc;
 
     Node *tree_root;
     int max_tree_depth;

@@ -178,7 +178,7 @@ void ByteCode_output_h(const ByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "extern ByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "extern const ByteCode %s;\n\n", varname ? varname : basename);
 
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
@@ -206,7 +206,7 @@ void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, con
     fprintf(fp, "#include \"%s.h\"\n", basename);
     fprintf(fp, "\n");
 
-    fprintf(fp, "ByteCode %s = {\n", varname ? varname : basename);
+    fprintf(fp, "const ByteCode %s = {\n", varname ? varname : basename);
     fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
 
     fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
