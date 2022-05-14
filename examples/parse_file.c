@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
             goto done;
         }
 
-        free(input);
+        CHPEG_FREE(input);
         input = NULL;
         length = -1;
     }
