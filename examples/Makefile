@@ -11,7 +11,7 @@ LDFLAGS=
 CHPEG_OBJDIR=chpeg
 CHPEG_SRC=../src
 
-CHPEG_SOURCE_FILES=parser.c compiler.c bytecode.c chpeg_bytecode.c opcodes.c util.c
+CHPEG_SOURCE_FILES=parser.c compiler.c bytecode.c chpeg_bytecode.c opcodes.c util.c mem.c
 CHPEG_SOURCES=$(patsubst %.c,$(CHPEG_SRC)/%.c,$(CHPEG_SOURCE_FILES))
 CHPEG_OBJECTS=$(patsubst $(CHPEG_SRC)/%.c,$(CHPEG_OBJDIR)/%.o,$(CHPEG_SOURCES))
 CHPEG_HEADERS=$(patsubst $(CHPEG_SRC)/%.c,$(CHPEG_SRC)/%.h,$(CHPEG_SOURCES)) $(CHPEG_SRC)/mem.h
