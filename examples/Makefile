@@ -50,3 +50,6 @@ clean:
 	-rm -rf $(EXAMPLES_OBJDIR)
 	-rm -rf $(CHPEG_OBJDIR)
 	-rm -f $(EXAMPLES)
+	-rm chpeg chpeg.c chpeg
+	-rm chpeg-hex chpeg-hex.c chpeg_hex_bytecode.*
+	-rm chpeg-nocase chpeg-nocase.c chpeg_nocase_bytecode.*

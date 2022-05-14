@@ -1,0 +1,5 @@
+insensitive <- S (name / name2)+ !.
+
+name <- 'name'i S
+name2 <- 'name2'
+S <-  [ \t\n\r]*

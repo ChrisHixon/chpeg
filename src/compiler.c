@@ -294,6 +294,10 @@ static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
         case CHPEG_OP(IDENTIFIER):
         case CHPEG_OP(CHARCLASS):
         case CHPEG_OP(LITERAL):
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_OP(LITERALSQ):
+        case CHPEG_OP(LITERALDQ):
+#endif /*CHPEG_OP(NOCASE)*/
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
             break;
@@ -303,7 +307,7 @@ static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
                 int lit_inst = cu->bc->num_instructions-2; //assuming CHPEG_LITERAL is the previous isntruction
                 int op = cu->bc->instructions[lit_inst] & 0xff;
                 int arg = cu->bc->instructions[lit_inst] >> 8;
-                ASSERT(op == LIT); // ensure it's what we expect
+                assert(op == LIT); // ensure it's what we expect
                 cu->bc->instructions[lit_inst] = INST(LIT_NC, arg); // overwrite it and do not generate any new instruction
             }
             break;
@@ -404,6 +408,10 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
         case CHPEG_OP(LITERAL):
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_OP(LITERALSQ):
+        case CHPEG_OP(LITERALDQ):
+#endif /*CHPEG_OP(NOCASE)*/
             Compiler_add_inst(cu, INST(LIT, gp->val.ival));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
@@ -439,6 +447,12 @@ static int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, 
 static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_OP(NOCASE):
+            break;
+        case CHPEG_OP(LITERALSQ):
+        case CHPEG_OP(LITERALDQ):
+#endif /*CHPEG_OP(NOCASE)*/
         case CHPEG_OP(LITERAL):
         case CHPEG_OP(CHARCLASS):
             {

@@ -689,10 +689,17 @@ pred_cleanup:
                 break;
 
 // Literal
+#ifdef CHPEG_HAS_NOCASE
+            case LIT_NC:
+#endif /*CHPEG_OP(NOCASE)*/
             case LIT: // arg = str_id; match literal string; skip next instruction on match
                 {
                     int len = self->bc->str_len[arg];
-                    if ((offset < (size - (len - 1))) && !memcmp(&input[offset], self->bc->strings[arg], len)) {
+                    if ((offset < (size - (len - 1))) && !(
+#ifdef CHPEG_HAS_NOCASE
+			    (op == LIT_NC) ? strncasecmp((const char*)&input[offset], (const char*)self->bc->strings[arg], len) :
+#endif /*CHPEG_OP(NOCASE)*/
+					memcmp(&input[offset], self->bc->strings[arg], len))) {
                         offset += len;
                         ++pc;
                         break;
