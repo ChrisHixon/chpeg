@@ -63,7 +63,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
         printf(" Begin    Len  DefID  Flags  Def. Name / Data\n");
         printf("---------------------------------------------------------------------------------\n");
     }
-    printf("%6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
+    printf("%6lu %6lu %6d | %s%s%s | %*s%s \"%s\"\n",
         self->offset,
         self->length,
         self->def,
@@ -83,7 +83,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
     }
 }
 
-Node *Node_new(int def, int offset, int length, int flags)
+Node *Node_new(int def, size_t offset, size_t length, int flags)
 {
     Node *self = (Node *)CHPEG_MALLOC(sizeof(Node));
     self->def = def;
@@ -107,7 +107,7 @@ void Node_free(Node *self)
     CHPEG_FREE(self);
 }
 
-Node *Node_push_child(Node *self, int def, int offset, int length, int flags)
+Node *Node_push_child(Node *self, int def, size_t offset, size_t length, int flags)
 {
     Node *node = Node_new(def, offset, length, flags);
     node->next = self->head;
@@ -169,7 +169,7 @@ Parser *Parser_new(const ByteCode *byte_code)
     self->tree_root = NULL;
     self->max_tree_depth = 256;
     self->max_stack_size = 256 * 8;
-    self->error_offset = -1;
+    self->error_offset = 0;
     self->error_parent_def = -1;
     self->error_def = -1;
     self->error_inst = -1;
@@ -199,7 +199,7 @@ void Parser_print_tree(Parser *self, const unsigned char *input)
     Node_print(self->tree_root, self, input, 0);
 }
 
-void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected)
+void Parser_expected(Parser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
     if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
         self->error_offset = offset;
@@ -216,7 +216,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
     const char *parent_def_name = Parser_def_name(self, self->error_parent_def);
     const char *def_name = Parser_def_name(self, self->error_def);
 
-    if (self->error_offset >= 0) {
+    if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
             int op = self->error_inst & 0xff;
             int arg = self->error_inst >> 8;
@@ -234,7 +234,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
                     esc = esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
                     break;
             }
-            printf("%s \"%s\" in %s at offset %d\n",
+            printf("%s \"%s\" in %s at offset %lu\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? str : (esc ? esc : "<NULL>"),
                     def_name ? def_name : "<N/A>",
@@ -246,14 +246,14 @@ void Parser_print_error(Parser *self, const unsigned char *input)
         }
         else {
             if (parent_def_name) {
-                printf("%s %s in %s at offset %d\n",
+                printf("%s %s in %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
                         self->error_offset);
             }
             else {
-                printf("%s %s at offset %d\n",
+                printf("%s %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         self->error_offset);
@@ -277,9 +277,10 @@ const char *Parser_def_name(Parser *self, int index)
 }
 
 // TODO: check sanity checks and overflow checks, make macros to make it easier
-int Parser_parse(Parser *self, const unsigned char *input, int size)
+int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
-    int offset = 0, locked = 0, retval = 0;
+    int locked = 0, retval = 0;
+    size_t offset = 0;
 
 #if ERRORS
     int err_locked = 0;
@@ -289,21 +290,21 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
     int tree_changed = 0;
 #endif
 
-    int stack[self->max_stack_size]; int top = -1;
+    size_t stack[self->max_stack_size]; int top = -1;
     Node *tree_stack[self->max_tree_depth]; int tree_top = -1;
 
     const int *instructions = self->instructions;
 
     int op = 0, arg = 0, pc = 0;
 
-    if (size < 0) { return INVALID_SIZE; }
+    if (length < 0) { return INVALID_LENGTH; }
 
     self->tree_root = Node_new(0, 0, -1, 0);
     if (tree_top >= self->max_tree_depth - 2) return TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
     unsigned long long cnt = 0, cnt_max = 0;
-    cnt_max = (size <= 2642245) ? (size < 128 ? 2097152 : size * size * size) : (unsigned long long)-1LL;
+    cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
 
 #if SANITY_CHECKS
     int num_inst = self->num_instructions;
@@ -334,7 +335,7 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 case IDENT:
                 case ISUCC:
                     def_name = Parser_def_name(self, arg);
-                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s%s\n",
+                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, op_name(op), arg, tree_top*2, "",
                         def_name ? def_name : "<INVALID>");
                     def_name = NULL;
@@ -343,14 +344,14 @@ int Parser_parse(Parser *self, const unsigned char *input, int size)
                 case CHRCLS:
                     tmp = esc_string(
                         self->strings[arg], self->str_len[arg], 28);
-                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s\"%s\"\n",
+                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s\"%s\"\n",
                         cnt, offset, pc, op_name(op), arg, tree_top*2, "",
                         tmp ? tmp : (unsigned char *)"<NULL>");
                     CHPEG_FREE(tmp);
                     tmp = NULL;
                     break;
                 default:
-                    fprintf(stderr, "=%8llu %8d %8d %12s %5d %*s-\n",
+                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s-\n",
                         cnt, offset, pc, op_name(op), arg, tree_top*2, "");
             }
         }
@@ -658,7 +659,7 @@ pred_cleanup:
 // CharClass
             case CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
                 {
-                    if (offset < size) {
+                    if (offset < length) {
                         int mlen = self->str_len[arg], i;
                         const unsigned char *mstr = self->strings[arg];
                         for (i = 0; i < mlen; ++i) {
@@ -695,7 +696,7 @@ pred_cleanup:
             case LIT: // arg = str_id; match literal string; skip next instruction on match
                 {
                     int len = self->str_len[arg];
-                    if ((offset < (size - (len - 1))) && !memcmp(&input[offset], self->strings[arg], len)) {
+                    if ((offset < (length - (len - 1))) && !memcmp(&input[offset], self->strings[arg], len)) {
                         offset += len;
                         ++pc;
                         break;
@@ -715,7 +716,7 @@ pred_cleanup:
 
 // Dot
             case DOT: // arg = fail addr; match any char; goto addr on failure
-                if (offset < size) { offset++; break; }
+                if (offset < length) { offset++; break; }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
                     Parser_expected(self,
@@ -753,7 +754,15 @@ pred_cleanup:
                     retval = UNEXPECTED_TREE_STACK_DATA;
                 }
                 else {
-                    retval = offset;
+                    if (consumed != NULL) {
+                        *consumed = offset;
+                    }
+                    if (offset == length) {
+                        retval = 0;
+                    }
+                    else {
+                        retval = EXTRANEOUS_INPUT;
+                    }
                 }
                 break;
 
@@ -774,9 +783,12 @@ pred_cleanup:
         }
 #endif
         if (pc < 0) {
+            self->parse_result = retval;
             return retval;
         }
     }
 
-    return RUNAWAY;
+    retval = RUNAWAY;
+    self->parse_result = retval;
+    return retval;
 }

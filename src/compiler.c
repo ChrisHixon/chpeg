@@ -510,7 +510,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
     }
 }
 
-ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose)
+ByteCode *Compiler_compile(const unsigned char *input, size_t length, int *result_return, int verbose)
 {
     CompilationUnit cu;
 
@@ -520,31 +520,32 @@ ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_ret
     cu.root = NULL;
     cu.strings_allocated = 0;
 
-    int result = Parser_parse(cu.parser, input, size);
+    size_t consumed = 0;
+    int result = Parser_parse(cu.parser, input, length, &consumed);
     if (result_return) {
         *result_return = result;
     }
 
     if (verbose) {
-        if (result >= 0) {
-            if (result == size) {
-                printf("parse ok.\n");
-            }
-            else {
-                printf("parse succeeded but consumed %d bytes out of %d\n", result, size);
-            }
+        if (result == 0) {
+            printf("Parse successful.\n");
             if (verbose & 0x2) {
                 Parser_print_tree(cu.parser, input);
             }
         }
         else {
-            printf("parse failed with result: %d\n", result);
+            if (result == EXTRANEOUS_INPUT) {
+                printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
+            }
+            else {
+                printf("Parse failed with result: %d\n", result);
+            }
             Parser_print_error(cu.parser, input);
             goto done;
         }
     }
     else {
-        if (result < 0) {
+        if (result != 0) {
             goto done;
         }
     }

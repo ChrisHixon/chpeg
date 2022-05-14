@@ -5,17 +5,19 @@
 
 enum ErrorCodes
 {
-    PARSE_FAILED = -1,
-    UNKNOWN_INSTRUCTION = -2,
-    RUNAWAY = -3,
-    INVALID_SIZE = -4,
-    STACK_OVERFLOW = -5,
-    TREE_STACK_OVERFLOW = -6,
-    STACK_UNDERFLOW = -7,
-    TREE_STACK_UNDERFLOW = -8,
-    UNEXPECTED_STACK_DATA = -9,
-    UNEXPECTED_TREE_STACK_DATA = -10,
-    INVALID_IDENTIFIER = -11,
+    NO_ERROR = 0,
+    PARSE_FAILED = 1,
+    EXTRANEOUS_INPUT = 2,
+    UNKNOWN_INSTRUCTION = 3,
+    RUNAWAY = 4,
+    INVALID_LENGTH = 5,
+    STACK_OVERFLOW = 6,
+    TREE_STACK_OVERFLOW = 7,
+    STACK_UNDERFLOW = 8,
+    TREE_STACK_UNDERFLOW = 9,
+    UNEXPECTED_STACK_DATA = 10,
+    UNEXPECTED_TREE_STACK_DATA = 11,
+    INVALID_IDENTIFIER = 12,
 };
 
 struct _CompilationUnit;
@@ -28,17 +30,17 @@ struct _Parser;
 typedef struct _Node
 {
     int def;
-    int offset;
-    int length;
+    size_t offset;
+    size_t length;
     int flags;
     int num_children;
     struct _Node *head;
     struct _Node *next;
 } Node;
 
-Node *Node_new(int def, int offset, int length, int flags);
+Node *Node_new(int def, size_t offset, size_t length, int flags);
 void Node_free(Node *self);
-Node *Node_push_child(Node *self, int def, int offset, int length, int flags);
+Node *Node_push_child(Node *self, int def, size_t offset, size_t length, int flags);
 void Node_pop_child(Node *self);
 Node *Node_unwrap(Node *self);
 
@@ -64,11 +66,12 @@ typedef struct _Parser
     Node *tree_root;
     int max_tree_depth;
     int max_stack_size;
-    int error_offset;
+    size_t error_offset;
     int error_def;
     int error_parent_def;
     int error_inst;
     int error_expected;
+    int parse_result;
 
 #if VM_TRACE
     int vm_trace;
@@ -81,10 +84,10 @@ typedef struct _Parser
 
 Parser *Parser_new(const ByteCode *byte);
 void Parser_free(Parser *self);
-int Parser_parse(Parser *self, const unsigned char *input, int size);
+int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t *consumed);
 void Parser_print_tree(Parser *self, const unsigned char *input);
 const char *Parser_def_name(Parser *self, int index);
-void Parser_expected(Parser *self, int parent_def, int def, int inst, int offset, int expected);
+void Parser_expected(Parser *self, int parent_def, int def, int inst, size_t offset, int expected);
 void Parser_print_error(Parser *self, const unsigned char *input);
 
 #endif // #ifndef CHPEG_PARSER_H
