@@ -339,3 +339,8 @@ CHPEG_API const ByteCode chpeg_bytecode = {
 
     .str_len = (int[25]){1, 1, 2, 1, 2, 1, 1, 3, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2},
 };
+
+CHPEG_API const ByteCode *Compiler_bytecode()
+{
+    return &chpeg_bytecode;
+}

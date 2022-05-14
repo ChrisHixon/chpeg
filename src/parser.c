@@ -224,8 +224,11 @@ CHPEG_API void Parser_print_error(Parser *self, const unsigned char *input)
                 case LIT:
                     esc = esc_bytes((unsigned char *)self->bc->strings[arg], self->bc->str_len[arg], 20);
                     break;
+                case CHRCLS:
+                    str = (const char*)self->bc->strings[arg];
+                    break;
                 default: // unhandled op, show instruction in <> for debugging
-                    esc = esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
+                    str = OpNames[op];
                     break;
             }
             printf("%s \"%s\" in %s at offset %d\n",

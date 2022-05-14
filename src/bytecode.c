@@ -140,7 +140,7 @@ CHPEG_API void ByteCode_output_h(const ByteCode *self, FILE *fp,
     int i, j, slen;
 
     // guard
-    char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
+    char *preproc[3] = { "#ifndef", "#define", "#endif /*" };
     for (j = 0; j < 2; j++) {
         fprintf(fp, "%s ", preproc[j]);
         if (prefix) {
@@ -159,10 +159,10 @@ CHPEG_API void ByteCode_output_h(const ByteCode *self, FILE *fp,
         fputc('\n', fp);
     }
 
-    fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
+    fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION");
     fprintf(fp, "\n#include \"bytecode.h\"\n");
-    fprintf(fp, "#include \"%s.h\"\n\n", opcodes ? opcodes : "opcodes");
-    fprintf(fp, "\n#endif /*CHPEG_AMALGAMATION*/\n");
+    fprintf(fp, "#include \"%s.h\"\n", opcodes ? opcodes : "opcodes");
+    fprintf(fp, "#endif /*CHPEG_AMALGAMATION*/\n\n");
 
     // #define for each def name
     for (j = 0; j < self->num_defs; j++) {
@@ -182,7 +182,9 @@ CHPEG_API void ByteCode_output_h(const ByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "CHPEG_API const ByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
+    fprintf(fp, "CHPEG_API const ByteCode %s;\n", varname ? varname : basename);
+    fprintf(fp, "#endif /*CHPEG_AMALGAMATION*/\n\n");
 
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
@@ -198,7 +200,7 @@ CHPEG_API void ByteCode_output_h(const ByteCode *self, FILE *fp,
             fputc(toupper(basename[i]), fp);
         }
     }
-    fputc('\n', fp);
+    fprintf(fp, "*/\n\n");
 }
 
 CHPEG_API void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, const char *varname)
@@ -209,7 +211,7 @@ CHPEG_API void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *bas
 
     fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
     fprintf(fp, "#include \"%s.h\"\n", basename);
-    fprintf(fp, "\n#endif /*CHPEG_AMALGAMATION*/\n");
+    fprintf(fp, "#endif /*CHPEG_AMALGAMATION*/\n");
     fprintf(fp, "\n");
 
     fprintf(fp, "CHPEG_API const ByteCode %s = {\n", varname ? varname : basename);
@@ -298,7 +300,13 @@ CHPEG_API void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *bas
     }
     fprintf(fp, "}\n");
 
-    fprintf(fp, "};\n");
+    fprintf(fp,
+        "};\n"
+        "CHPEG_API const ByteCode *Compiler_bytecode()\n"
+        "{\n"
+        "    return &%s;\n"
+        "};\n\n", varname ? varname : basename
+        );
 }
 
 CHPEG_API int ByteCode_compare(const ByteCode *a, const ByteCode *b)

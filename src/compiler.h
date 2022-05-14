@@ -14,6 +14,8 @@
 //
 
 CHPEG_API ByteCode *Compiler_compile(const unsigned char *input, int size, int *result_return, int verbose);
+#ifndef CHPEG_AMALGAMATION
 CHPEG_API const ByteCode *Compiler_bytecode();
+#endif /*CHPEG_AMALGAMATION*/
 
 #endif // #ifndef CHPEG_COMPILER_H

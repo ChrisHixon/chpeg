@@ -1,0 +1,5 @@
+#define CHPEG_AMALGAMATION
+#define CHPEG_API static
+#define CHPEG_HAS_EXTRA_ESCAPE
+#define CHPEG_HAS_HEXCHAR
+#define CHPEG_OP(op) CHPEG_HEX_BYTECODE_##op

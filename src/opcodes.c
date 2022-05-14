@@ -29,6 +29,7 @@ CHPEG_API const char *OpNames[NUM_OPS] =
     "PNOMATS",
     "CHRCLS",
     "LIT",
+    "LIT_NC",
     "DOT",
     "SUCC",
     "FAIL"

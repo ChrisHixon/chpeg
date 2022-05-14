@@ -11,7 +11,11 @@
 CHPEG_API char *esc_bytes(const unsigned char *bytes, int length, int limit)
 {
     static const char *hex_digit = "0123456789ABCDEF";
+#ifdef CHPEG_HAS_EXTRA_ESCAPE
+    static const char *esc_chars = "\\\"\a\b\e\f\t\v\r\n";
+#else
     static const char *esc_chars = "\\\"\t\r\n";
+#endif
 
     if (!bytes || length < 0) { return NULL; }
     if (limit > 0 && limit < 3) { return NULL; }
@@ -52,6 +56,13 @@ CHPEG_API char *esc_bytes(const unsigned char *bytes, int length, int limit)
         else if (strchr(esc_chars, b)) {
             *p++ = '\\';
             switch (b) {
+#ifdef CHPEG_HAS_EXTRA_ESCAPE
+                case '\a': *p++ = 'a'; break;
+                case '\b': *p++ = 'b'; break;
+                case '\e': *p++ = 'e'; break;
+                case '\f': *p++ = 'f'; break;
+                case '\v': *p++ = 'v'; break;
+#endif                
                 case '\r': *p++ = 'r'; break;
                 case '\t': *p++ = 't'; break;
                 case '\n': *p++ = 'n'; break;

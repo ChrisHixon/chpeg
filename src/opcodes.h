@@ -31,6 +31,7 @@ enum OpCodes
     PNOMATS,
     CHRCLS,
     LIT,
+    LIT_NC,
     DOT,
     SUCC,
     FAIL,

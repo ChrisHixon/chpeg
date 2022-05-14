@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #ifndef CHPEG_AMALGAMATION
 #include "mem.h"
@@ -14,6 +15,10 @@
 #ifndef DEBUG_COMPILER
 #define DEBUG_COMPILER 0
 #endif
+
+#ifndef CHPEG_OP
+#define CHPEG_OP(op) CHPEG_##op
+#endif /*CHPEG_OP*/
 
 //
 // Gnode: grammar tree node (temporary use during compilation)
@@ -172,17 +177,17 @@ static void Compiler_setup_defs(CompilationUnit *cu)
     cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
-        if (CHPEG_DEFINITION != p->def) { continue; }
+        if (CHPEG_OP(DEFINITION) != p->def) { continue; }
 
         Node *tmp = p->head; // Identifier, definition name
-        if (NULL == tmp || CHPEG_IDENTIFIER != tmp->def) { continue; }
+        if (NULL == tmp || CHPEG_OP(IDENTIFIER) != tmp->def) { continue; }
         cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
         cu->bc->def_names[i][tmp->length] = '\0';
 
         int flags = 0;
         tmp = tmp->next; // Options, flags
-        if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
+        if (NULL != tmp && CHPEG_OP(OPTIONS) == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
                     case 'S': flags |= STOP; break;
@@ -243,7 +248,7 @@ static inline int Compiler_alloc_inst(CompilationUnit *cu)
 static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_OP(GRAMMAR):
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
@@ -251,12 +256,12 @@ static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
                 Compiler_alloc_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_OP(DEFINITION):
             Compiler_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->next->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_OP(CHOICE):
             gp->parse_state = Compiler_alloc_inst(cu);
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_alloc_instructions(cu, p);
@@ -265,33 +270,44 @@ static void Compiler_alloc_instructions(CompilationUnit *cu, GNode *gp)
             }
             Compiler_alloc_inst(cu);
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_OP(SEQUENCE):
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_alloc_instructions(cu, p);
             }
             gp->parse_state = gp->head->parse_state;
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_OP(REPEAT):
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_OP(PREDICATE):
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = Compiler_alloc_inst(cu);
             gp->head->next->parent_fail_state = Compiler_alloc_inst(cu);
             break;
-        case CHPEG_DOT:
+        case CHPEG_OP(DOT):
             gp->parse_state = Compiler_alloc_inst(cu);
             break;
-        case CHPEG_IDENTIFIER:
-        case CHPEG_CHARCLASS:
-        case CHPEG_LITERAL:
+        case CHPEG_OP(IDENTIFIER):
+        case CHPEG_OP(CHARCLASS):
+        case CHPEG_OP(LITERAL):
             gp->parse_state = Compiler_alloc_inst(cu);
             Compiler_alloc_inst(cu);
             break;
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_OP(NOCASE):
+            {
+                int lit_inst = cu->bc->num_instructions-2; //assuming CHPEG_LITERAL is the previous isntruction
+                int op = cu->bc->instructions[lit_inst] & 0xff;
+                int arg = cu->bc->instructions[lit_inst] >> 8;
+                ASSERT(op == LIT); // ensure it's what we expect
+                cu->bc->instructions[lit_inst] = INST(LIT_NC, arg); // overwrite it and do not generate any new instruction
+            }
+            break;
+#endif /*CHPEG_OP(NOCASE)*/
     }
 }
 
@@ -303,7 +319,7 @@ static inline void Compiler_add_inst(CompilationUnit *cu, int inst)
 static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_OP(GRAMMAR):
             Compiler_add_inst(cu, INST(IDENT, 0));
             Compiler_add_inst(cu, INST(FAIL, 0));
             Compiler_add_inst(cu, INST(SUCC, 0));
@@ -311,12 +327,12 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 Compiler_add_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_OP(DEFINITION):
             Compiler_add_instructions(cu, gp->head->next);
             Compiler_add_inst(cu, INST(ISUCC, Compiler_find_def(cu, gp->head->node)));
             Compiler_add_inst(cu, INST(IFAIL, 0));
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_OP(CHOICE):
             Compiler_add_inst(cu, INST(CHOICE, 0));
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_add_instructions(cu, p);
@@ -325,14 +341,14 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
             }
             Compiler_add_inst(cu, INST(CFAIL, gp->parent_fail_state - 1));
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_OP(SEQUENCE):
             for (GNode *p = gp->head; p; p = p->next) {
                 p->parent_next_state = p->next ? p->next->parse_state : gp->parent_next_state;
                 p->parent_fail_state = gp->parent_fail_state;
                 Compiler_add_instructions(cu, p);
             }
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_OP(REPEAT):
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
                 switch (op) {
@@ -357,7 +373,7 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 }
             }
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_OP(PREDICATE):
             {
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
@@ -376,18 +392,18 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 }
             }
             break;
-        case CHPEG_DOT:
+        case CHPEG_OP(DOT):
             Compiler_add_inst(cu, INST(DOT, gp->parent_fail_state - 1));
             break;
-        case CHPEG_IDENTIFIER:
+        case CHPEG_OP(IDENTIFIER):
             Compiler_add_inst(cu, INST(IDENT, Compiler_find_def(cu, gp->node)));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_CHARCLASS:
+        case CHPEG_OP(CHARCLASS):
             Compiler_add_inst(cu, INST(CHRCLS, gp->val.ival));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_LITERAL:
+        case CHPEG_OP(LITERAL):
             Compiler_add_inst(cu, INST(LIT, gp->val.ival));
             Compiler_add_inst(cu, INST(GOTO, gp->parent_fail_state - 1));
             break;
@@ -423,8 +439,8 @@ static int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, 
 static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_LITERAL:
-        case CHPEG_CHARCLASS:
+        case CHPEG_OP(LITERAL):
+        case CHPEG_OP(CHARCLASS):
             {
                 int len = 0, offset = 0;
                 for (GNode *p = gp->head; p; p = p->next) {
@@ -439,13 +455,13 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
                 gp->val.ival = Compiler_alloc_string(cu, str, len);
 #if DEBUG_COMPILER
                 char *tmp = esc_bytes(str, len, 20);
-                printf("PEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
+                printf("CHPEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
                 CHPEG_FREE(tmp);
 #endif
                 CHPEG_FREE(str);
             }
             break;
-        case CHPEG_CHARRANGE:
+        case CHPEG_OP(CHARRANGE):
             {
                 for (GNode *p = gp->head; p; p = p->next) {
                     Compiler_alloc_strings(cu, p);
@@ -461,7 +477,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #endif
             }
             break;
-        case CHPEG_PLAINCHAR:
+        case CHPEG_OP(PLAINCHAR):
             {
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
@@ -472,7 +488,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #endif
             }
             break;
-        case CHPEG_ESCCHAR:
+        case CHPEG_OP(ESCCHAR):
             {
                 gp->val.cval[0] = cu->input[gp->node->offset + 1];
                 gp->value_len = 1;
@@ -488,7 +504,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #endif
             }
             break;
-        case CHPEG_OCTCHAR:
+        case CHPEG_OP(OCTCHAR):
             {
                 int val = 0; int len = gp->node->length - 1;
                 const unsigned char *ip = cu->input + gp->node->offset + 1;
@@ -504,6 +520,57 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
 #endif
             }
             break;
+#ifdef CHPEG_HAS_HEXCHAR
+        case CHPEG_OP(HEXCHAR):
+            {
+                int val = 0; int len = gp->node->length - 1;
+                const unsigned char *ip = cu->input + gp->node->offset + 1;
+                for (int i = 1; i < len; ++i) {
+                    unsigned char c = ip[i];
+                    switch(c) {
+                        case '0':
+                        case '1':
+                        case '2':
+                        case '3':
+                        case '4':
+                        case '5':
+                        case '6':
+                        case '7':
+                        case '8':
+                        case '9':
+                            c -= '0';
+                            break;
+
+                        case 'a':
+                        case 'b':
+                        case 'c':
+                        case 'd':
+                        case 'e':
+                        case 'f':
+                            c = 10 + (c - 'a');
+                            break;
+
+                        case 'A':
+                        case 'B':
+                        case 'C':
+                        case 'D':
+                        case 'E':
+                        case 'F':
+                            c = 10 + (c - 'A');
+                            break;
+                    }
+                    val = (val << 4) | c;
+                }
+                gp->val.cval[0] = val & 255;
+                gp->value_len = 1;
+#if DEBUG_COMPILER
+                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_HEXCHAR %s\n", tmp);
+                CHPEG_FREE(tmp);
+#endif
+            }
+            break;
+#endif /*CHPEG_HEXCHAR*/
         default:
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_alloc_strings(cu, p);
@@ -583,9 +650,4 @@ done:
     if (cu.parser) { Parser_free(cu.parser); }
     if (cu.root) { GNode_free(cu.root); }
     return cu.bc;
-}
-
-CHPEG_API const ByteCode *Compiler_bytecode()
-{
-    return &chpeg_bytecode;
 }

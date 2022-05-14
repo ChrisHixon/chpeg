@@ -8,7 +8,7 @@ INCLUDES=-I$(CHPEG_SRC)
 LDFLAGS=
 
 # chpeg pseudo-lib
-CHPEG_OBJDIR=chpeg
+CHPEG_OBJDIR=chpeg_obj
 CHPEG_SRC=../src
 
 CHPEG_SOURCE_FILES=parser.c compiler.c bytecode.c chpeg_bytecode.c opcodes.c util.c mem.c
