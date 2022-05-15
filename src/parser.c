@@ -52,7 +52,7 @@
 // ChpegNode
 //
 
-void Node_print(ChpegNode *self, Parser *parser, const unsigned char *input, int depth)
+void Node_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
     char *data = esc_bytes(&input[self->offset], self->length, 40);
@@ -149,12 +149,12 @@ ChpegNode *Node_unwrap(ChpegNode *self)
 }
 
 //
-// Parser
+// ChpegParser
 //
 
-Parser *Parser_new(const ChpegByteCode *byte_code)
+ChpegParser *Parser_new(const ChpegByteCode *byte_code)
 {
-    Parser *self = (Parser *)CHPEG_MALLOC(sizeof(Parser));
+    ChpegParser *self = (ChpegParser *)CHPEG_MALLOC(sizeof(ChpegParser));
 
     self->num_defs = byte_code->num_defs;
     self->def_names = byte_code->def_names;
@@ -185,7 +185,7 @@ Parser *Parser_new(const ChpegByteCode *byte_code)
     return self;
 }
 
-void Parser_free(Parser *self)
+void Parser_free(ChpegParser *self)
 {
     if (self->tree_root) {
         Node_free(self->tree_root);
@@ -194,12 +194,12 @@ void Parser_free(Parser *self)
     CHPEG_FREE(self);
 }
 
-void Parser_print_tree(Parser *self, const unsigned char *input)
+void Parser_print_tree(ChpegParser *self, const unsigned char *input)
 {
     Node_print(self->tree_root, self, input, 0);
 }
 
-void Parser_expected(Parser *self, int parent_def, int def, int inst, size_t offset, int expected)
+void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
     if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
         self->error_offset = offset;
@@ -210,7 +210,7 @@ void Parser_expected(Parser *self, int parent_def, int def, int inst, size_t off
     }
 }
 
-void Parser_print_error(Parser *self, const unsigned char *input)
+void Parser_print_error(ChpegParser *self, const unsigned char *input)
 {
 #if ERRORS
     const char *parent_def_name = Parser_def_name(self, self->error_parent_def);
@@ -268,7 +268,7 @@ void Parser_print_error(Parser *self, const unsigned char *input)
 #endif
 }
 
-const char *Parser_def_name(Parser *self, int index)
+const char *Parser_def_name(ChpegParser *self, int index)
 {
     if (index >= 0 && index < self->num_defs) {
         return self->def_names[index];
@@ -277,7 +277,7 @@ const char *Parser_def_name(Parser *self, int index)
 }
 
 // TODO: check sanity checks and overflow checks, make macros to make it easier
-int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t *consumed)
+int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
     int locked = 0, retval = 0;
     size_t offset = 0;

@@ -21,7 +21,7 @@ enum ChpegErrorCodes
 };
 
 struct _CompilationUnit;
-struct _Parser;
+struct _ChpegParser;
 
 //
 // Syntax tree ChpegNode
@@ -45,13 +45,13 @@ void Node_pop_child(ChpegNode *self);
 ChpegNode *Node_unwrap(ChpegNode *self);
 
 // debugging / dev aid. TODO: should disappear based on some DEBUG/NDEBUG macro
-void Node_print(ChpegNode *self, struct _Parser *parser, const unsigned char *input, int depth);
+void Node_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
 
 //
-// Parser
+// ChpegParser
 //
 
-typedef struct _Parser
+typedef struct _ChpegParser
 {
     int num_defs;
     char **def_names;
@@ -80,14 +80,14 @@ typedef struct _Parser
     int vm_print_tree;
 #endif
 
-} Parser;
+} ChpegParser;
 
-Parser *Parser_new(const ChpegByteCode *byte_code);
-void Parser_free(Parser *self);
-int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t *consumed);
-void Parser_print_tree(Parser *self, const unsigned char *input);
-const char *Parser_def_name(Parser *self, int index);
-void Parser_expected(Parser *self, int parent_def, int def, int inst, size_t offset, int expected);
-void Parser_print_error(Parser *self, const unsigned char *input);
+ChpegParser *Parser_new(const ChpegByteCode *byte_code);
+void Parser_free(ChpegParser *self);
+int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
+void Parser_print_tree(ChpegParser *self, const unsigned char *input);
+const char *Parser_def_name(ChpegParser *self, int index);
+void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
+void Parser_print_error(ChpegParser *self, const unsigned char *input);
 
 #endif // #ifndef CHPEG_PARSER_H

@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     unsigned char *input = NULL;
     size_t length = 0;
     ChpegByteCode *byte_code = NULL;
-    Parser *parser = NULL;
+    ChpegParser *parser = NULL;
     int parse_result = 0;
     int ret = 0;
     char *grammar_filename = NULL;

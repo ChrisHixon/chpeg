@@ -108,7 +108,7 @@ static GNode *GNode_reverse(GNode *self)
 
 typedef struct _CompilationUnit
 {
-    Parser *parser;
+    ChpegParser *parser;
     const unsigned char *input;
     ChpegByteCode *bc;
     GNode *root;
