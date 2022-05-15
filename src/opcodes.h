@@ -1,43 +1,43 @@
 #ifndef CHPEG_OPCODES_H
 #define CHPEG_OPCODES_H
 
-enum OpCodes
+enum ChpegOp
 {
-    GOTO,
-    IDENT,
-    ISUCC,
-    IFAIL,
-    RSBEG,
-    RQBEG,
-    CHOICE,
-    CISUCC,
-    CFAIL,
-    CIFAIL,
-    RPBEG,
-    RPMAT,
-    RPDONE,
-    RSMAT,
-    RSDONE,
-    RQDONE,
-    RQMAT,
-    PRED,
-    PMATCHF,
-    PNOMATF,
-    PMATCHS,
-    PNOMATS,
-    CHRCLS,
-    LIT,
-    DOT,
-    SUCC,
-    FAIL,
-    NUM_OPS
+    CHPEG_OP_GOTO,
+    CHPEG_OP_IDENT,
+    CHPEG_OP_ISUCC,
+    CHPEG_OP_IFAIL,
+    CHPEG_OP_RSBEG,
+    CHPEG_OP_RQBEG,
+    CHPEG_OP_CHOICE,
+    CHPEG_OP_CISUCC,
+    CHPEG_OP_CFAIL,
+    CHPEG_OP_CIFAIL,
+    CHPEG_OP_RPBEG,
+    CHPEG_OP_RPMAT,
+    CHPEG_OP_RPDONE,
+    CHPEG_OP_RSMAT,
+    CHPEG_OP_RSDONE,
+    CHPEG_OP_RQDONE,
+    CHPEG_OP_RQMAT,
+    CHPEG_OP_PRED,
+    CHPEG_OP_PMATCHF,
+    CHPEG_OP_PNOMATF,
+    CHPEG_OP_PMATCHS,
+    CHPEG_OP_PNOMATS,
+    CHPEG_OP_CHRCLS,
+    CHPEG_OP_LIT,
+    CHPEG_OP_DOT,
+    CHPEG_OP_SUCC,
+    CHPEG_OP_FAIL,
+    CHPEG_NUM_OPS
 };
 
-extern const char *OpNames[NUM_OPS];
+extern const char *Chpeg_op_names[CHPEG_NUM_OPS];
 
-static inline const char *op_name(int op)
+static inline const char *Chpeg_op_name(int op)
 {
-    return (op >= 0 && op < NUM_OPS) ? OpNames[op] : "N/A";
+    return (op >= 0 && op < CHPEG_NUM_OPS) ? Chpeg_op_names[op] : "N/A";
 }
 
 #endif // #ifndef CHPEG_OPCODES_H

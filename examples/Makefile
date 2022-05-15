@@ -3,7 +3,7 @@ SHELL=/bin/sh
 .SUFFIXES: .c .o
 
 CC=gcc
-CFLAGS=-Wall -std=c99 -O3
+CFLAGS=-Wall -std=c99 -O3 -DVM_TRACE -DVM_PRINT_TREE
 INCLUDES=-I$(CHPEG_SRC)
 LDFLAGS=
 

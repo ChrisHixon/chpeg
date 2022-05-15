@@ -223,11 +223,11 @@ void Parser_print_error(Parser *self, const unsigned char *input)
             char *esc = NULL;
             const char *str = NULL;
             switch (op) {
-                case DOT:
+                case CHPEG_OP_DOT:
                     str = "character"; break;
-                case IDENT:
+                case CHPEG_OP_IDENT:
                     str = Parser_def_name(self, arg); break;
-                case LIT:
+                case CHPEG_OP_LIT:
                     esc = esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
                     break;
                 default: // unhandled op, show instruction in <> for debugging
@@ -329,30 +329,30 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             if (cnt == 0) {
                 fprintf(stderr, "=     CNT   OFFSET       PC           OP   ARG\n");
             }
-            unsigned char *tmp;
+            char *tmp;
             const char *def_name;
             switch (op) {
-                case IDENT:
-                case ISUCC:
+                case CHPEG_OP_IDENT:
+                case CHPEG_OP_ISUCC:
                     def_name = Parser_def_name(self, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
-                        cnt, offset, pc, op_name(op), arg, tree_top*2, "",
+                        cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         def_name ? def_name : "<INVALID>");
                     def_name = NULL;
                     break;
-                case LIT:
-                case CHRCLS:
-                    tmp = esc_string(
+                case CHPEG_OP_LIT:
+                case CHPEG_OP_CHRCLS:
+                    tmp = esc_bytes(
                         self->strings[arg], self->str_len[arg], 28);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s\"%s\"\n",
-                        cnt, offset, pc, op_name(op), arg, tree_top*2, "",
-                        tmp ? tmp : (unsigned char *)"<NULL>");
+                        cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
+                        tmp ? tmp : "<NULL>");
                     CHPEG_FREE(tmp);
                     tmp = NULL;
                     break;
                 default:
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s-\n",
-                        cnt, offset, pc, op_name(op), arg, tree_top*2, "");
+                        cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "");
             }
         }
 #endif
@@ -365,11 +365,11 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
         // This is to allow finalization like tree printing (if enabled)
 
         switch (op) {
-            case GOTO: // arg = addr; GOTO addr; pc is set to addr
+            case CHPEG_OP_GOTO: // arg = addr; GOTO addr; pc is set to addr
                 pc = arg; break;
 
 // Identifier
-            case IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
+            case CHPEG_OP_IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
                 if (arg < 0) {
                     pc = -1; retval = INVALID_IDENTIFIER; break;
                 }
@@ -400,7 +400,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 #endif
                 break;
 
-            case ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
+            case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
 #if SANITY_CHECKS
                 if (top < 2) {
                     pc = -1; retval = STACK_UNDERFLOW; break;
@@ -426,7 +426,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 #endif
                 break;
 
-            case IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
+            case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
 #if SANITY_CHECKS
                 if (top < 2) {
                     pc = -1; retval = STACK_UNDERFLOW; break;
@@ -461,7 +461,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 break;
 
 // Choice
-            case CHOICE:
+            case CHPEG_OP_CHOICE:
                 if (top >= self->max_stack_size - 3) {
                     pc = -1; retval = STACK_OVERFLOW; break;
                 }
@@ -469,8 +469,8 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 stack[++top] = offset; // save offset for backtrack
                 break;
 
-            case CISUCC: // arg = success/fail pc addr
-            case CFAIL:
+            case CHPEG_OP_CISUCC: // arg = success/fail pc addr
+            case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
                 if (top < 1) {
                     pc = -1; retval = STACK_UNDERFLOW; break;
@@ -480,7 +480,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 pc = arg;
                 break;
 
-            case CIFAIL:
+            case CHPEG_OP_CIFAIL:
                 // backtrack
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
@@ -492,7 +492,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 
 
 // Repeat +
-            case RPBEG:
+            case CHPEG_OP_RPBEG:
                 if (top >= self->max_stack_size - 4) {
                     pc = -1; retval = STACK_OVERFLOW; break;
                 }
@@ -504,7 +504,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 stack[++top] = 0; // cnt (match count)
                 break;
 
-            case RPMAT: // arg = loop pc addr
+            case CHPEG_OP_RPMAT: // arg = loop pc addr
                 ++stack[top]; // incr match count
                 if (offset != stack[top-1]) { // only loop if consuming
                     stack[top-2] = tree_stack[tree_top]->num_children; // update backtrack point
@@ -518,7 +518,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 }
                 break;
 
-            case RPDONE: // arg = match fail pc addr
+            case CHPEG_OP_RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
                 if (top < 3) {
                     pc = -1; retval = STACK_UNDERFLOW; break;
@@ -543,8 +543,8 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 break;
 
 // Repeat *|?
-            case RSBEG:
-            case RQBEG:
+            case CHPEG_OP_RSBEG:
+            case CHPEG_OP_RQBEG:
                 if (top >= self->max_stack_size - 4) {
                     pc = -1; retval = STACK_OVERFLOW; break;
                 }
@@ -560,7 +560,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 stack[++top] = offset; // save offset for backtrack
                 break;
 
-            case RSMAT: // arg = loop pc addr
+            case CHPEG_OP_RSMAT: // arg = loop pc addr
                 if (offset != stack[top]) { // only loop if consuming
                     stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                     stack[top] = offset; // update backtrack point
@@ -568,8 +568,8 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 } // else next instruction, which is a R*DONE
                 break;
 
-            case RSDONE: // * always succeeds, proceeds to next instr.
-            case RQDONE: // ? always succeeds, proceeds to next instr.
+            case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
+            case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
                 if (top < 2) {
                     pc = -1; retval = STACK_UNDERFLOW; break;
@@ -588,13 +588,13 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 break;
 
 // Repeat ?
-            case RQMAT: // no looping for ?
+            case CHPEG_OP_RQMAT: // no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
                 break;
 
 // Predicate
-            case PRED:
+            case CHPEG_OP_PRED:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
                 if (top >= self->max_stack_size - 3) {
@@ -615,14 +615,14 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 #endif
                 break;
 
-            case PMATCHF: // Predicate matched, match is considered failure, arg = failure address
-            case PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
+            case CHPEG_OP_PMATCHF: // Predicate matched, match is considered failure, arg = failure address
+            case CHPEG_OP_PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
 #if ERRORS && ERRORS_PRED
                 if (stack[top]) {
                     Parser_expected(self,
                             tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                             tree_stack[tree_top]->def, instructions[stack[top-1]],
-                            offset, (PNOMATF == op));
+                            offset, (CHPEG_OP_PNOMATF == op));
 #if DEBUG_ERRORS
                     Parser_print_error(self, input);
 #endif
@@ -631,11 +631,11 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 pc = arg;
                 goto pred_cleanup;
 
-            case PMATCHS: // Predicate matched, match is considered success; next instruction skipped
+            case CHPEG_OP_PMATCHS: // Predicate matched, match is considered success; next instruction skipped
                 ++pc;
                 // passthrough to pred_cleanup
 
-            case PNOMATS: // Predicate not matched, not match is considered success
+            case CHPEG_OP_PNOMATS: // Predicate not matched, not match is considered success
 pred_cleanup:
 #if SANITY_CHECKS
                 if (top < 2) {
@@ -657,7 +657,7 @@ pred_cleanup:
                 break;
 
 // CharClass
-            case CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
+            case CHPEG_OP_CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
                 {
                     if (offset < length) {
                         int mlen = self->str_len[arg], i;
@@ -693,7 +693,7 @@ pred_cleanup:
                 break;
 
 // Literal
-            case LIT: // arg = str_id; match literal string; skip next instruction on match
+            case CHPEG_OP_LIT: // arg = str_id; match literal string; skip next instruction on match
                 {
                     int len = self->str_len[arg];
                     if ((offset < (length - (len - 1))) && !memcmp(&input[offset], self->strings[arg], len)) {
@@ -715,7 +715,7 @@ pred_cleanup:
                 break;
 
 // Dot
-            case DOT: // arg = fail addr; match any char; goto addr on failure
+            case CHPEG_OP_DOT: // arg = fail addr; match any char; goto addr on failure
                 if (offset < length) { offset++; break; }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
@@ -731,7 +731,7 @@ pred_cleanup:
                 break;
 
 // End
-            case SUCC: // overall success
+            case CHPEG_OP_SUCC: // overall success
                 pc = -1; // we're done
 #if SANITY_CHECKS
                 if (tree_top < 0) {
@@ -766,7 +766,7 @@ pred_cleanup:
                 }
                 break;
 
-            case FAIL: // overall failure
+            case CHPEG_OP_FAIL: // overall failure
                 pc = -1; // we're done
                 retval = arg < 0 ? arg : PARSE_FAILED;
                 break;

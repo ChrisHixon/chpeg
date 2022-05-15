@@ -1,6 +1,6 @@
 #include "opcodes.h"
 
-const char *OpNames[NUM_OPS] =
+const char *Chpeg_op_names[CHPEG_NUM_OPS] =
 {
     "GOTO",
     "IDENT",
