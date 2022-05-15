@@ -11,8 +11,9 @@
 // Compiler
 //
 
-extern ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length,
-    int *result_return, int verbose);
-extern const ChpegByteCode *Compiler_bytecode();
+extern int chpeg_compile(const unsigned char *input, size_t length,
+    ChpegByteCode **bytecode_return, int verbose);
+
+extern const ChpegByteCode *chpeg_default_bytecode();
 
 #endif // #ifndef CHPEG_COMPILER_H

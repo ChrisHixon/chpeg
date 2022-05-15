@@ -64,11 +64,11 @@ int main(int argc, char *argv[])
     close(fd);
     fd = -1;
 
-    byte_code = Compiler_compile(input, st.st_size, NULL, 0);
+    chpeg_compile(input, st.st_size, &byte_code, 0);
     ChpegByteCode_print(byte_code);
 
-    ret = ChpegByteCode_compare(Compiler_bytecode(), byte_code);
-    printf("ChpegByteCode_compare(Compiler_bytecode(), byte_code) = %d\n", ret);
+    ret = ChpegByteCode_compare(chpeg_default_bytecode(), byte_code);
+    printf("ChpegByteCode_compare(chpeg_default_bytecode(), byte_code) = %d\n", ret);
 
 done:
 

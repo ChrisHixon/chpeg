@@ -56,8 +56,8 @@ int main(int argc, char *argv[])
         }
 
         // Compile the grammar file into byte_code
-        byte_code = Compiler_compile(input, length, &parse_result, 1);
-        if (!byte_code) {
+        parse_result = chpeg_compile(input, length, &byte_code, 1);
+        if (parse_result != 0) {
             fprintf(stderr, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
             ret = 3;
             goto done;
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
     }
 
     // Parse the data file using byte code
-    parser = ChpegParser_new(byte_code ? byte_code : Compiler_bytecode());
+    parser = ChpegParser_new(byte_code ? byte_code : chpeg_default_bytecode());
 
 #if VM_TRACE
     // set to non-zero to enable VM instruction execution tracing
