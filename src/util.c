@@ -7,7 +7,7 @@
 
 // escape bytes like a C literal string, optionally truncating to limit, adding "..." at the end
 // caller must free() returned value
-char *esc_bytes(const unsigned char *bytes, int length, int limit)
+char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
 {
     static const char *hex_digit = "0123456789ABCDEF";
     static const char *esc_chars = "\\\"\t\r\n";
@@ -80,7 +80,7 @@ char *esc_bytes(const unsigned char *bytes, int length, int limit)
 #define CHPEG_READ_FILE_INITIAL_SIZE 4096 * 4
 #endif
 
-int read_file(const char *filename, unsigned char **data, size_t *length)
+int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
 {
     int ret = 0;
     size_t bsize = 0, remain = 0, bytes_read = 0, len = 0;

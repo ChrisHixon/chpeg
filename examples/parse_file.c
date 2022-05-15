@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
     if (grammar_filename) {
 
         // Read the grammar file into input
-        if (read_file(grammar_filename, &input, &length) != 0) {
+        if (chpeg_read_file(grammar_filename, &input, &length) != 0) {
             fprintf(stderr, "Could not read grammar file: %s\n", grammar_filename);
             ret = 2;
             goto done;
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
     }
 
     // Read the file to parse into input
-    if (read_file(input_filename, &input, &length) != 0) {
+    if (chpeg_read_file(input_filename, &input, &length) != 0) {
         fprintf(stderr, "Could not read file: %s\n", input_filename);
         ret = 4;
         goto done;

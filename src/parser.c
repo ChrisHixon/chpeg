@@ -55,7 +55,7 @@
 void Node_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
-    char *data = esc_bytes(&input[self->offset], self->length, 40);
+    char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
     const char *def_name = Parser_def_name(parser, self->def);
 
     if (depth == 0) {
@@ -228,10 +228,10 @@ void Parser_print_error(ChpegParser *self, const unsigned char *input)
                 case CHPEG_OP_IDENT:
                     str = Parser_def_name(self, arg); break;
                 case CHPEG_OP_LIT:
-                    esc = esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
+                    esc = chpeg_esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
                     break;
                 default: // unhandled op, show instruction in <> for debugging
-                    esc = esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
+                    esc = chpeg_esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
                     break;
             }
             printf("%s \"%s\" in %s at offset %lu\n",
@@ -342,7 +342,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
                     break;
                 case CHPEG_OP_LIT:
                 case CHPEG_OP_CHRCLS:
-                    tmp = esc_bytes(
+                    tmp = chpeg_esc_bytes(
                         self->strings[arg], self->str_len[arg], 28);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s\"%s\"\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",

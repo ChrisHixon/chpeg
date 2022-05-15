@@ -94,7 +94,7 @@ void ByteCode_print_instructions(const ChpegByteCode *self)
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
-                tmp = esc_bytes(
+                tmp = chpeg_esc_bytes(
                     self->strings[arg], self->str_len[arg], 256);
                 printf("CHPEG_INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
@@ -118,7 +118,7 @@ void ByteCode_print_strings(const ChpegByteCode *self)
 {
     char *tmp;
     for (int i = 0; i < self->num_strings; ++i) {
-        tmp = esc_bytes(self->strings[i], self->str_len[i], 256);
+        tmp = chpeg_esc_bytes(self->strings[i], self->str_len[i], 256);
         printf("STR  %8d %8d \"%s\"\n", i, self->str_len[i],
             tmp ? tmp : "<NULL>");
         if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
@@ -261,7 +261,7 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
-                str = esc_bytes(self->strings[arg], self->str_len[arg], 40);
+                str = chpeg_esc_bytes(self->strings[arg], self->str_len[arg], 40);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* \"%s\" */\n",
                     i, Chpeg_op_name(op), arg, str ? str : "<NULL>");
                 if (str) { CHPEG_FREE(str); str = NULL; }
@@ -278,7 +278,7 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
 
     fprintf(fp, "  .strings = (unsigned char**)(char*[%d]) {", self->num_strings);
     for (i = 0; i < self->num_strings; i++) {
-        str = esc_bytes(self->strings[i], self->str_len[i], 0);
+        str = chpeg_esc_bytes(self->strings[i], self->str_len[i], 0);
         fprintf(fp, "%s\"%s\"", i ? ", " : "", str);
         CHPEG_FREE(str);
     }
@@ -351,11 +351,11 @@ int ByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
     for (i = 0; i < a->num_strings; ++i) {
         if (a->str_len[i] != b->str_len[i] || memcmp(a->strings[i], b->strings[i], a->str_len[i])) {
             char *tmp;
-            tmp = esc_bytes(a->strings[i], a->str_len[i], 256);
+            tmp = chpeg_esc_bytes(a->strings[i], a->str_len[i], 256);
             printf("a->strings[%d] = \"%s\" (len=%d)\n", i,
                 tmp ? tmp : "<NULL>", a->str_len[i]);
             if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
-            tmp = esc_bytes(b->strings[i], b->str_len[i], 256);
+            tmp = chpeg_esc_bytes(b->strings[i], b->str_len[i], 256);
             printf("b->strings[%d] = \"%s\" (len=%d)\n", i,
                 tmp ? tmp : "<NULL>", b->str_len[i]);
             if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
