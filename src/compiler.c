@@ -210,13 +210,10 @@ static void ChpegCU_setup_def_addrs(ChpegCU *cu)
 
 static int ChpegCU_find_def(ChpegCU *cu, ChpegNode *ident)
 {
-    // TODO: this looks dangerous, could overflow stack; why not just compare with len
-    // and no copy/alloc of any sort?
-    char buf[ident->length + 1];
-    memcpy(buf, cu->input + ident->offset, ident->length);
-    buf[ident->length] = '\0';
     for (int i = 0; i < cu->bc->num_defs; ++i) {
-        if (0 == strcmp(buf, cu->bc->def_names[i])) {
+        if (ident->length == strlen(cu->bc->def_names[i]) &&
+            0 == memcmp(cu->input + ident->offset, cu->bc->def_names[i], ident->length))
+        {
             return i;
         }
     }
