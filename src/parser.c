@@ -297,10 +297,10 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 
     int op = 0, arg = 0, pc = 0;
 
-    if (length < 0) { return INVALID_LENGTH; }
+    if (length < 0) { return CHPEG_ERR_INVALID_LENGTH; }
 
     self->tree_root = Node_new(0, 0, -1, 0);
-    if (tree_top >= self->max_tree_depth - 2) return TREE_STACK_OVERFLOW;
+    if (tree_top >= self->max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
     unsigned long long cnt = 0, cnt_max = 0;
@@ -371,14 +371,14 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 // Identifier
             case CHPEG_OP_IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
                 if (arg < 0) {
-                    pc = -1; retval = INVALID_IDENTIFIER; break;
+                    pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
                 if (top >= self->max_stack_size - 4) {
-                    pc = -1; retval = STACK_OVERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 if (!locked) {
                     if (tree_top >= self->max_tree_depth - 2) {
-                        pc = -1; retval = TREE_STACK_OVERFLOW; break;
+                        pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
                     if (self->def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
                         stack[++top] = 1; locked = 1;
@@ -403,7 +403,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
 #if SANITY_CHECKS
                 if (top < 2) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 pc = stack[top--] + 1;
@@ -415,7 +415,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                     if (self->def_flags[arg] & CHPEG_IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
-                            pc = -1; retval = TREE_STACK_UNDERFLOW; break;
+                            pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                         }
 #endif
                         Node_pop_child(tree_stack[tree_top]);
@@ -429,7 +429,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
 #if SANITY_CHECKS
                 if (top < 2) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 pc = stack[top--];
@@ -450,7 +450,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 if (!locked) {
 #if SANITY_CHECKS
                     if (tree_top < 0) {
-                        pc = -1; retval = TREE_STACK_UNDERFLOW; break;
+                        pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                     }
 #endif
                     Node_pop_child(tree_stack[--tree_top]);
@@ -463,7 +463,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 // Choice
             case CHPEG_OP_CHOICE:
                 if (top >= self->max_stack_size - 3) {
-                    pc = -1; retval = STACK_OVERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
@@ -473,7 +473,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
                 if (top < 1) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 top -= 2;
@@ -494,7 +494,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 // Repeat +
             case CHPEG_OP_RPBEG:
                 if (top >= self->max_stack_size - 4) {
-                    pc = -1; retval = STACK_OVERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 stack[++top] = 0; // used to inhibit error tracking after 1st rep
@@ -521,7 +521,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
                 if (top < 3) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 offset = stack[top-1];
@@ -546,7 +546,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_RSBEG:
             case CHPEG_OP_RQBEG:
                 if (top >= self->max_stack_size - 4) {
-                    pc = -1; retval = STACK_OVERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (!err_locked) { // inhibit error tracking
@@ -572,7 +572,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
             case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
                 if (top < 2) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 offset = stack[top];
@@ -598,7 +598,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
                 if (top >= self->max_stack_size - 3) {
-                    pc = -1; retval = STACK_OVERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
@@ -639,7 +639,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 pred_cleanup:
 #if SANITY_CHECKS
                 if (top < 2) {
-                    pc = -1; retval = STACK_UNDERFLOW; break;
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
 #if ERRORS
@@ -735,7 +735,7 @@ pred_cleanup:
                 pc = -1; // we're done
 #if SANITY_CHECKS
                 if (tree_top < 0) {
-                    retval = TREE_STACK_UNDERFLOW; break;
+                    retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                 }
 #endif
                 tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
@@ -748,10 +748,10 @@ pred_cleanup:
 #endif
 
                 if (top != -1) {
-                    retval = UNEXPECTED_STACK_DATA;
+                    retval = CHPEG_ERR_UNEXPECTED_STACK_DATA;
                 }
                 else if (tree_top != -1) {
-                    retval = UNEXPECTED_TREE_STACK_DATA;
+                    retval = CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA;
                 }
                 else {
                     if (consumed != NULL) {
@@ -761,19 +761,19 @@ pred_cleanup:
                         retval = 0;
                     }
                     else {
-                        retval = EXTRANEOUS_INPUT;
+                        retval = CHPEG_ERR_EXTRANEOUS_INPUT;
                     }
                 }
                 break;
 
             case CHPEG_OP_FAIL: // overall failure
                 pc = -1; // we're done
-                retval = arg < 0 ? arg : PARSE_FAILED;
+                retval = arg < 0 ? arg : CHPEG_ERR_PARSE_FAILED;
                 break;
 
             default:
                 pc = -1; // we're done
-                retval = UNKNOWN_INSTRUCTION;
+                retval = CHPEG_ERR_UNKNOWN_INSTRUCTION;
                 break;
         }
 
@@ -788,7 +788,7 @@ pred_cleanup:
         }
     }
 
-    retval = RUNAWAY;
+    retval = CHPEG_ERR_RUNAWAY;
     self->parse_result = retval;
     return retval;
 }

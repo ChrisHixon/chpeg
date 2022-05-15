@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
         Parser_print_tree(parser, input);
     }
     else {
-        if (parse_result == EXTRANEOUS_INPUT) {
+        if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
             printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
         }
         else {

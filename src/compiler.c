@@ -534,7 +534,7 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
             }
         }
         else {
-            if (result == EXTRANEOUS_INPUT) {
+            if (result == CHPEG_ERR_EXTRANEOUS_INPUT) {
                 printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
             }
             else {
