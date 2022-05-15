@@ -22,16 +22,16 @@ typedef struct _ChpegByteCode
     int *str_len;
 } ChpegByteCode;
 
-extern ChpegByteCode *ByteCode_new();
-extern void ByteCode_free(ChpegByteCode *self);
+extern ChpegByteCode *ChpegByteCode_new();
+extern void ChpegByteCode_free(ChpegByteCode *self);
 
-extern int ByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
-extern void ByteCode_print_instructions(const ChpegByteCode *self);
-extern void ByteCode_print_defs(const ChpegByteCode *self);
-extern void ByteCode_print(const ChpegByteCode *self);
-extern void ByteCode_output_h(const ChpegByteCode *self, FILE *fp,
+extern int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
+extern void ChpegByteCode_print_instructions(const ChpegByteCode *self);
+extern void ChpegByteCode_print_defs(const ChpegByteCode *self);
+extern void ChpegByteCode_print(const ChpegByteCode *self);
+extern void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
-extern void ByteCode_output_c(const ChpegByteCode *self, FILE *fp,
+extern void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
 
 // rule/node flags AKA options

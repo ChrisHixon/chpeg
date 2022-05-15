@@ -550,7 +550,7 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
         }
     }
 
-    cu.bc = ByteCode_new();
+    cu.bc = ChpegByteCode_new();
     Compiler_setup_defs(&cu);
 
     cu.root = GNode_new();

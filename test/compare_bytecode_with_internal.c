@@ -65,15 +65,15 @@ int main(int argc, char *argv[])
     fd = -1;
 
     byte_code = Compiler_compile(input, st.st_size, NULL, 0);
-    ByteCode_print(byte_code);
+    ChpegByteCode_print(byte_code);
 
-    ret = ByteCode_compare(Compiler_bytecode(), byte_code);
-    printf("ByteCode_compare(Compiler_bytecode(), byte_code) = %d\n", ret);
+    ret = ChpegByteCode_compare(Compiler_bytecode(), byte_code);
+    printf("ChpegByteCode_compare(Compiler_bytecode(), byte_code) = %d\n", ret);
 
 done:
 
     if (byte_code) {
-        ByteCode_free(byte_code);
+        ChpegByteCode_free(byte_code);
     }
     if (input) {
         CHPEG_FREE(input);

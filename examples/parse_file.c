@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
         }
 
         // uncomment to print a dump of the byte code (defs, instructions, and strings)
-        //ByteCode_print(byte_code);
+        //ChpegByteCode_print(byte_code);
 
         CHPEG_FREE(input);
         input = NULL;
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 done:
 
     if (grammar_filename && byte_code) {
-        ByteCode_free(byte_code);
+        ChpegByteCode_free(byte_code);
         byte_code = NULL;
     }
     if (input) {

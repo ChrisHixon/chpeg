@@ -11,7 +11,7 @@
 // ByteCode
 //
 
-ChpegByteCode *ByteCode_new()
+ChpegByteCode *ChpegByteCode_new()
 {
     ChpegByteCode *self = (ChpegByteCode *)CHPEG_MALLOC(sizeof(ChpegByteCode));
     if (NULL == self) { return self; }
@@ -27,7 +27,7 @@ ChpegByteCode *ByteCode_new()
     return self;
 }
 
-void ByteCode_free(ChpegByteCode *self)
+void ChpegByteCode_free(ChpegByteCode *self)
 {
     int i;
 
@@ -69,7 +69,7 @@ void ByteCode_free(ChpegByteCode *self)
     CHPEG_FREE(self);
 }
 
-const char *ByteCode_def_name(const ChpegByteCode *self, int index)
+const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index)
 {
     if (index >= 0 && index < self->num_defs) {
         return self->def_names[index];
@@ -77,7 +77,7 @@ const char *ByteCode_def_name(const ChpegByteCode *self, int index)
     return 0;
 }
 
-void ByteCode_print_instructions(const ChpegByteCode *self)
+void ChpegByteCode_print_instructions(const ChpegByteCode *self)
 {
     const char *arg_str = NULL;
     char *tmp = NULL;
@@ -88,7 +88,7 @@ void ByteCode_print_instructions(const ChpegByteCode *self)
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
-                arg_str = ByteCode_def_name(self, arg);
+                arg_str = ChpegByteCode_def_name(self, arg);
                 printf("CHPEG_INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
@@ -107,14 +107,14 @@ void ByteCode_print_instructions(const ChpegByteCode *self)
     }
 }
 
-void ByteCode_print_defs(const ChpegByteCode *self)
+void ChpegByteCode_print_defs(const ChpegByteCode *self)
 {
     for (int i = 0; i < self->num_defs; ++i) {
         printf("DEF  %8d %12s %8d %6d\n", i, self->def_names[i], self->def_addrs[i], self->def_flags[i]);
     }
 }
 
-void ByteCode_print_strings(const ChpegByteCode *self)
+void ChpegByteCode_print_strings(const ChpegByteCode *self)
 {
     char *tmp;
     for (int i = 0; i < self->num_strings; ++i) {
@@ -125,14 +125,14 @@ void ByteCode_print_strings(const ChpegByteCode *self)
     }
 }
 
-void ByteCode_print(const ChpegByteCode *self)
+void ChpegByteCode_print(const ChpegByteCode *self)
 {
-    ByteCode_print_defs(self);
-    ByteCode_print_instructions(self);
-    ByteCode_print_strings(self);
+    ChpegByteCode_print_defs(self);
+    ChpegByteCode_print_instructions(self);
+    ChpegByteCode_print_strings(self);
 }
 
-void ByteCode_output_h(const ChpegByteCode *self, FILE *fp,
+void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes)
 {
     int i, j, slen;
@@ -197,7 +197,7 @@ void ByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fputc('\n', fp);
 }
 
-void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
+void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
 {
     int i;
     char *str;
@@ -255,7 +255,7 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
-                arg_str = ByteCode_def_name(self, arg);
+                arg_str = ChpegByteCode_def_name(self, arg);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
@@ -293,7 +293,7 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
     fprintf(fp, "};\n");
 }
 
-int ByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
+int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 {
     int i;
 

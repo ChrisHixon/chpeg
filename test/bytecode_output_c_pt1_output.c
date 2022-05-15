@@ -13,7 +13,7 @@ int main(void)
         perror("test_bytecode.c");
         return 1;
     }
-    ByteCode_output_c(&chpeg_bytecode, fp, "test_bytecode", NULL);
+    ChpegByteCode_output_c(&chpeg_bytecode, fp, "test_bytecode", NULL);
     fclose(fp);
 
     fp = fopen("generated/test_bytecode.h", "w");
@@ -21,7 +21,7 @@ int main(void)
         perror("test_bytecode.h");
         return 1;
     }
-    ByteCode_output_h(&chpeg_bytecode, fp, "test_bytecode", NULL, "chpeg", NULL);
+    ChpegByteCode_output_h(&chpeg_bytecode, fp, "test_bytecode", NULL, "chpeg", NULL);
     fclose(fp);
 }
 
