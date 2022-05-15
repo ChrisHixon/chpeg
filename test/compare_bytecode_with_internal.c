@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
     int ret = 0;
     int fd = -1;
     unsigned char *input = NULL;
-    ByteCode *byte_code = NULL;
+    ChpegByteCode *byte_code = NULL;
 
 #if DEBUG_MEM
     mtrace();

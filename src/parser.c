@@ -152,7 +152,7 @@ Node *Node_unwrap(Node *self)
 // Parser
 //
 
-Parser *Parser_new(const ByteCode *byte_code)
+Parser *Parser_new(const ChpegByteCode *byte_code)
 {
     Parser *self = (Parser *)CHPEG_MALLOC(sizeof(Parser));
 

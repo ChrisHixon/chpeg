@@ -11,9 +11,9 @@
 // ByteCode
 //
 
-ByteCode *ByteCode_new()
+ChpegByteCode *ByteCode_new()
 {
-    ByteCode *self = (ByteCode *)CHPEG_MALLOC(sizeof(ByteCode));
+    ChpegByteCode *self = (ChpegByteCode *)CHPEG_MALLOC(sizeof(ChpegByteCode));
     if (NULL == self) { return self; }
     self->num_defs = 0;
     self->def_names = NULL;
@@ -27,7 +27,7 @@ ByteCode *ByteCode_new()
     return self;
 }
 
-void ByteCode_free(ByteCode *self)
+void ByteCode_free(ChpegByteCode *self)
 {
     int i;
 
@@ -69,7 +69,7 @@ void ByteCode_free(ByteCode *self)
     CHPEG_FREE(self);
 }
 
-const char *ByteCode_def_name(const ByteCode *self, int index)
+const char *ByteCode_def_name(const ChpegByteCode *self, int index)
 {
     if (index >= 0 && index < self->num_defs) {
         return self->def_names[index];
@@ -77,7 +77,7 @@ const char *ByteCode_def_name(const ByteCode *self, int index)
     return 0;
 }
 
-void ByteCode_print_instructions(const ByteCode *self)
+void ByteCode_print_instructions(const ChpegByteCode *self)
 {
     const char *arg_str = NULL;
     char *tmp = NULL;
@@ -107,14 +107,14 @@ void ByteCode_print_instructions(const ByteCode *self)
     }
 }
 
-void ByteCode_print_defs(const ByteCode *self)
+void ByteCode_print_defs(const ChpegByteCode *self)
 {
     for (int i = 0; i < self->num_defs; ++i) {
         printf("DEF  %8d %12s %8d %6d\n", i, self->def_names[i], self->def_addrs[i], self->def_flags[i]);
     }
 }
 
-void ByteCode_print_strings(const ByteCode *self)
+void ByteCode_print_strings(const ChpegByteCode *self)
 {
     char *tmp;
     for (int i = 0; i < self->num_strings; ++i) {
@@ -125,14 +125,14 @@ void ByteCode_print_strings(const ByteCode *self)
     }
 }
 
-void ByteCode_print(const ByteCode *self)
+void ByteCode_print(const ChpegByteCode *self)
 {
     ByteCode_print_defs(self);
     ByteCode_print_instructions(self);
     ByteCode_print_strings(self);
 }
 
-void ByteCode_output_h(const ByteCode *self, FILE *fp,
+void ByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes)
 {
     int i, j, slen;
@@ -178,7 +178,7 @@ void ByteCode_output_h(const ByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "extern ByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "extern ChpegByteCode %s;\n\n", varname ? varname : basename);
 
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
@@ -197,7 +197,7 @@ void ByteCode_output_h(const ByteCode *self, FILE *fp,
     fputc('\n', fp);
 }
 
-void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, const char *varname)
+void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
 {
     int i;
     char *str;
@@ -206,7 +206,7 @@ void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, con
     fprintf(fp, "#include \"%s.h\"\n", basename);
     fprintf(fp, "\n");
 
-    fprintf(fp, "ByteCode %s = {\n", varname ? varname : basename);
+    fprintf(fp, "ChpegByteCode %s = {\n", varname ? varname : basename);
     fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
 
     fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
@@ -295,7 +295,7 @@ void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, con
     fprintf(fp, "};\n");
 }
 
-int ByteCode_compare(const ByteCode *a, const ByteCode *b)
+int ByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 {
     int i;
 

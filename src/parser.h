@@ -82,7 +82,7 @@ typedef struct _Parser
 
 } Parser;
 
-Parser *Parser_new(const ByteCode *byte);
+Parser *Parser_new(const ChpegByteCode *byte_code);
 void Parser_free(Parser *self);
 int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t *consumed);
 void Parser_print_tree(Parser *self, const unsigned char *input);

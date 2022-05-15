@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 {
     unsigned char *input = NULL;
     size_t length = 0;
-    ByteCode *byte_code = NULL;
+    ChpegByteCode *byte_code = NULL;
     Parser *parser = NULL;
     int parse_result = 0;
     int ret = 0;

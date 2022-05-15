@@ -110,7 +110,7 @@ typedef struct _CompilationUnit
 {
     Parser *parser;
     const unsigned char *input;
-    ByteCode *bc;
+    ChpegByteCode *bc;
     GNode *root;
     int strings_allocated;
 } CompilationUnit;
@@ -510,7 +510,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, GNode *gp)
     }
 }
 
-ByteCode *Compiler_compile(const unsigned char *input, size_t length, int *result_return, int verbose)
+ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *result_return, int verbose)
 {
     CompilationUnit cu;
 
@@ -584,7 +584,7 @@ done:
     return cu.bc;
 }
 
-const ByteCode *Compiler_bytecode()
+const ChpegByteCode *Compiler_bytecode()
 {
     return &chpeg_bytecode;
 }

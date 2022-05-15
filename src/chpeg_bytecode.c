@@ -2,7 +2,7 @@
 
 // this version of the hardcoded byte code started with the version output by the Ruby bootstrap process
 
-ByteCode chpeg_bytecode = {
+ChpegByteCode chpeg_bytecode = {
     .num_defs = 20,
 
     .def_names = (char*[20]){"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
