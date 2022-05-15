@@ -89,20 +89,20 @@ void ByteCode_print_instructions(const ByteCode *self)
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
                 arg_str = ByteCode_def_name(self, arg);
-                printf("INST %8d %12s %8d %s\n",
+                printf("CHPEG_INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
                 tmp = esc_bytes(
                     self->strings[arg], self->str_len[arg], 256);
-                printf("INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
+                printf("CHPEG_INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
                 if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
                 break;
             default:
                 arg_str = "";
-                printf("INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
+                printf("CHPEG_INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
         }
     }
 }
@@ -258,19 +258,19 @@ void ByteCode_output_c(const ByteCode *self, FILE *fp, const char *basename, con
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
                 arg_str = ByteCode_def_name(self, arg);
-                fprintf(fp, "  /* %5d */ INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
+                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
                 str = esc_bytes(self->strings[arg], self->str_len[arg], 40);
-                fprintf(fp, "  /* %5d */ INST(CHPEG_OP_%-12s, %8d), /* \"%s\" */\n",
+                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* \"%s\" */\n",
                     i, Chpeg_op_name(op), arg, str ? str : "<NULL>");
                 if (str) { CHPEG_FREE(str); str = NULL; }
                 break;
             default:
                 arg_str = "";
-                fprintf(fp, "  /* %5d */ INST(CHPEG_OP_%-12s, %8d),\n",
+                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d),\n",
                     i, Chpeg_op_name(op), arg);
         }
     }

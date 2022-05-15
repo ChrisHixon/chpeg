@@ -302,26 +302,26 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
 {
     switch (gp->type) {
         case CHPEG_GRAMMAR:
-            Compiler_add_inst(cu, INST(CHPEG_OP_IDENT, 0));
-            Compiler_add_inst(cu, INST(CHPEG_OP_FAIL, 0));
-            Compiler_add_inst(cu, INST(CHPEG_OP_SUCC, 0));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_FAIL, 0));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_SUCC, 0));
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_add_instructions(cu, p);
             }
             break;
         case CHPEG_DEFINITION:
             Compiler_add_instructions(cu, gp->head->next);
-            Compiler_add_inst(cu, INST(CHPEG_OP_ISUCC, Compiler_find_def(cu, gp->head->node)));
-            Compiler_add_inst(cu, INST(CHPEG_OP_IFAIL, 0));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, Compiler_find_def(cu, gp->head->node)));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, 0));
             break;
         case CHPEG_CHOICE:
-            Compiler_add_inst(cu, INST(CHPEG_OP_CHOICE, 0));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (GNode *p = gp->head; p; p = p->next) {
                 Compiler_add_instructions(cu, p);
-                Compiler_add_inst(cu, INST(CHPEG_OP_CISUCC, gp->parent_next_state - 1));
-                Compiler_add_inst(cu, INST(CHPEG_OP_CIFAIL, 0));
+                Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state - 1));
+                Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_CIFAIL, 0));
             }
-            Compiler_add_inst(cu, INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
             break;
         case CHPEG_SEQUENCE:
             for (GNode *p = gp->head; p; p = p->next) {
@@ -335,22 +335,22 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 unsigned char op = cu->input[gp->head->next->node->offset];
                 switch (op) {
                     case '+':
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RPBEG, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RPBEG, 0));
                         Compiler_add_instructions(cu, gp->head);
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RPMAT, gp->head->parse_state - 1));
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RPDONE, gp->parent_fail_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state - 1));
                         break;
                     case '*':
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RSBEG, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RSBEG, 0));
                         Compiler_add_instructions(cu, gp->head);
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RSMAT, gp->head->parse_state - 1));
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RSDONE, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RSDONE, 0));
                         break;
                     case '?':
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RQBEG, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RQBEG, 0));
                         Compiler_add_instructions(cu, gp->head);
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RQMAT, 0));
-                        Compiler_add_inst(cu, INST(CHPEG_OP_RQDONE, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RQMAT, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_RQDONE, 0));
                         break;
                 }
             }
@@ -360,34 +360,34 @@ static void Compiler_add_instructions(CompilationUnit *cu, GNode *gp)
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
                     case '&':
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PRED, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
                         Compiler_add_instructions(cu, gp->head->next);
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
                         break;
                     case '!':
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PRED, 0));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
                         Compiler_add_instructions(cu, gp->head->next);
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
-                        Compiler_add_inst(cu, INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
+                        Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
                         break;
                 }
             }
             break;
         case CHPEG_DOT:
-            Compiler_add_inst(cu, INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
             break;
         case CHPEG_IDENTIFIER:
-            Compiler_add_inst(cu, INST(CHPEG_OP_IDENT, Compiler_find_def(cu, gp->node)));
-            Compiler_add_inst(cu, INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, Compiler_find_def(cu, gp->node)));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
         case CHPEG_CHARCLASS:
-            Compiler_add_inst(cu, INST(CHPEG_OP_CHRCLS, gp->val.ival));
-            Compiler_add_inst(cu, INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
         case CHPEG_LITERAL:
-            Compiler_add_inst(cu, INST(CHPEG_OP_LIT, gp->val.ival));
-            Compiler_add_inst(cu, INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
+            Compiler_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
     }
 }

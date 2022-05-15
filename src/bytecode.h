@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-#define INST(op, arg) (((arg) << 8) | (op))
+#define CHPEG_INST(op, arg) (((arg) << 8) | (op))
 
 //
 // Byte Code
