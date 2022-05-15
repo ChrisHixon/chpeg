@@ -52,7 +52,7 @@
 // ChpegNode
 //
 
-void Node_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
+void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
@@ -76,14 +76,14 @@ void Node_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input
         );
     if (data) { CHPEG_FREE(data); data = NULL; }
     for (ChpegNode *p = self->head; p; p = p->next) {
-        Node_print(p, parser, input, depth + 1);
+        ChpegNode_print(p, parser, input, depth + 1);
     }
     if (depth == 0) {
         printf("---------------------------------------------------------------------------------\n");
     }
 }
 
-ChpegNode *Node_new(int def, size_t offset, size_t length, int flags)
+ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
 {
     ChpegNode *self = (ChpegNode *)CHPEG_MALLOC(sizeof(ChpegNode));
     self->def = def;
@@ -96,32 +96,32 @@ ChpegNode *Node_new(int def, size_t offset, size_t length, int flags)
     return self;
 }
 
-void Node_free(ChpegNode *self)
+void ChpegNode_free(ChpegNode *self)
 {
     ChpegNode *tmp;
     for (ChpegNode *p = self->head; p; p = tmp) {
         tmp = p->next;
-        Node_free(p);
+        ChpegNode_free(p);
     }
     self->head = NULL;
     CHPEG_FREE(self);
 }
 
-ChpegNode *Node_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
+ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
 {
-    ChpegNode *node = Node_new(def, offset, length, flags);
+    ChpegNode *node = ChpegNode_new(def, offset, length, flags);
     node->next = self->head;
     self->head = node;
     ++(self->num_children);
     return node;
 }
 
-void Node_pop_child(ChpegNode *self)
+void ChpegNode_pop_child(ChpegNode *self)
 {
     if (self->head) {
         ChpegNode *tmp = self->head;
         self->head = self->head->next;
-        Node_free(tmp);
+        ChpegNode_free(tmp);
         --(self->num_children);
     }
 }
@@ -129,19 +129,19 @@ void Node_pop_child(ChpegNode *self)
 // 'Unwrap' a ChpegNode, recursively removing unnecessary parent nodes containing only one child.
 // In the process, this reverses the reverse node insertion used in tree building, so should only
 // be called once on the tree root after a successful parse.
-ChpegNode *Node_unwrap(ChpegNode *self)
+ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 {
     if (!(self->flags & (CHPEG_STOP | CHPEG_LEAF)) && self->num_children == 1) {
-        ChpegNode *tmp = Node_unwrap(self->head);
+        ChpegNode *tmp = ChpegNode_unwrap(self->head);
         self->head = NULL;
-        Node_free(self);
+        ChpegNode_free(self);
         return tmp;
     }
     ChpegNode *p = self->head; self->head = NULL;
     ChpegNode *tmp;
     for (; p; p=tmp) {
         tmp = p->next;
-        p = Node_unwrap(p);
+        p = ChpegNode_unwrap(p);
         p->next = self->head;
         self->head = p;
     }
@@ -188,7 +188,7 @@ ChpegParser *Parser_new(const ChpegByteCode *byte_code)
 void Parser_free(ChpegParser *self)
 {
     if (self->tree_root) {
-        Node_free(self->tree_root);
+        ChpegNode_free(self->tree_root);
         self->tree_root = NULL;
     }
     CHPEG_FREE(self);
@@ -196,7 +196,7 @@ void Parser_free(ChpegParser *self)
 
 void Parser_print_tree(ChpegParser *self, const unsigned char *input)
 {
-    Node_print(self->tree_root, self, input, 0);
+    ChpegNode_print(self->tree_root, self, input, 0);
 }
 
 void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
@@ -299,7 +299,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
 
     if (length < 0) { return CHPEG_ERR_INVALID_LENGTH; }
 
-    self->tree_root = Node_new(0, 0, -1, 0);
+    self->tree_root = ChpegNode_new(0, 0, -1, 0);
     if (tree_top >= self->max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
@@ -386,7 +386,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
                     else {
                         stack[++top] = 0;
                     }
-                    tree_stack[tree_top+1] = Node_push_child(tree_stack[tree_top], arg, offset, -1, self->def_flags[arg]);
+                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, -1, self->def_flags[arg]);
                     ++tree_top;
                 }
                 else {
@@ -418,7 +418,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
                             pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                         }
 #endif
-                        Node_pop_child(tree_stack[tree_top]);
+                        ChpegNode_pop_child(tree_stack[tree_top]);
                     }
                 }
 #if VM_PRINT_TREE
@@ -453,7 +453,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                     }
 #endif
-                    Node_pop_child(tree_stack[--tree_top]);
+                    ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
 #if VM_PRINT_TREE
                 tree_changed = 1;
@@ -484,7 +484,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
                 // backtrack
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
-                    Node_pop_child(tree_stack[tree_top]);
+                    ChpegNode_pop_child(tree_stack[tree_top]);
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -526,7 +526,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
 #endif
                 offset = stack[top-1];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-2]; i > 0; --i)
-                    Node_pop_child(tree_stack[tree_top]);
+                    ChpegNode_pop_child(tree_stack[tree_top]);
                 if (stack[top] > 0) { // op+ SUCCESS
                     top -= 3;
                 }
@@ -577,7 +577,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
 #endif
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
-                    Node_pop_child(tree_stack[tree_top]);
+                    ChpegNode_pop_child(tree_stack[tree_top]);
                 top -= 2;
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
@@ -650,7 +650,7 @@ pred_cleanup:
 #endif
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (int i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
-                    Node_pop_child(tree_stack[tree_top]);
+                    ChpegNode_pop_child(tree_stack[tree_top]);
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -742,7 +742,7 @@ pred_cleanup:
                 --tree_top;
 
                 // clean up the parse tree, reversing the reverse node insertion in the process
-                self->tree_root = Node_unwrap(self->tree_root);
+                self->tree_root = ChpegNode_unwrap(self->tree_root);
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif

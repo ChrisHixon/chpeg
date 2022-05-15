@@ -37,14 +37,14 @@ typedef struct _ChpegNode
     struct _ChpegNode *next;
 } ChpegNode;
 
-ChpegNode *Node_new(int def, size_t offset, size_t length, int flags);
-void Node_free(ChpegNode *self);
-ChpegNode *Node_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
-void Node_pop_child(ChpegNode *self);
-ChpegNode *Node_unwrap(ChpegNode *self);
+ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
+void ChpegNode_free(ChpegNode *self);
+ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
+void ChpegNode_pop_child(ChpegNode *self);
+ChpegNode *ChpegNode_unwrap(ChpegNode *self);
 
 // debugging / dev aid. TODO: should disappear based on some DEBUG/NDEBUG macro
-void Node_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
+void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
 
 //
 // ChpegParser

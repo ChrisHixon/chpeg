@@ -189,7 +189,7 @@ static void Compiler_setup_defs(CompilationUnit *cu)
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node
-            Node_free(tmp);
+            ChpegNode_free(tmp);
         }
         cu->bc->def_flags[i] = flags;
 #if DEBUG_COMPILER
