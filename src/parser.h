@@ -24,28 +24,28 @@ struct _CompilationUnit;
 struct _Parser;
 
 //
-// Syntax tree Node
+// Syntax tree ChpegNode
 //
 
-typedef struct _Node
+typedef struct _ChpegNode
 {
     int def;
     size_t offset;
     size_t length;
     int flags;
     int num_children;
-    struct _Node *head;
-    struct _Node *next;
-} Node;
+    struct _ChpegNode *head;
+    struct _ChpegNode *next;
+} ChpegNode;
 
-Node *Node_new(int def, size_t offset, size_t length, int flags);
-void Node_free(Node *self);
-Node *Node_push_child(Node *self, int def, size_t offset, size_t length, int flags);
-void Node_pop_child(Node *self);
-Node *Node_unwrap(Node *self);
+ChpegNode *Node_new(int def, size_t offset, size_t length, int flags);
+void Node_free(ChpegNode *self);
+ChpegNode *Node_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
+void Node_pop_child(ChpegNode *self);
+ChpegNode *Node_unwrap(ChpegNode *self);
 
 // debugging / dev aid. TODO: should disappear based on some DEBUG/NDEBUG macro
-void Node_print(Node *self, struct _Parser *parser, const unsigned char *input, int depth);
+void Node_print(ChpegNode *self, struct _Parser *parser, const unsigned char *input, int depth);
 
 //
 // Parser
@@ -63,7 +63,7 @@ typedef struct _Parser
     unsigned char **strings;
     int *str_len;
 
-    Node *tree_root;
+    ChpegNode *tree_root;
     int max_tree_depth;
     int max_stack_size;
     size_t error_offset;

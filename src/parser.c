@@ -49,10 +49,10 @@
 #endif
 
 //
-// Node
+// ChpegNode
 //
 
-void Node_print(Node *self, Parser *parser, const unsigned char *input, int depth)
+void Node_print(ChpegNode *self, Parser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
     char *data = esc_bytes(&input[self->offset], self->length, 40);
@@ -75,7 +75,7 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
         data ? data : "<NULL>"
         );
     if (data) { CHPEG_FREE(data); data = NULL; }
-    for (Node *p = self->head; p; p = p->next) {
+    for (ChpegNode *p = self->head; p; p = p->next) {
         Node_print(p, parser, input, depth + 1);
     }
     if (depth == 0) {
@@ -83,9 +83,9 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
     }
 }
 
-Node *Node_new(int def, size_t offset, size_t length, int flags)
+ChpegNode *Node_new(int def, size_t offset, size_t length, int flags)
 {
-    Node *self = (Node *)CHPEG_MALLOC(sizeof(Node));
+    ChpegNode *self = (ChpegNode *)CHPEG_MALLOC(sizeof(ChpegNode));
     self->def = def;
     self->offset = offset;
     self->length = length;
@@ -96,10 +96,10 @@ Node *Node_new(int def, size_t offset, size_t length, int flags)
     return self;
 }
 
-void Node_free(Node *self)
+void Node_free(ChpegNode *self)
 {
-    Node *tmp;
-    for (Node *p = self->head; p; p = tmp) {
+    ChpegNode *tmp;
+    for (ChpegNode *p = self->head; p; p = tmp) {
         tmp = p->next;
         Node_free(p);
     }
@@ -107,38 +107,38 @@ void Node_free(Node *self)
     CHPEG_FREE(self);
 }
 
-Node *Node_push_child(Node *self, int def, size_t offset, size_t length, int flags)
+ChpegNode *Node_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
 {
-    Node *node = Node_new(def, offset, length, flags);
+    ChpegNode *node = Node_new(def, offset, length, flags);
     node->next = self->head;
     self->head = node;
     ++(self->num_children);
     return node;
 }
 
-void Node_pop_child(Node *self)
+void Node_pop_child(ChpegNode *self)
 {
     if (self->head) {
-        Node *tmp = self->head;
+        ChpegNode *tmp = self->head;
         self->head = self->head->next;
         Node_free(tmp);
         --(self->num_children);
     }
 }
 
-// 'Unwrap' a Node, recursively removing unnecessary parent nodes containing only one child.
+// 'Unwrap' a ChpegNode, recursively removing unnecessary parent nodes containing only one child.
 // In the process, this reverses the reverse node insertion used in tree building, so should only
 // be called once on the tree root after a successful parse.
-Node *Node_unwrap(Node *self)
+ChpegNode *Node_unwrap(ChpegNode *self)
 {
     if (!(self->flags & (CHPEG_STOP | CHPEG_LEAF)) && self->num_children == 1) {
-        Node *tmp = Node_unwrap(self->head);
+        ChpegNode *tmp = Node_unwrap(self->head);
         self->head = NULL;
         Node_free(self);
         return tmp;
     }
-    Node *p = self->head; self->head = NULL;
-    Node *tmp;
+    ChpegNode *p = self->head; self->head = NULL;
+    ChpegNode *tmp;
     for (; p; p=tmp) {
         tmp = p->next;
         p = Node_unwrap(p);
@@ -291,7 +291,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
 #endif
 
     size_t stack[self->max_stack_size]; int top = -1;
-    Node *tree_stack[self->max_tree_depth]; int tree_top = -1;
+    ChpegNode *tree_stack[self->max_tree_depth]; int tree_top = -1;
 
     const int *instructions = self->instructions;
 

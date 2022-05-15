@@ -19,7 +19,7 @@
 
 typedef struct _GNode
 {
-    Node *node;
+    ChpegNode *node;
     int type;
 
     int parse_state;
@@ -122,7 +122,7 @@ static void CompilationUnit_print(CompilationUnit *cu, GNode *gnode, const unsig
     char *data = NULL;
     const char *def_name = Parser_def_name(cu->parser, gnode->type);
 
-    Node *node = gnode->node;
+    ChpegNode *node = gnode->node;
     if (node) {
         data = esc_bytes(&input[node->offset], node->length, 40);
         flags = node->flags;
@@ -157,7 +157,7 @@ static void CompilationUnit_print(CompilationUnit *cu, GNode *gnode, const unsig
 
 static void Compiler_setup_defs(CompilationUnit *cu)
 {
-    Node *p = NULL;
+    ChpegNode *p = NULL;
     int i = 0, j = 0;
 
     cu->bc->num_defs = cu->parser->tree_root->num_children;
@@ -172,7 +172,7 @@ static void Compiler_setup_defs(CompilationUnit *cu)
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
         if (CHPEG_DEFINITION != p->def) { continue; }
 
-        Node *tmp = p->head; // Identifier, definition name
+        ChpegNode *tmp = p->head; // Identifier, definition name
         if (NULL == tmp || CHPEG_IDENTIFIER != tmp->def) { continue; }
         cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
@@ -207,7 +207,7 @@ static void Compiler_setup_def_addrs(CompilationUnit *cu)
     }
 }
 
-static int Compiler_find_def(CompilationUnit *cu, Node *ident)
+static int Compiler_find_def(CompilationUnit *cu, ChpegNode *ident)
 {
     char buf[ident->length + 1];
     memcpy(buf, cu->input + ident->offset, ident->length);
@@ -220,13 +220,13 @@ static int Compiler_find_def(CompilationUnit *cu, Node *ident)
     return -1;
 }
 
-static void Compiler_build_tree(CompilationUnit *cu, Node *np, GNode *gp)
+static void Compiler_build_tree(CompilationUnit *cu, ChpegNode *np, GNode *gp)
 {
     if (NULL == np) { np = cu->parser->tree_root; }
     if (NULL == gp) { gp = cu->root; }
     gp->node = np;
     gp->type = np->def;
-    for (Node *p = np->head; p; p = p->next) {
+    for (ChpegNode *p = np->head; p; p = p->next) {
         GNode *g = GNode_new();
         Compiler_build_tree(cu, p, g);
         GNode_push_child(gp, g);
