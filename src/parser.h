@@ -81,12 +81,12 @@ typedef struct _ChpegParser
 
 } ChpegParser;
 
-ChpegParser *Parser_new(const ChpegByteCode *byte_code);
-void Parser_free(ChpegParser *self);
-int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
-void Parser_print_tree(ChpegParser *self, const unsigned char *input);
-const char *Parser_def_name(ChpegParser *self, int index);
-void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
-void Parser_print_error(ChpegParser *self, const unsigned char *input);
+ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
+void ChpegParser_free(ChpegParser *self);
+int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
+void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
+const char *ChpegParser_def_name(ChpegParser *self, int index);
+void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
+void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 
 #endif // #ifndef CHPEG_PARSER_H

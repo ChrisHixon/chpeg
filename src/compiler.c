@@ -120,7 +120,7 @@ static void CompilationUnit_print(CompilationUnit *cu, GNode *gnode, const unsig
 {
     int flags = 0;
     char *data = NULL;
-    const char *def_name = Parser_def_name(cu->parser, gnode->type);
+    const char *def_name = ChpegParser_def_name(cu->parser, gnode->type);
 
     ChpegNode *node = gnode->node;
     if (node) {
@@ -514,14 +514,14 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
 {
     CompilationUnit cu;
 
-    cu.parser = Parser_new(Compiler_bytecode());
+    cu.parser = ChpegParser_new(Compiler_bytecode());
     cu.input = input;
     cu.bc = NULL;
     cu.root = NULL;
     cu.strings_allocated = 0;
 
     size_t consumed = 0;
-    int result = Parser_parse(cu.parser, input, length, &consumed);
+    int result = ChpegParser_parse(cu.parser, input, length, &consumed);
     if (result_return) {
         *result_return = result;
     }
@@ -530,7 +530,7 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
         if (result == 0) {
             printf("Parse successful.\n");
             if (verbose & 0x2) {
-                Parser_print_tree(cu.parser, input);
+                ChpegParser_print_tree(cu.parser, input);
             }
         }
         else {
@@ -540,7 +540,7 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
             else {
                 printf("Parse failed with result: %d\n", result);
             }
-            Parser_print_error(cu.parser, input);
+            ChpegParser_print_error(cu.parser, input);
             goto done;
         }
     }
@@ -579,7 +579,7 @@ ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *
 #endif
 
 done:
-    if (cu.parser) { Parser_free(cu.parser); }
+    if (cu.parser) { ChpegParser_free(cu.parser); }
     if (cu.root) { GNode_free(cu.root); }
     return cu.bc;
 }

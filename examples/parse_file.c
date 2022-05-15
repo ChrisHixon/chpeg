@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
     }
 
     // Parse the data file using byte code
-    parser = Parser_new(byte_code ? byte_code : Compiler_bytecode());
+    parser = ChpegParser_new(byte_code ? byte_code : Compiler_bytecode());
 
 #if VM_TRACE
     // set to non-zero to enable VM instruction execution tracing
@@ -99,12 +99,12 @@ int main(int argc, char *argv[])
 #endif
 
     size_t consumed = 0;
-    parse_result = Parser_parse(parser, input, length, &consumed);
+    parse_result = ChpegParser_parse(parser, input, length, &consumed);
     if (parse_result == 0) {
         if (consumed == length) {
             printf("Parse successful.\n");
         }
-        Parser_print_tree(parser, input);
+        ChpegParser_print_tree(parser, input);
     }
     else {
         if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
         else {
             printf("Parse failed with result: %d\n", parse_result);
         }
-        Parser_print_error(parser, input);
+        ChpegParser_print_error(parser, input);
         ret = 5;
         goto done;
     }
@@ -130,7 +130,7 @@ done:
         input = NULL;
     }
     if (parser) {
-        Parser_free(parser);
+        ChpegParser_free(parser);
         parser = NULL;
     }
 

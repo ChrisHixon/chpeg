@@ -36,14 +36,14 @@
 
 // VM_TRACE:
 // Set to non-zero to compile in support for tracing parser VM instruction execution.
-// To use, set parser->vm_trace to non-zero before calling Parser_parse()
+// To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
 #ifndef VM_TRACE
 #define VM_TRACE 0
 #endif
 
 // VM_PRINT_TREE:
 // Set to non-zero to compile in support for printing the parse tree as it is being built.
-// To use, set parser->vm_print_tree to non-zero before calling Parser_parse()
+// To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
 #ifndef VM_PRINT_TREE
 #define VM_PRINT_TREE 0
 #endif
@@ -56,7 +56,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
-    const char *def_name = Parser_def_name(parser, self->def);
+    const char *def_name = ChpegParser_def_name(parser, self->def);
 
     if (depth == 0) {
         printf("---------------------------------------------------------------------------------\n");
@@ -152,7 +152,7 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 // ChpegParser
 //
 
-ChpegParser *Parser_new(const ChpegByteCode *byte_code)
+ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code)
 {
     ChpegParser *self = (ChpegParser *)CHPEG_MALLOC(sizeof(ChpegParser));
 
@@ -185,7 +185,7 @@ ChpegParser *Parser_new(const ChpegByteCode *byte_code)
     return self;
 }
 
-void Parser_free(ChpegParser *self)
+void ChpegParser_free(ChpegParser *self)
 {
     if (self->tree_root) {
         ChpegNode_free(self->tree_root);
@@ -194,12 +194,12 @@ void Parser_free(ChpegParser *self)
     CHPEG_FREE(self);
 }
 
-void Parser_print_tree(ChpegParser *self, const unsigned char *input)
+void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)
 {
     ChpegNode_print(self->tree_root, self, input, 0);
 }
 
-void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
+void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
     if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
         self->error_offset = offset;
@@ -210,11 +210,11 @@ void Parser_expected(ChpegParser *self, int parent_def, int def, int inst, size_
     }
 }
 
-void Parser_print_error(ChpegParser *self, const unsigned char *input)
+void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 {
 #if ERRORS
-    const char *parent_def_name = Parser_def_name(self, self->error_parent_def);
-    const char *def_name = Parser_def_name(self, self->error_def);
+    const char *parent_def_name = ChpegParser_def_name(self, self->error_parent_def);
+    const char *def_name = ChpegParser_def_name(self, self->error_def);
 
     if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
@@ -226,7 +226,7 @@ void Parser_print_error(ChpegParser *self, const unsigned char *input)
                 case CHPEG_OP_DOT:
                     str = "character"; break;
                 case CHPEG_OP_IDENT:
-                    str = Parser_def_name(self, arg); break;
+                    str = ChpegParser_def_name(self, arg); break;
                 case CHPEG_OP_LIT:
                     esc = chpeg_esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
                     break;
@@ -268,7 +268,7 @@ void Parser_print_error(ChpegParser *self, const unsigned char *input)
 #endif
 }
 
-const char *Parser_def_name(ChpegParser *self, int index)
+const char *ChpegParser_def_name(ChpegParser *self, int index)
 {
     if (index >= 0 && index < self->num_defs) {
         return self->def_names[index];
@@ -277,7 +277,7 @@ const char *Parser_def_name(ChpegParser *self, int index)
 }
 
 // TODO: check sanity checks and overflow checks, make macros to make it easier
-int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
+int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
     int locked = 0, retval = 0;
     size_t offset = 0;
@@ -334,7 +334,7 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
             switch (op) {
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
-                    def_name = Parser_def_name(self, arg);
+                    def_name = ChpegParser_def_name(self, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         def_name ? def_name : "<INVALID>");
@@ -437,11 +437,11 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
-                    Parser_expected(self,
+                    ChpegParser_expected(self,
                             tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                             tree_stack[tree_top]->def, -1, offset, 1);
 #if DEBUG_ERRORS
-                    Parser_print_error(self, input);
+                    ChpegParser_print_error(self, input);
 #endif
                 }
 #endif
@@ -619,12 +619,12 @@ int Parser_parse(ChpegParser *self, const unsigned char *input, size_t length, s
             case CHPEG_OP_PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
 #if ERRORS && ERRORS_PRED
                 if (stack[top]) {
-                    Parser_expected(self,
+                    ChpegParser_expected(self,
                             tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                             tree_stack[tree_top]->def, instructions[stack[top-1]],
                             offset, (CHPEG_OP_PNOMATF == op));
 #if DEBUG_ERRORS
-                    Parser_print_error(self, input);
+                    ChpegParser_print_error(self, input);
 #endif
                 }
 #endif
@@ -681,11 +681,11 @@ pred_cleanup:
                     }
 #if ERRORS && ERRORS_TERMINALS
                     if (!err_locked) {
-                        Parser_expected(self,
+                        ChpegParser_expected(self,
                                 tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                                 tree_stack[tree_top]->def, instructions[pc], offset, 1);
 #if DEBUG_ERRORS
-                        Parser_print_error(self, input);
+                        ChpegParser_print_error(self, input);
 #endif
                     }
 #endif
@@ -704,11 +704,11 @@ pred_cleanup:
                 }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
-                    Parser_expected(self,
+                    ChpegParser_expected(self,
                             tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                             tree_stack[tree_top]->def, instructions[pc], offset, 1);
 #if DEBUG_ERRORS
-                    Parser_print_error(self, input);
+                    ChpegParser_print_error(self, input);
 #endif
                 }
 #endif
@@ -719,11 +719,11 @@ pred_cleanup:
                 if (offset < length) { offset++; break; }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
-                    Parser_expected(self,
+                    ChpegParser_expected(self,
                             tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
                             tree_stack[tree_top]->def, instructions[pc], offset, 1);
 #if DEBUG_ERRORS
-                    Parser_print_error(self, input);
+                    ChpegParser_print_error(self, input);
 #endif
                 }
 #endif
@@ -779,7 +779,7 @@ pred_cleanup:
 
 #if VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
-            Parser_print_tree(self, input);
+            ChpegParser_print_tree(self, input);
         }
 #endif
         if (pc < 0) {
