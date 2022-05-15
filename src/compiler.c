@@ -106,17 +106,17 @@ static ChpegGNode *GNode_reverse(ChpegGNode *self)
 // Compiler
 //
 
-typedef struct _CompilationUnit
+typedef struct _ChpegCompUnit
 {
     ChpegParser *parser;
     const unsigned char *input;
     ChpegByteCode *bc;
     ChpegGNode *root;
     int strings_allocated;
-} CompilationUnit;
+} ChpegCompUnit;
 
 #if DEBUG_COMPILER
-static void CompilationUnit_print(CompilationUnit *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
+static void CompilationUnit_print(ChpegCompUnit *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
 {
     int flags = 0;
     char *data = NULL;
@@ -155,7 +155,7 @@ static void CompilationUnit_print(CompilationUnit *cu, ChpegGNode *gnode, const 
 }
 #endif
 
-static void Compiler_setup_defs(CompilationUnit *cu)
+static void Compiler_setup_defs(ChpegCompUnit *cu)
 {
     ChpegNode *p = NULL;
     int i = 0, j = 0;
@@ -198,7 +198,7 @@ static void Compiler_setup_defs(CompilationUnit *cu)
     }
 }
 
-static void Compiler_setup_def_addrs(CompilationUnit *cu)
+static void Compiler_setup_def_addrs(ChpegCompUnit *cu)
 {
     int i = 0;
     ChpegGNode *p = NULL;
@@ -207,7 +207,7 @@ static void Compiler_setup_def_addrs(CompilationUnit *cu)
     }
 }
 
-static int Compiler_find_def(CompilationUnit *cu, ChpegNode *ident)
+static int Compiler_find_def(ChpegCompUnit *cu, ChpegNode *ident)
 {
     char buf[ident->length + 1];
     memcpy(buf, cu->input + ident->offset, ident->length);
@@ -220,7 +220,7 @@ static int Compiler_find_def(CompilationUnit *cu, ChpegNode *ident)
     return -1;
 }
 
-static void Compiler_build_tree(CompilationUnit *cu, ChpegNode *np, ChpegGNode *gp)
+static void Compiler_build_tree(ChpegCompUnit *cu, ChpegNode *np, ChpegGNode *gp)
 {
     if (NULL == np) { np = cu->parser->tree_root; }
     if (NULL == gp) { gp = cu->root; }
@@ -233,12 +233,12 @@ static void Compiler_build_tree(CompilationUnit *cu, ChpegNode *np, ChpegGNode *
     }
 }
 
-static inline int Compiler_alloc_inst(CompilationUnit *cu)
+static inline int Compiler_alloc_inst(ChpegCompUnit *cu)
 {
     return cu->bc->num_instructions++;
 }
 
-static void Compiler_alloc_instructions(CompilationUnit *cu, ChpegGNode *gp)
+static void Compiler_alloc_instructions(ChpegCompUnit *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
         case CHPEG_GRAMMAR:
@@ -293,12 +293,12 @@ static void Compiler_alloc_instructions(CompilationUnit *cu, ChpegGNode *gp)
     }
 }
 
-static inline void Compiler_add_inst(CompilationUnit *cu, int inst)
+static inline void Compiler_add_inst(ChpegCompUnit *cu, int inst)
 {
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
 
-static void Compiler_add_instructions(CompilationUnit *cu, ChpegGNode *gp)
+static void Compiler_add_instructions(ChpegCompUnit *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
         case CHPEG_GRAMMAR:
@@ -392,7 +392,7 @@ static void Compiler_add_instructions(CompilationUnit *cu, ChpegGNode *gp)
     }
 }
 
-static int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, int len)
+static int Compiler_alloc_string(ChpegCompUnit *cu, const unsigned char *str, int len)
 {
     for (int i = 0; i < cu->bc->num_strings; ++i) {
         if (len == cu->bc->str_len[i] && 0 == memcmp(cu->bc->strings[i], str, len)) {
@@ -418,7 +418,7 @@ static int Compiler_alloc_string(CompilationUnit *cu, const unsigned char *str, 
     return idx;
 }
 
-static void Compiler_alloc_strings(CompilationUnit *cu, ChpegGNode *gp)
+static void Compiler_alloc_strings(ChpegCompUnit *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
         case CHPEG_LITERAL:
@@ -512,7 +512,7 @@ static void Compiler_alloc_strings(CompilationUnit *cu, ChpegGNode *gp)
 
 ChpegByteCode *Compiler_compile(const unsigned char *input, size_t length, int *result_return, int verbose)
 {
-    CompilationUnit cu;
+    ChpegCompUnit cu;
 
     cu.parser = ChpegParser_new(Compiler_bytecode());
     cu.input = input;
