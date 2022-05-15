@@ -25,6 +25,7 @@ typedef struct _ChpegByteCode
 extern ChpegByteCode *ChpegByteCode_new();
 extern void ChpegByteCode_free(ChpegByteCode *self);
 
+extern const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index);
 extern int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
 extern void ChpegByteCode_print_instructions(const ChpegByteCode *self);
 extern void ChpegByteCode_print_defs(const ChpegByteCode *self);

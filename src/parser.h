@@ -10,14 +10,13 @@ enum ChpegErrorCodes
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
     CHPEG_ERR_UNKNOWN_INSTRUCTION = 3,
     CHPEG_ERR_RUNAWAY = 4,
-    CHPEG_ERR_INVALID_LENGTH = 5,
-    CHPEG_ERR_STACK_OVERFLOW = 6,
-    CHPEG_ERR_TREE_STACK_OVERFLOW = 7,
-    CHPEG_ERR_STACK_UNDERFLOW = 8,
-    CHPEG_ERR_TREE_STACK_UNDERFLOW = 9,
-    CHPEG_ERR_UNEXPECTED_STACK_DATA = 10,
-    CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA = 11,
-    CHPEG_ERR_INVALID_IDENTIFIER = 12,
+    CHPEG_ERR_STACK_OVERFLOW = 5,
+    CHPEG_ERR_TREE_STACK_OVERFLOW = 6,
+    CHPEG_ERR_STACK_UNDERFLOW = 7,
+    CHPEG_ERR_TREE_STACK_UNDERFLOW = 8,
+    CHPEG_ERR_UNEXPECTED_STACK_DATA = 9,
+    CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA = 10,
+    CHPEG_ERR_INVALID_IDENTIFIER = 11,
 };
 
 struct _ChpegParser;
@@ -52,16 +51,7 @@ void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigne
 
 typedef struct _ChpegParser
 {
-    int num_defs;
-    char **def_names;
-    int *def_flags;
-    int *def_addrs;
-    int num_instructions;
-    int *instructions;
-    int num_strings;
-    unsigned char **strings;
-    int *str_len;
-
+    const ChpegByteCode *bc;
     ChpegNode *tree_root;
     int max_tree_depth;
     int max_stack_size;
@@ -85,7 +75,6 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 void ChpegParser_free(ChpegParser *self);
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
 void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
-const char *ChpegParser_def_name(ChpegParser *self, int index);
 void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 

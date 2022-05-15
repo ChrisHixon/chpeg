@@ -56,7 +56,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
-    const char *def_name = ChpegParser_def_name(parser, self->def);
+    const char *def_name = ChpegByteCode_def_name(parser->bc, self->def);
 
     if (depth == 0) {
         printf("---------------------------------------------------------------------------------\n");
@@ -152,20 +152,11 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 // ChpegParser
 //
 
-ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code)
+ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 {
     ChpegParser *self = (ChpegParser *)CHPEG_MALLOC(sizeof(ChpegParser));
 
-    self->num_defs = byte_code->num_defs;
-    self->def_names = byte_code->def_names;
-    self->def_flags = byte_code->def_flags;
-    self->def_addrs = byte_code->def_addrs;
-    self->num_instructions = byte_code->num_instructions;
-    self->instructions = byte_code->instructions;
-    self->num_strings = byte_code->num_strings;
-    self->strings = byte_code->strings;
-    self->str_len = byte_code->str_len;
-
+    self->bc = bc;
     self->tree_root = NULL;
     self->max_tree_depth = 256;
     self->max_stack_size = 256 * 8;
@@ -213,8 +204,8 @@ void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, 
 void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 {
 #if ERRORS
-    const char *parent_def_name = ChpegParser_def_name(self, self->error_parent_def);
-    const char *def_name = ChpegParser_def_name(self, self->error_def);
+    const char *parent_def_name = ChpegByteCode_def_name(self->bc, self->error_parent_def);
+    const char *def_name = ChpegByteCode_def_name(self->bc, self->error_def);
 
     if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
@@ -226,12 +217,14 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
                 case CHPEG_OP_DOT:
                     str = "character"; break;
                 case CHPEG_OP_IDENT:
-                    str = ChpegParser_def_name(self, arg); break;
+                    str = ChpegByteCode_def_name(self->bc, arg); break;
                 case CHPEG_OP_LIT:
-                    esc = chpeg_esc_bytes((unsigned char *)self->strings[arg], self->str_len[arg], 20);
+                    esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
+                        self->bc->str_len[arg], 20);
                     break;
                 default: // unhandled op, show instruction in <> for debugging
-                    esc = chpeg_esc_bytes((unsigned char *)&self->error_inst, sizeof(int), 20);
+                    esc = chpeg_esc_bytes((unsigned char *)&self->error_inst,
+                        sizeof(int), 20);
                     break;
             }
             printf("%s \"%s\" in %s at offset %lu\n",
@@ -268,19 +261,10 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 #endif
 }
 
-const char *ChpegParser_def_name(ChpegParser *self, int index)
-{
-    if (index >= 0 && index < self->num_defs) {
-        return self->def_names[index];
-    }
-    return 0;
-}
-
 // TODO: check sanity checks and overflow checks, make macros to make it easier
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
     int locked = 0, retval = 0;
-    size_t offset = 0;
 
 #if ERRORS
     int err_locked = 0;
@@ -290,39 +274,39 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     int tree_changed = 0;
 #endif
 
-    size_t stack[self->max_stack_size]; int top = -1;
-    ChpegNode *tree_stack[self->max_tree_depth]; int tree_top = -1;
+    //const int num_defs = self->bc->num_defs;
+    //const char **def_names = (const char **)self->bc->def_names;
+    const int *def_flags = self->bc->def_flags;
+    const int *def_addrs = self->bc->def_addrs;
+    const int *instructions = self->bc->instructions;
+    //const int num_strings = self->bc->num_strings;
+    const unsigned char **strings = (const unsigned char **)self->bc->strings;
+    const int *str_len = self->bc->str_len;
 
-    const int *instructions = self->instructions;
+    const int max_stack_size = self->max_stack_size;
+    const int max_tree_depth = self->max_tree_depth;
 
+    size_t offset = 0;
     int op = 0, arg = 0, pc = 0;
 
-    if (length < 0) { return CHPEG_ERR_INVALID_LENGTH; }
+    size_t stack[max_stack_size]; int top = -1;
+    ChpegNode *tree_stack[max_tree_depth]; int tree_top = -1;
 
     self->tree_root = ChpegNode_new(0, 0, -1, 0);
-    if (tree_top >= self->max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
+    if (tree_top >= max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
+#if SANITY_CHECKS || VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
+    const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
-
-#if SANITY_CHECKS
-    int num_inst = self->num_instructions;
-    for(cnt = 0; cnt < cnt_max && pc < num_inst; ++cnt, ++pc)
+    for(cnt = 0; cnt < cnt_max && pc < num_instructions; ++cnt, ++pc)
 #else
-    for(cnt = 0; cnt < cnt_max; ++cnt, ++pc)
+    for(;; ++pc)
 #endif
     {
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
-
-        /*
-        printf("pc=%d op=%d arg=%d top=%d tt=%d stack: ", pc, op, arg, top, tree_top);
-        for (int i = 0; i <= top; i++) {
-            printf("%d ", stack[i]);
-        }
-        printf("\n");
-        */
 
 #if VM_TRACE
         if (self->vm_trace) {
@@ -334,7 +318,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             switch (op) {
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
-                    def_name = ChpegParser_def_name(self, arg);
+                    def_name = ChpegByteCode_def_name(self->bc, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         def_name ? def_name : "<INVALID>");
@@ -343,7 +327,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 case CHPEG_OP_LIT:
                 case CHPEG_OP_CHRCLS:
                     tmp = chpeg_esc_bytes(
-                        self->strings[arg], self->str_len[arg], 28);
+                        strings[arg], str_len[arg], 28);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s\"%s\"\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         tmp ? tmp : "<NULL>");
@@ -373,20 +357,20 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
-                if (top >= self->max_stack_size - 4) {
+                if (top >= max_stack_size - 4) {
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 if (!locked) {
-                    if (tree_top >= self->max_tree_depth - 2) {
+                    if (tree_top >= max_tree_depth - 2) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
-                    if (self->def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
+                    if (def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
                     else {
                         stack[++top] = 0;
                     }
-                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, -1, self->def_flags[arg]);
+                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, -1, def_flags[arg]);
                     ++tree_top;
                 }
                 else {
@@ -394,7 +378,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
                 stack[++top] = offset;
                 stack[++top] = pc;
-                pc = self->def_addrs[arg];
+                pc = def_addrs[arg];
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -412,7 +396,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (self->def_flags[arg] & CHPEG_IGNORE) {
+                    if (def_flags[arg] & CHPEG_IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
                             pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
@@ -462,7 +446,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 // Choice
             case CHPEG_OP_CHOICE:
-                if (top >= self->max_stack_size - 3) {
+                if (top >= max_stack_size - 3) {
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -493,7 +477,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 // Repeat +
             case CHPEG_OP_RPBEG:
-                if (top >= self->max_stack_size - 4) {
+                if (top >= max_stack_size - 4) {
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -545,7 +529,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 // Repeat *|?
             case CHPEG_OP_RSBEG:
             case CHPEG_OP_RQBEG:
-                if (top >= self->max_stack_size - 4) {
+                if (top >= max_stack_size - 4) {
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -597,7 +581,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_PRED:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
-                if (top >= self->max_stack_size - 3) {
+                if (top >= max_stack_size - 3) {
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -660,8 +644,8 @@ pred_cleanup:
             case CHPEG_OP_CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
                 {
                     if (offset < length) {
-                        int mlen = self->str_len[arg], i;
-                        const unsigned char *mstr = self->strings[arg];
+                        int mlen = str_len[arg], i;
+                        const unsigned char *mstr = strings[arg];
                         for (i = 0; i < mlen; ++i) {
                             if (mstr[i] == input[offset]) {
                                 ++offset;
@@ -695,8 +679,8 @@ pred_cleanup:
 // Literal
             case CHPEG_OP_LIT: // arg = str_id; match literal string; skip next instruction on match
                 {
-                    int len = self->str_len[arg];
-                    if ((offset < (length - (len - 1))) && !memcmp(&input[offset], self->strings[arg], len)) {
+                    int len = str_len[arg];
+                    if ((offset < (length - (len - 1))) && !memcmp(&input[offset], strings[arg], len)) {
                         offset += len;
                         ++pc;
                         break;

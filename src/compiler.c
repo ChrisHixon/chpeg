@@ -121,7 +121,7 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
 {
     int flags = 0;
     char *data = NULL;
-    const char *def_name = ChpegParser_def_name(cu->parser, gnode->type);
+    const char *def_name = ChpegByteCode_def_name(cu->parser->bc, gnode->type);
 
     ChpegNode *node = gnode->node;
     if (node) {
