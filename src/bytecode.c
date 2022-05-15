@@ -178,7 +178,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "extern ChpegByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "extern const ChpegByteCode %s;\n\n", varname ? varname : basename);
 
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
@@ -205,7 +205,7 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *bas
     fprintf(fp, "#include \"%s.h\"\n", basename);
     fprintf(fp, "\n");
 
-    fprintf(fp, "ChpegByteCode %s = {\n", varname ? varname : basename);
+    fprintf(fp, "const ChpegByteCode %s = {\n", varname ? varname : basename);
     fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
 
     fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
