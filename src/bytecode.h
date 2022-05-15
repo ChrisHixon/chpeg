@@ -35,10 +35,10 @@ extern void ByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
 
 // rule/node flags AKA options
-enum Flags {
-    STOP = 1<<0,    // used - stop automatic unwrapping, forcing this node to be a container
-    IGNORE = 1<<1,  // used - deletes nodes matching this identifier
-    LEAF = 1<<2,    // used - collects this node and anything underneath as a final leaf (text) node
+enum ChpegFlags {
+    CHPEG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
+    CHPEG_IGNORE = 1<<1,  // deletes nodes matching this identifier
+    CHPEG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H

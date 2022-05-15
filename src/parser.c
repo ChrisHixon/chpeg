@@ -67,9 +67,9 @@ void Node_print(Node *self, Parser *parser, const unsigned char *input, int dept
         self->offset,
         self->length,
         self->def,
-        flags & STOP ? "S" : " ",
-        flags & IGNORE ? "I" : " ",
-        flags & LEAF ? "L" : " ",
+        flags & CHPEG_STOP ? "S" : " ",
+        flags & CHPEG_IGNORE ? "I" : " ",
+        flags & CHPEG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
@@ -131,7 +131,7 @@ void Node_pop_child(Node *self)
 // be called once on the tree root after a successful parse.
 Node *Node_unwrap(Node *self)
 {
-    if (!(self->flags & (STOP|LEAF)) && self->num_children == 1) {
+    if (!(self->flags & (CHPEG_STOP | CHPEG_LEAF)) && self->num_children == 1) {
         Node *tmp = Node_unwrap(self->head);
         self->head = NULL;
         Node_free(self);
@@ -380,7 +380,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                     if (tree_top >= self->max_tree_depth - 2) {
                         pc = -1; retval = TREE_STACK_OVERFLOW; break;
                     }
-                    if (self->def_flags[arg] & (LEAF | IGNORE)) {
+                    if (self->def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
                     else {
@@ -412,7 +412,7 @@ int Parser_parse(Parser *self, const unsigned char *input, size_t length, size_t
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (self->def_flags[arg] & IGNORE) {
+                    if (self->def_flags[arg] & CHPEG_IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
                             pc = -1; retval = TREE_STACK_UNDERFLOW; break;

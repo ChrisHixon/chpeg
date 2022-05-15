@@ -183,9 +183,9 @@ static void Compiler_setup_defs(CompilationUnit *cu)
         if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= STOP; break;
-                    case 'I': flags |= IGNORE; break;
-                    case 'L': flags |= LEAF; break;
+                    case 'S': flags |= CHPEG_STOP; break;
+                    case 'I': flags |= CHPEG_IGNORE; break;
+                    case 'L': flags |= CHPEG_LEAF; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node

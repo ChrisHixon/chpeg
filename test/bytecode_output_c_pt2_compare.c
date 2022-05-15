@@ -6,6 +6,6 @@
 // compare chpeg_bytecode with generated test_bytecode
 int main(void)
 {
-    ByteCode_compare(&chpeg_bytecode, &test_bytecode);
+    return ByteCode_compare(&chpeg_bytecode, &test_bytecode);
 }
 

@@ -201,7 +201,6 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
 {
     int i;
     char *str;
-    char buf[256];
 
     fprintf(fp, "#include \"%s.h\"\n", basename);
     fprintf(fp, "\n");
@@ -217,26 +216,25 @@ void ByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename
 
     fprintf(fp, "  .def_flags = (int[%d]) {", self->num_defs);
     for (i = 0; i < self->num_defs; i++) {
-        str = buf;
+        fprintf(fp, "%s", i ? ", " : "");
+        int flag_out = 0;
         if (self->def_flags[i] & 0x7) {
-            if (self->def_flags[i] & STOP) {
-                if (str != buf) *str++ = '|';
-                strcpy(str, "STOP"); str += 4;
+            if (self->def_flags[i] & CHPEG_STOP) {
+                fprintf(fp, "%sCHPEG_STOP", flag_out ? " | " : "");
+                flag_out = 1;
             }
-            if (self->def_flags[i] & IGNORE) {
-                if (str != buf) *str++ = '|';
-                strcpy(str, "IGNORE"); str += 6;
+            if (self->def_flags[i] & CHPEG_IGNORE) {
+                fprintf(fp, "%sCHPEG_IGNORE", flag_out ? " | " : "");
+                flag_out = 1;
             }
-            if (self->def_flags[i] & LEAF) {
-                if (str != buf) *str++ = '|';
-                strcpy(str, "LEAF"); str += 4;
+            if (self->def_flags[i] & CHPEG_LEAF) {
+                fprintf(fp, "%sCHPEG_LEAF", flag_out ? " | " : "");
+                flag_out = 1;
             }
-            *str = '\0';
         }
         else {
-            buf[0] = '0'; buf[1] = '\0';
+            fprintf(fp, "0");
         }
-        fprintf(fp, "%s%s", i ? ", " : "", buf);
     }
     fprintf(fp, "},\n");
 

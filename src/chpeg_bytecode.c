@@ -5,11 +5,11 @@
 ChpegByteCode chpeg_bytecode = {
     .num_defs = 20,
 
-    .def_names = (char*[20]){"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
+    .def_names = (char*[20]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
 
-    .def_flags = (int[20]){STOP, 0, 0, 0, 0, 0, 0, 0, LEAF, STOP, STOP, 0, 0, LEAF, LEAF, LEAF, LEAF, LEAF, LEAF, IGNORE},
+    .def_flags = (int[20]) {CHPEG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_LEAF, CHPEG_STOP, CHPEG_STOP, 0, 0, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_IGNORE},
 
-    .def_addrs = (int[20]){2, 15, 42, 55, 62, 73, 84, 129, 136, 145, 181, 197, 218, 234, 240, 265, 273, 277, 281, 285}, // presubtracted by 1
+    .def_addrs = (int[20]) {2, 15, 42, 55, 62, 73, 84, 129, 136, 145, 181, 197, 218, 234, 240, 265, 273, 277, 281, 285}, // presubtracted by 1
 
     .num_instructions = 315,
 
@@ -333,7 +333,7 @@ ChpegByteCode chpeg_bytecode = {
 
     .num_strings = 25,
 
-    .strings = (unsigned char**)(char*[25]){"{", "}", "<-", "/", "{<", "(", ")", "ILS", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
+    .strings = (unsigned char**)(char*[25]) {"{", "}", "<-", "/", "{<", "(", ")", "ILS", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
 
-    .str_len = (int[25]){1, 1, 2, 1, 2, 1, 1, 3, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2},
+    .str_len = (int[25]) {1, 1, 2, 1, 2, 1, 1, 3, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2},
 };
