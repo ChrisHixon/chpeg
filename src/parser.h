@@ -20,7 +20,6 @@ enum ChpegErrorCodes
     CHPEG_ERR_INVALID_IDENTIFIER = 12,
 };
 
-struct _CompilationUnit;
 struct _ChpegParser;
 
 //
