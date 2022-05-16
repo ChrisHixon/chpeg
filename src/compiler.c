@@ -1,13 +1,18 @@
+//
+// chpeg: compiler.c {
+//
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-#include "mem.h"
-#include "parser.h"
-#include "compiler.h"
-
-#include "opcodes.h"
-#include "chpeg_bytecode.h"
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/mem.h"
+#include "chpeg/parser.h"
+#include "chpeg/compiler.h"
+#include "chpeg/opcodes.h"
+#include "chpeg/chpeg_bytecode.h"
+#endif
 
 #ifndef DEBUG_COMPILER
 #define DEBUG_COMPILER 0
@@ -125,7 +130,7 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
 
     ChpegNode *node = gnode->node;
     if (node) {
-        data = esc_bytes(&input[node->offset], node->length, 40);
+        data = chpeg_esc_bytes(&input[node->offset], node->length, 40);
         flags = node->flags;
     }
 
@@ -134,16 +139,16 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         printf(" Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
         printf("---------------------------------------------------------------------------------\n");
     }
-    printf("%6d %6d %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
+    printf("%6zu %6zu %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
         gnode->type,
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & STOP ? "S" : " ",
-        flags & IGNORE ? "I" : " ",
-        flags & LEAF ? "L" : " ",
+        flags & CHPEG_STOP ? "S" : " ",
+        flags & CHPEG_IGNORE ? "I" : " ",
+        flags & CHPEG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -438,7 +443,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 }
                 gp->val.ival = ChpegCU_alloc_string(cu, str, len);
 #if DEBUG_COMPILER
-                char *tmp = esc_bytes(str, len, 20);
+                char *tmp = chpeg_esc_bytes(str, len, 20);
                 printf("PEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
                 CHPEG_FREE(tmp);
 #endif
@@ -455,7 +460,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[2] = gp->head->next->val.cval[0];
                 gp->value_len = 3;
 #if DEBUG_COMPILER
-                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
                 printf("CHPEG_CHARRANGE %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -466,7 +471,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
 #if DEBUG_COMPILER
-                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
                 printf("CHPEG_PLAINCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -482,7 +487,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                     case 't': gp->val.cval[0] = '\t'; break;
                 }
 #if DEBUG_COMPILER
-                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
                 printf("CHPEG_ESCCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -498,7 +503,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[0] = val & 255;
                 gp->value_len = 1;
 #if DEBUG_COMPILER
-                char *tmp = esc_bytes(gp->val.cval, gp->value_len, 10);
+                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
                 printf("CHPEG_OCTCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -593,3 +598,6 @@ const ChpegByteCode *chpeg_default_bytecode()
 {
     return &chpeg_bytecode;
 }
+
+// } chpeg: compiler.c
+

@@ -1,5 +1,13 @@
+//
+// chpeg: mem.h {
+//
+
 #ifndef CHPEG_MEM_H
 #define CHPEG_MEM_H
+
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/chpeg_api.h"
+#endif
 
 #include <stdlib.h>
 
@@ -11,3 +19,6 @@
 #endif
 
 #endif // #ifndef CHPEG_MEM_H
+
+// } chpeg: mem.h
+

@@ -4,24 +4,33 @@ SHELL=/bin/sh
 
 CC=gcc
 CFLAGS=-Wall -std=c99 -O3
-INCLUDES=-I$(CHPEG_SRC)
+INCLUDES=-I$(INCLUDE)
 LDFLAGS=
+
+INCLUDE=../include
+CHPEG_INCLUDE=$(INCLUDE)/chpeg
 
 # chpeg pseudo-lib
 CHPEG_OBJDIR=chpeg
 CHPEG_SRC=../src
 
-CHPEG_SOURCE_FILES=parser.c compiler.c bytecode.c chpeg_bytecode.c opcodes.c util.c
+# list these in amalgamation order
+CHPEG_HEADER_FILES=chpeg_api.h mem.h \
+		   opcodes.h bytecode.h chpeg_bytecode.h util.h parser.h compiler.h
+CHPEG_SOURCE_FILES=opcodes.c bytecode.c chpeg_bytecode.c util.c parser.c compiler.c
+
 CHPEG_SOURCES=$(patsubst %.c,$(CHPEG_SRC)/%.c,$(CHPEG_SOURCE_FILES))
 CHPEG_OBJECTS=$(patsubst $(CHPEG_SRC)/%.c,$(CHPEG_OBJDIR)/%.o,$(CHPEG_SOURCES))
-CHPEG_HEADERS=$(patsubst $(CHPEG_SRC)/%.c,$(CHPEG_SRC)/%.h,$(CHPEG_SOURCES)) $(CHPEG_SRC)/mem.h
+CHPEG_HEADERS=$(patsubst %.h,$(CHPEG_INCLUDE)/%.h,$(CHPEG_HEADER_FILES))
 
 # dir for generated files
 GENERATED=generated
 
 # tests
 TESTS_OBJDIR=obj
-TESTS=bytecode_output_c_pt1_output bytecode_output_c_pt2_compare compare_bytecode_with_internal
+TESTS=bytecode_output_c_pt1_output \
+      bytecode_output_c_pt2_compare \
+      compare_bytecode_with_internal
 TESTS_SOURCES=$(patsubst %,%.c,$(TESTS))
 TESTS_OBJECTS=$(patsubst %.c,$(TESTS_OBJDIR)/%.o,$(TESTS_SOURCES))
 
@@ -70,6 +79,10 @@ $(CHPEG_OBJDIR):
 
 $(GENERATED):
 	mkdir $(GENERATED)
+
+.PHONY: test
+test:
+	-./run_tests.sh
 
 .PHONY: clean
 clean:

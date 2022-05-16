@@ -1,5 +1,13 @@
+//
+// chpeg: bytecode.h {
+//
+
 #ifndef CHPEG_BYTECODE_H
 #define CHPEG_BYTECODE_H
+
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/chpeg_api.h"
+#endif
 
 #include <stdio.h>
 
@@ -22,17 +30,17 @@ typedef struct _ChpegByteCode
     int *str_len;
 } ChpegByteCode;
 
-extern ChpegByteCode *ChpegByteCode_new();
-extern void ChpegByteCode_free(ChpegByteCode *self);
+CHPEG_API ChpegByteCode *ChpegByteCode_new();
+CHPEG_API void ChpegByteCode_free(ChpegByteCode *self);
 
-extern const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index);
-extern int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
-extern void ChpegByteCode_print_instructions(const ChpegByteCode *self);
-extern void ChpegByteCode_print_defs(const ChpegByteCode *self);
-extern void ChpegByteCode_print(const ChpegByteCode *self);
-extern void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
+CHPEG_API const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index);
+CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
+CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self);
+CHPEG_API void ChpegByteCode_print_defs(const ChpegByteCode *self);
+CHPEG_API void ChpegByteCode_print(const ChpegByteCode *self);
+CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
-extern void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
+CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
 
 // rule/node flags AKA options
@@ -43,3 +51,6 @@ enum ChpegFlags {
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H
+
+// } chpeg: bytecode.h
+

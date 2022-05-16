@@ -1,5 +1,13 @@
+//
+// chpeg: opcodes.h {
+//
+
 #ifndef CHPEG_OPCODES_H
 #define CHPEG_OPCODES_H
+
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/chpeg_api.h"
+#endif
 
 enum ChpegOp
 {
@@ -33,7 +41,7 @@ enum ChpegOp
     CHPEG_NUM_OPS
 };
 
-extern const char *Chpeg_op_names[CHPEG_NUM_OPS];
+CHPEG_API const char *Chpeg_op_names[CHPEG_NUM_OPS];
 
 static inline const char *Chpeg_op_name(int op)
 {
@@ -41,3 +49,6 @@ static inline const char *Chpeg_op_name(int op)
 }
 
 #endif // #ifndef CHPEG_OPCODES_H
+
+// } chpeg: opcodes.h
+

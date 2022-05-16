@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "chpeg_bytecode.h"
+#include "chpeg/chpeg_bytecode.h"
 
 // output chpeg_bytecode as test_bytecode.c & test_bytecode.h files
 
@@ -21,7 +21,7 @@ int main(void)
         perror("test_bytecode.h");
         return 1;
     }
-    ChpegByteCode_output_h(&chpeg_bytecode, fp, "test_bytecode", NULL, "chpeg", NULL);
+    ChpegByteCode_output_h(&chpeg_bytecode, fp, "test_bytecode", NULL, NULL, NULL);
     fclose(fp);
 }
 

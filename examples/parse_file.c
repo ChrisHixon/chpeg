@@ -1,20 +1,6 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <limits.h>
 
-#ifdef DEBUG_MEM
-    #include <mcheck.h>
-#endif
-
-#include "mem.h"
-#include "util.h"
-#include "parser.h"
-#include "compiler.h"
+#include "chpeg/chpeg.h"
 
 int main(int argc, char *argv[])
 {

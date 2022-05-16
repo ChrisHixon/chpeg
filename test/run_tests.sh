@@ -1,7 +1,5 @@
 #!/bin/sh
 
-make
-
 bytecode_output_c_pt2_compare() {
   ./bytecode_output_c_pt2_compare
 }

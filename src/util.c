@@ -1,9 +1,15 @@
+//
+// chpeg: util.c {
+//
+
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/mem.h"
+#include "chpeg/util.h"
+#endif
+
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
-
-#include "mem.h"
-#include "util.h"
 
 // escape bytes like a C literal string, optionally truncating to limit, adding "..." at the end
 // caller must free() returned value
@@ -174,3 +180,6 @@ cleanup:
     }
     return ret;
 }
+
+// } chpeg: util.c
+

@@ -1,11 +1,17 @@
+//
+// chpeg: parser.c {
+//
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "mem.h"
-#include "util.h"
-#include "parser.h"
-#include "opcodes.h"
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/mem.h"
+#include "chpeg/util.h"
+#include "chpeg/parser.h"
+#include "chpeg/opcodes.h"
+#endif
 
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
@@ -776,3 +782,6 @@ pred_cleanup:
     self->parse_result = retval;
     return retval;
 }
+
+// } chpeg: parser.c
+

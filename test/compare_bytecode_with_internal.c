@@ -14,9 +14,9 @@
     #include <mcheck.h>
 #endif
 
-#include "mem.h"
-#include "parser.h"
-#include "compiler.h"
+#include "chpeg/mem.h"
+#include "chpeg/parser.h"
+#include "chpeg/compiler.h"
 
 int main(int argc, char *argv[])
 {

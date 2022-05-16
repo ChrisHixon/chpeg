@@ -1,7 +1,14 @@
+//
+// chpeg: parser.h {
+//
+
 #ifndef CHPEG_PARSER_H
 #define CHPEG_PARSER_H
 
-#include "bytecode.h"
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/chpeg_api.h"
+#include "chpeg/bytecode.h"
+#endif
 
 enum ChpegErrorCodes
 {
@@ -36,14 +43,12 @@ typedef struct _ChpegNode
     struct _ChpegNode *next;
 } ChpegNode;
 
-ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
-void ChpegNode_free(ChpegNode *self);
-ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
-void ChpegNode_pop_child(ChpegNode *self);
-ChpegNode *ChpegNode_unwrap(ChpegNode *self);
-
-// debugging / dev aid. TODO: should disappear based on some DEBUG/NDEBUG macro
-void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
+CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
+CHPEG_API void ChpegNode_free(ChpegNode *self);
+CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
+CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
+CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self);
+CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
 
 //
 // ChpegParser
@@ -71,11 +76,14 @@ typedef struct _ChpegParser
 
 } ChpegParser;
 
-ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
-void ChpegParser_free(ChpegParser *self);
-int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
-void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
-void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
-void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
+CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
+CHPEG_API void ChpegParser_free(ChpegParser *self);
+CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
+CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
+CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 
 #endif // #ifndef CHPEG_PARSER_H
+
+// } chpeg: parser.h
+

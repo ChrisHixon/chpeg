@@ -1,6 +1,12 @@
-#include "opcodes.h"
+//
+// chpeg: opcodes.c {
+//
 
-const char *Chpeg_op_names[CHPEG_NUM_OPS] =
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/opcodes.h"
+#endif
+
+CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
 {
     "GOTO",
     "IDENT",
@@ -30,3 +36,6 @@ const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "SUCC",
     "FAIL"
 };
+
+// } chpeg: opcodes.c
+

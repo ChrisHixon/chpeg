@@ -1,11 +1,17 @@
+//
+// chpeg: bytecode.c {
+//
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
-#include "mem.h"
-#include "util.h"
-#include "bytecode.h"
-#include "opcodes.h"
+#ifndef CHPEG_AMALGAMATION
+#include "chpeg/mem.h"
+#include "chpeg/util.h"
+#include "chpeg/bytecode.h"
+#include "chpeg/opcodes.h"
+#endif
 
 //
 // ByteCode
@@ -137,6 +143,10 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
 {
     int i, j, slen;
 
+    if (prefix == NULL) {
+        prefix = "chpeg";
+    }
+
     // guard
     char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
     for (j = 0; j < 2; j++) {
@@ -154,11 +164,14 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
                 fputc(toupper(basename[i]), fp);
             }
         }
-        fputc('\n', fp);
+        fprintf(fp, "_H\n");
     }
 
-    fprintf(fp, "\n#include \"bytecode.h\"\n");
-    fprintf(fp, "#include \"%s.h\"\n\n", opcodes ? opcodes : "opcodes");
+    fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
+    fprintf(fp, "#include \"chpeg/chpeg_api.h\"\n");
+    fprintf(fp, "#include \"chpeg/bytecode.h\"\n");
+    fprintf(fp, "#include \"%s\"\n", opcodes ? opcodes : "chpeg/opcodes.h");
+    fprintf(fp, "\n#endif\n\n");
 
     // #define for each def name
     for (j = 0; j < self->num_defs; j++) {
@@ -178,7 +191,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "extern const ChpegByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "CHPEG_API const ChpegByteCode %s;\n\n", varname ? varname : basename);
 
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
@@ -194,7 +207,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
             fputc(toupper(basename[i]), fp);
         }
     }
-    fputc('\n', fp);
+    fprintf(fp, "_H\n");
 }
 
 void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
@@ -202,10 +215,10 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *bas
     int i;
     char *str;
 
-    fprintf(fp, "#include \"%s.h\"\n", basename);
+    fprintf(fp, "#ifndef CHPEG_AMALGAMATION\n#include \"%s.h\"\n#endif\n", basename);
     fprintf(fp, "\n");
 
-    fprintf(fp, "const ChpegByteCode %s = {\n", varname ? varname : basename);
+    fprintf(fp, "CHPEG_DEF const ChpegByteCode %s = {\n", varname ? varname : basename);
     fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
 
     fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
@@ -365,3 +378,6 @@ int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 
     return 0;
 }
+
+// } chpeg: bytecode.c
+
