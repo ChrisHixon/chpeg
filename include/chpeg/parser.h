@@ -76,6 +76,11 @@ typedef struct _ChpegParser
 
 } ChpegParser;
 
+#ifndef CHPEG_PARSER_MAX_STACK_SIZE
+#define CHPEG_PARSER_MAX_TREE_DEPTH 256
+#define CHPEG_PARSER_MAX_STACK_SIZE (CHPEG_PARSER_MAX_TREE_DEPTH * 8)
+#endif /*CHPEG_PARSER_STACK_SIZE*/
+
 CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);

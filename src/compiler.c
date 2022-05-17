@@ -312,7 +312,7 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
                 int op = cu->bc->instructions[lit_inst] & 0xff;
                 int arg = cu->bc->instructions[lit_inst] >> 8;
                 assert(op == CHPEG_OP_LIT); // ensure it's what we expect
-                cu->bc->instructions[lit_inst] = INST(CHPEG_OP_LIT_NC, arg); // overwrite it and do not generate any new instruction
+                cu->bc->instructions[lit_inst] = CHPEG_INST(CHPEG_OP_LIT_NC, arg); // overwrite it and do not generate any new instruction
             }
             break;
 #endif /*CHPEG_HAS_NOCASE*/

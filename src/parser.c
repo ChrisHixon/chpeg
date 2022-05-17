@@ -163,8 +163,8 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
     self->bc = bc;
     self->tree_root = NULL;
-    self->max_tree_depth = 256;
-    self->max_stack_size = 256 * 8;
+    self->max_tree_depth = CHPEG_PARSER_MAX_TREE_DEPTH;
+    self->max_stack_size = CHPEG_PARSER_MAX_STACK_SIZE;
     self->error_offset = 0;
     self->error_parent_def = -1;
     self->error_def = -1;
@@ -690,13 +690,13 @@ pred_cleanup:
 // Literal
             case CHPEG_OP_LIT: // arg = str_id; match literal string; skip next instruction on match
 #ifdef CHPEG_HAS_NOCASE
-            case LIT_NC:
+            case CHPEG_OP_LIT_NC:
 #endif /*CHPEG_OP(NOCASE)*/
                 {
                     int len = str_len[arg];
                     if ((offset < (length - (len - 1))) && !(
 #ifdef CHPEG_HAS_NOCASE
-			    (op == LIT_NC) ? strncasecmp((const char*)&input[offset], (const char*)strings[arg], len) :
+			    (op == CHPEG_OP_LIT_NC) ? strncasecmp((const char*)&input[offset], (const char*)strings[arg], len) :
 #endif /*CHPEG_OP(NOCASE)*/
 					memcmp(&input[offset], strings[arg], len))) {
                         offset += len;
