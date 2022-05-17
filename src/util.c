@@ -3,20 +3,23 @@
 //
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/mem.h"
 #include "chpeg/util.h"
 #endif
 
-#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // escape bytes like a C literal string, optionally truncating to limit, adding "..." at the end
 // caller must free() returned value
-char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
+CHPEG_API char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
 {
     static const char *hex_digit = "0123456789ABCDEF";
+#ifdef CHPEG_HAS_EXTRA_ESCAPE
+    static const char *esc_chars = "\\\"\a\b\e\f\t\v\r\n";
+#else
     static const char *esc_chars = "\\\"\t\r\n";
+#endif
 
     if (!bytes || length < 0) { return NULL; }
     if (limit > 0 && limit < 3) { return NULL; }
@@ -57,6 +60,13 @@ char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
         else if (strchr(esc_chars, b)) {
             *p++ = '\\';
             switch (b) {
+#ifdef CHPEG_HAS_EXTRA_ESCAPE
+                case '\a': *p++ = 'a'; break;
+                case '\b': *p++ = 'b'; break;
+                case '\e': *p++ = 'e'; break;
+                case '\f': *p++ = 'f'; break;
+                case '\v': *p++ = 'v'; break;
+#endif                
                 case '\r': *p++ = 'r'; break;
                 case '\t': *p++ = 't'; break;
                 case '\n': *p++ = 'n'; break;
@@ -86,7 +96,7 @@ char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
 #define CHPEG_READ_FILE_INITIAL_SIZE 4096 * 4
 #endif
 
-int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
+CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
 {
     int ret = 0;
     size_t bsize = 0, remain = 0, bytes_read = 0, len = 0;
@@ -114,7 +124,7 @@ int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
     }
 
     // initial allocation
-    buf = malloc(CHPEG_READ_FILE_INITIAL_SIZE);
+    buf = CHPEG_MALLOC(CHPEG_READ_FILE_INITIAL_SIZE);
     if (buf == NULL) {
         perror("malloc");
         ret = 1;
@@ -131,7 +141,7 @@ int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
             p += bytes_read;
             len += bytes_read;
             if (remain == 0) {
-                buf = realloc(buf, bsize * 2);
+                buf = CHPEG_REALLOC(buf, bsize * 2);
                 if (buf == NULL) {
                     perror("realloc");
                     ret = 1;
@@ -166,14 +176,14 @@ cleanup:
     }
     if (ret) { // if we're returning error
         if (buf) {
-            free(buf); // free the allocated buffer
+            CHPEG_FREE(buf); // free the allocated buffer
         }
         *data = NULL;
         *length = 0;
     }
     else {
         if (len > CHPEG_READ_FILE_INITIAL_SIZE) {
-            buf = realloc(buf, len);
+            buf = CHPEG_REALLOC(buf, len);
         }
         *data = buf;
         *length = len;
@@ -181,5 +191,36 @@ cleanup:
     return ret;
 }
 
-// } chpeg: util.c
+#ifndef CHPEG_NO_MALLOC_WRAPPER
+CHPEG_API void *chpeg_malloc(size_t sz) {
+    void *ptr = malloc(sz);
+    if(!ptr) {
+        fprintf(stderr, "Failed to allocate %zd bytes of memory", sz);
+        exit(-1);
+    }
+    return ptr;
+}
 
+CHPEG_API void *chpeg_realloc(void *prev_ptr, size_t sz) {
+    void *ptr = realloc(prev_ptr, sz);
+    if(!ptr) {
+        fprintf(stderr, "Failed to reallocate %zd bytes of memory", sz);
+        exit(-1);
+    }
+    return ptr;
+}
+
+CHPEG_API void *chpeg_calloc(size_t count, size_t sz) {
+    void *ptr = calloc(count, sz);
+    if(!ptr) {
+        fprintf(stderr, "Failed to allocate and initialize %zd bytes of memory", sz);
+        exit(-1);
+    }
+    return ptr;
+}
+
+CHPEG_API void chpeg_free(void *ptr) {
+    free(ptr);
+}
+#endif /*CHPEG_NO_MALLOC_WRAPPER*/
+// } chpeg: util.c

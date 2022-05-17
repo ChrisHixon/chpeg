@@ -6,17 +6,19 @@ INCLUDES=-I$(INCLUDE)
 LDFLAGS=
 
 INCLUDE=../include
-CHPEG_INCLUDE=$(INCLUDE)/chpeg
-CHPEG_AMALGAMATION=$(CHPEG_INCLUDE)/chpeg.h # used to remake when this has changed
 
 EXAMPLES=parse_file
 
 # rules
 all: $(EXAMPLES)
 
-parse_file: $(CHPEG_AMALGAMATION)
+parse_file:
 	$(CC) $(LDFLAGS) $(CFLAGS) $(INCLUDES) parse_file.c -o parse_file
 
 .PHONY: clean
 clean:
 	-rm -f $(EXAMPLES)
+	-rm chpeg chpeg.c chpeg_bc.[ch]
+	-rm chpeg_chpeg chpeg_chpeg.c chpeg_chpeg_bc.[ch]
+	-rm chpeg_hex chpeg_hex.c chpeg_hex_bc.[ch]
+	-rm chpeg_nocase chpeg_nocase.c chpeg_nocase_bc.[ch]

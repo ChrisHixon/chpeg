@@ -1,6 +1,13 @@
 #include <stdio.h>
 
+#ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg.h"
+#endif
+
+void usage(const char *prog) {
+    fprintf(stderr, "usage: %s [<grammar>] <input>\n", prog);
+    fprintf(stderr, "   or: %s --cbytecode basename <grammar>\n", prog);
+}
 
 int main(int argc, char *argv[])
 {
@@ -12,18 +19,31 @@ int main(int argc, char *argv[])
     int ret = 0;
     char *grammar_filename = NULL;
     char *input_filename = NULL;
+    char *base_filename = NULL;
+    int gen_cbytecode = 0;
 
 #ifdef DEBUG_MEM
     mtrace();
 #endif
 
-    if (argc < 2 || argc > 3) {
-        fprintf(stderr, "usage: %s [<grammar>] <input>\n", argv[0]);
+    if (argc < 2 || argc > 4) {
+        usage(argv[0]);
         ret = 1;
         goto done;
     }
 
-    if (argc == 2) {
+    gen_cbytecode = strcmp(argv[1], "--cbytecode") == 0;
+
+    if(gen_cbytecode) {
+        if(argc != 4) {
+            usage(argv[0]);
+            ret = 1;
+            goto done;
+        }
+        base_filename = argv[2];
+        grammar_filename = argv[3];
+    }
+    else if (argc == 2) {
         input_filename = argv[1];
     }
     else if (argc == 3) {
@@ -54,6 +74,28 @@ int main(int argc, char *argv[])
 
         // uncomment to print a dump of the byte code (defs, instructions, and strings)
         //ChpegByteCode_print(byte_code);
+        if(gen_cbytecode) {
+            FILE *fp;
+            char strbuf[1024];
+            snprintf(strbuf, sizeof(strbuf), "%s.c", base_filename);
+            fp = fopen(strbuf, "w");
+            if (!fp) {
+                perror(strbuf);
+                return 1;
+            }
+            ChpegByteCode_output_c(byte_code, fp, base_filename, NULL);
+            fclose(fp);
+
+            snprintf(strbuf, sizeof(strbuf), "%s.h", base_filename);
+            fp = fopen(strbuf, "w");
+            if (!fp) {
+                perror(strbuf);
+                return 1;
+            }
+            ChpegByteCode_output_h(byte_code, fp, base_filename, NULL, base_filename, NULL);
+            fclose(fp);
+            goto done;
+        }
 
         CHPEG_FREE(input);
         input = NULL;

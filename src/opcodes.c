@@ -32,6 +32,7 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "PNOMATS",
     "CHRCLS",
     "LIT",
+    "LIT_NC",
     "DOT",
     "SUCC",
     "FAIL"

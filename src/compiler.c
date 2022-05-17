@@ -5,9 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/mem.h"
+#include "chpeg/util.h"
 #include "chpeg/parser.h"
 #include "chpeg/compiler.h"
 #include "chpeg/opcodes.h"
@@ -17,6 +18,10 @@
 #ifndef DEBUG_COMPILER
 #define DEBUG_COMPILER 0
 #endif
+
+#ifndef CHPEG_BC
+#define CHPEG_BC(bc) CHPEG_BC_##bc
+#endif /*CHPEG_BC*/
 
 //
 // Gnode: grammar tree node (internal use during compilation)
@@ -146,9 +151,9 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & CHPEG_STOP ? "S" : " ",
-        flags & CHPEG_IGNORE ? "I" : " ",
-        flags & CHPEG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : " ",
+        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
+        flags & CHPEG_FLAG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -176,22 +181,22 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
     cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
-        if (CHPEG_DEFINITION != p->def) { continue; }
+        if (CHPEG_BC(DEFINITION) != p->def) { continue; }
 
         ChpegNode *tmp = p->head; // Identifier, definition name
-        if (NULL == tmp || CHPEG_IDENTIFIER != tmp->def) { continue; }
+        if (NULL == tmp || CHPEG_BC(IDENTIFIER) != tmp->def) { continue; }
         cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
         cu->bc->def_names[i][tmp->length] = '\0';
 
         int flags = 0;
         tmp = tmp->next; // Options, flags
-        if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
+        if (NULL != tmp && CHPEG_BC(OPTIONS) == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= CHPEG_STOP; break;
-                    case 'I': flags |= CHPEG_IGNORE; break;
-                    case 'L': flags |= CHPEG_LEAF; break;
+                    case 'S': flags |= CHPEG_FLAG_STOP; break;
+                    case 'I': flags |= CHPEG_FLAG_IGNORE; break;
+                    case 'L': flags |= CHPEG_FLAG_LEAF; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node
@@ -247,7 +252,7 @@ static inline int ChpegCU_alloc_inst(ChpegCU *cu)
 static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_BC(GRAMMAR):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
@@ -255,12 +260,12 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_alloc_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_BC(DEFINITION):
             ChpegCU_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_BC(CHOICE):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
@@ -269,33 +274,48 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_BC(SEQUENCE):
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
             }
             gp->parse_state = gp->head->parse_state;
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_BC(REPEAT):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_BC(PREDICATE):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_DOT:
+        case CHPEG_BC(DOT):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_IDENTIFIER:
-        case CHPEG_CHARCLASS:
-        case CHPEG_LITERAL:
+        case CHPEG_BC(IDENTIFIER):
+        case CHPEG_BC(CHARCLASS):
+        case CHPEG_BC(LITERAL):
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_BC(LITERALSQ):
+        case CHPEG_BC(LITERALDQ):
+#endif /*CHPEG_OP(NOCASE)*/
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_BC(NOCASE):
+            {
+                int lit_inst = cu->bc->num_instructions-2; //assuming CHPEG_OP_LITERAL is the previous isntruction
+                int op = cu->bc->instructions[lit_inst] & 0xff;
+                int arg = cu->bc->instructions[lit_inst] >> 8;
+                assert(op == CHPEG_OP_LIT); // ensure it's what we expect
+                cu->bc->instructions[lit_inst] = INST(CHPEG_OP_LIT_NC, arg); // overwrite it and do not generate any new instruction
+            }
+            break;
+#endif /*CHPEG_HAS_NOCASE*/
     }
 }
 
@@ -308,7 +328,7 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_BC(GRAMMAR):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_FAIL, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_SUCC, 0));
@@ -316,12 +336,12 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_BC(DEFINITION):
             ChpegCU_add_instructions(cu, gp->head->next);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, ChpegCU_find_def(cu, gp->head->node)));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, 0));
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_BC(CHOICE):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
@@ -330,14 +350,14 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_BC(SEQUENCE):
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 p->parent_next_state = p->next ? p->next->parse_state : gp->parent_next_state;
                 p->parent_fail_state = gp->parent_fail_state;
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_BC(REPEAT):
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
                 switch (op) {
@@ -362,7 +382,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
             }
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_BC(PREDICATE):
             {
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
@@ -381,18 +401,22 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
             }
             break;
-        case CHPEG_DOT:
+        case CHPEG_BC(DOT):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
             break;
-        case CHPEG_IDENTIFIER:
+        case CHPEG_BC(IDENTIFIER):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, gp->node)));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_CHARCLASS:
+        case CHPEG_BC(CHARCLASS):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_LITERAL:
+        case CHPEG_BC(LITERAL):
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_BC(LITERALSQ):
+        case CHPEG_BC(LITERALDQ):
+#endif /*CHPEG_HAS_NOCASE*/
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
@@ -428,8 +452,12 @@ static int ChpegCU_alloc_string(ChpegCU *cu, const unsigned char *str, int len)
 static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_LITERAL:
-        case CHPEG_CHARCLASS:
+#ifdef CHPEG_HAS_NOCASE
+        case CHPEG_BC(LITERALSQ):
+        case CHPEG_BC(LITERALDQ):
+#endif /*CHPEG_HAS_NOCASE*/
+        case CHPEG_BC(LITERAL):
+        case CHPEG_BC(CHARCLASS):
             {
                 int len = 0, offset = 0;
                 for (ChpegGNode *p = gp->head; p; p = p->next) {
@@ -444,13 +472,13 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.ival = ChpegCU_alloc_string(cu, str, len);
 #if DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(str, len, 20);
-                printf("PEG LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
+                printf("PEG BC_LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
                 CHPEG_FREE(tmp);
 #endif
                 CHPEG_FREE(str);
             }
             break;
-        case CHPEG_CHARRANGE:
+        case CHPEG_BC(CHARRANGE):
             {
                 for (ChpegGNode *p = gp->head; p; p = p->next) {
                     ChpegCU_alloc_strings(cu, p);
@@ -461,23 +489,23 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->value_len = 3;
 #if DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_CHARRANGE %s\n", tmp);
+                printf("CHPEG_BC_CHARRANGE %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case CHPEG_PLAINCHAR:
+        case CHPEG_BC(PLAINCHAR):
             {
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
 #if DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_PLAINCHAR %s\n", tmp);
+                printf("CHPEG_BC_PLAINCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case CHPEG_ESCCHAR:
+        case CHPEG_BC(ESCCHAR):
             {
                 gp->val.cval[0] = cu->input[gp->node->offset + 1];
                 gp->value_len = 1;
@@ -488,12 +516,12 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 }
 #if DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_ESCCHAR %s\n", tmp);
+                printf("CHPEG_BC_ESCCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
-        case CHPEG_OCTCHAR:
+        case CHPEG_BC(OCTCHAR):
             {
                 int val = 0; int len = gp->node->length - 1;
                 const unsigned char *ip = cu->input + gp->node->offset + 1;
@@ -504,11 +532,62 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->value_len = 1;
 #if DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_OCTCHAR %s\n", tmp);
+                printf("CHPEG_BC_OCTCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
             break;
+#ifdef CHPEG_HAS_HEXCHAR
+        case CHPEG_BC(HEXCHAR):
+            {
+                int val = 0; int len = gp->node->length - 1;
+                const unsigned char *ip = cu->input + gp->node->offset + 1;
+                for (int i = 1; i < len; ++i) {
+                    unsigned char c = ip[i];
+                    switch(c) {
+                        case '0':
+                        case '1':
+                        case '2':
+                        case '3':
+                        case '4':
+                        case '5':
+                        case '6':
+                        case '7':
+                        case '8':
+                        case '9':
+                            c -= '0';
+                            break;
+
+                        case 'a':
+                        case 'b':
+                        case 'c':
+                        case 'd':
+                        case 'e':
+                        case 'f':
+                            c = 10 + (c - 'a');
+                            break;
+
+                        case 'A':
+                        case 'B':
+                        case 'C':
+                        case 'D':
+                        case 'E':
+                        case 'F':
+                            c = 10 + (c - 'A');
+                            break;
+                    }
+                    val = (val << 4) | c;
+                }
+                gp->val.cval[0] = val & 255;
+                gp->value_len = 1;
+#if DEBUG_COMPILER
+                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
+                printf("CHPEG_BC_HEXCHAR %s\n", tmp);
+                CHPEG_FREE(tmp);
+#endif
+            }
+            break;
+#endif /*CHPEG_HAS_HEXCHAR*/
         default:
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_alloc_strings(cu, p);
@@ -519,7 +598,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 
 // This is more of a convenience function, thus the lowercase chpeg_ prefix.
 // I plan to create a more OO-like API to the compiler to allow more flexibility.
-int chpeg_compile(const unsigned char *input, size_t length,
+CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
     ChpegCU cu;
@@ -594,9 +673,12 @@ done:
     return parse_result;
 }
 
-const ChpegByteCode *chpeg_default_bytecode()
+#ifndef CHPEG_DEFAULT_BYTECODE
+#define CHPEG_DEFAULT_BYTECODE (&chpeg_bytecode)
+#endif
+CHPEG_API const ChpegByteCode *chpeg_default_bytecode()
 {
-    return &chpeg_bytecode;
+    return CHPEG_DEFAULT_BYTECODE;
 }
 
 // } chpeg: compiler.c

@@ -7,7 +7,6 @@
 #include <stdlib.h>
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/mem.h"
 #include "chpeg/util.h"
 #include "chpeg/parser.h"
 #include "chpeg/opcodes.h"
@@ -58,7 +57,7 @@
 // ChpegNode
 //
 
-void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
+CHPEG_API void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
@@ -73,9 +72,9 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
         self->offset,
         self->length,
         self->def,
-        flags & CHPEG_STOP ? "S" : " ",
-        flags & CHPEG_IGNORE ? "I" : " ",
-        flags & CHPEG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : " ",
+        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
+        flags & CHPEG_FLAG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
@@ -89,7 +88,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
     }
 }
 
-ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
+CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
 {
     ChpegNode *self = (ChpegNode *)CHPEG_MALLOC(sizeof(ChpegNode));
     self->def = def;
@@ -102,7 +101,7 @@ ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
     return self;
 }
 
-void ChpegNode_free(ChpegNode *self)
+CHPEG_API void ChpegNode_free(ChpegNode *self)
 {
     ChpegNode *tmp;
     for (ChpegNode *p = self->head; p; p = tmp) {
@@ -113,7 +112,7 @@ void ChpegNode_free(ChpegNode *self)
     CHPEG_FREE(self);
 }
 
-ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
+CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
 {
     ChpegNode *node = ChpegNode_new(def, offset, length, flags);
     node->next = self->head;
@@ -122,7 +121,7 @@ ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t 
     return node;
 }
 
-void ChpegNode_pop_child(ChpegNode *self)
+CHPEG_API void ChpegNode_pop_child(ChpegNode *self)
 {
     if (self->head) {
         ChpegNode *tmp = self->head;
@@ -135,9 +134,9 @@ void ChpegNode_pop_child(ChpegNode *self)
 // 'Unwrap' a ChpegNode, recursively removing unnecessary parent nodes containing only one child.
 // In the process, this reverses the reverse node insertion used in tree building, so should only
 // be called once on the tree root after a successful parse.
-ChpegNode *ChpegNode_unwrap(ChpegNode *self)
+CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 {
-    if (!(self->flags & (CHPEG_STOP | CHPEG_LEAF)) && self->num_children == 1) {
+    if (!(self->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF)) && self->num_children == 1) {
         ChpegNode *tmp = ChpegNode_unwrap(self->head);
         self->head = NULL;
         ChpegNode_free(self);
@@ -158,7 +157,7 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 // ChpegParser
 //
 
-ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
+CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 {
     ChpegParser *self = (ChpegParser *)CHPEG_MALLOC(sizeof(ChpegParser));
 
@@ -182,7 +181,7 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     return self;
 }
 
-void ChpegParser_free(ChpegParser *self)
+CHPEG_API void ChpegParser_free(ChpegParser *self)
 {
     if (self->tree_root) {
         ChpegNode_free(self->tree_root);
@@ -191,12 +190,12 @@ void ChpegParser_free(ChpegParser *self)
     CHPEG_FREE(self);
 }
 
-void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)
 {
     ChpegNode_print(self->tree_root, self, input, 0);
 }
 
-void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
+CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
     if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
         self->error_offset = offset;
@@ -207,7 +206,7 @@ void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, 
     }
 }
 
-void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
+CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 {
 #if ERRORS
     const char *parent_def_name = ChpegByteCode_def_name(self->bc, self->error_parent_def);
@@ -219,18 +218,24 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
             int arg = self->error_inst >> 8;
             char *esc = NULL;
             const char *str = NULL;
+            char buf[1024];
             switch (op) {
                 case CHPEG_OP_DOT:
-                    str = "character"; break;
+                    snprintf(buf, sizeof(buf), "character `%c`", input[self->error_offset]);
+                    str = buf; 
+                    break;
                 case CHPEG_OP_IDENT:
                     str = ChpegByteCode_def_name(self->bc, arg); break;
                 case CHPEG_OP_LIT:
                     esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                         self->bc->str_len[arg], 20);
                     break;
+                case CHPEG_OP_CHRCLS:
+                    str = (const char*)self->bc->strings[arg];
+                    break;
                 default: // unhandled op, show instruction in <> for debugging
-                    esc = chpeg_esc_bytes((unsigned char *)&self->error_inst,
-                        sizeof(int), 20);
+                    snprintf(buf, sizeof(buf), "unhandled op <%s>", Chpeg_op_names[op]);
+                    str = buf;
                     break;
             }
             printf("%s \"%s\" in %s at offset %lu\n",
@@ -268,7 +273,7 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 }
 
 // TODO: check sanity checks and overflow checks, make macros to make it easier
-int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
+CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
     int locked = 0, retval = 0;
 
@@ -370,7 +375,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     if (tree_top >= max_tree_depth - 2) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
-                    if (def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
+                    if (def_flags[arg] & (CHPEG_FLAG_LEAF | CHPEG_FLAG_IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
                     else {
@@ -402,7 +407,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (def_flags[arg] & CHPEG_IGNORE) {
+                    if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
                             pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
@@ -684,9 +689,16 @@ pred_cleanup:
 
 // Literal
             case CHPEG_OP_LIT: // arg = str_id; match literal string; skip next instruction on match
+#ifdef CHPEG_HAS_NOCASE
+            case LIT_NC:
+#endif /*CHPEG_OP(NOCASE)*/
                 {
                     int len = str_len[arg];
-                    if ((offset < (length - (len - 1))) && !memcmp(&input[offset], strings[arg], len)) {
+                    if ((offset < (length - (len - 1))) && !(
+#ifdef CHPEG_HAS_NOCASE
+			    (op == LIT_NC) ? strncasecmp((const char*)&input[offset], (const char*)strings[arg], len) :
+#endif /*CHPEG_OP(NOCASE)*/
+					memcmp(&input[offset], strings[arg], len))) {
                         offset += len;
                         ++pc;
                         break;

@@ -13,7 +13,7 @@
 CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   .num_defs = 20,
   .def_names = (char*[20]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
-  .def_flags = (int[20]) {CHPEG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_LEAF, CHPEG_STOP, CHPEG_STOP, 0, 0, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_IGNORE},
+  .def_flags = (int[20]) {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE},
   .def_addrs = (int[20]) {2, 15, 42, 55, 62, 73, 84, 129, 136, 145, 181, 197, 218, 234, 240, 265, 273, 277, 281, 285}, // presubtracted by 1
   .num_instructions = 315,
   .instructions = (int[315]) {

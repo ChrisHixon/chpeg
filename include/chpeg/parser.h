@@ -6,7 +6,7 @@
 #define CHPEG_PARSER_H
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_api.h"
+#include "chpeg/chpeg_util.h"
 #include "chpeg/bytecode.h"
 #endif
 

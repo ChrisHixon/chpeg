@@ -6,7 +6,7 @@
 #define CHPEG_BYTECODE_H
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_api.h"
+#include "chpeg/chpeg_util.h"
 #endif
 
 #include <stdio.h>
@@ -45,9 +45,9 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
 
 // rule/node flags AKA options
 enum ChpegFlags {
-    CHPEG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
-    CHPEG_IGNORE = 1<<1,  // deletes nodes matching this identifier
-    CHPEG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
+    CHPEG_FLAG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
+    CHPEG_FLAG_IGNORE = 1<<1,  // deletes nodes matching this identifier
+    CHPEG_FLAG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H

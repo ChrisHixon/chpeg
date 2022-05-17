@@ -7,7 +7,6 @@
 #include <ctype.h>
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/mem.h"
 #include "chpeg/util.h"
 #include "chpeg/bytecode.h"
 #include "chpeg/opcodes.h"
@@ -17,7 +16,7 @@
 // ByteCode
 //
 
-ChpegByteCode *ChpegByteCode_new()
+CHPEG_API ChpegByteCode *ChpegByteCode_new()
 {
     ChpegByteCode *self = (ChpegByteCode *)CHPEG_MALLOC(sizeof(ChpegByteCode));
     if (NULL == self) { return self; }
@@ -33,7 +32,7 @@ ChpegByteCode *ChpegByteCode_new()
     return self;
 }
 
-void ChpegByteCode_free(ChpegByteCode *self)
+CHPEG_API void ChpegByteCode_free(ChpegByteCode *self)
 {
     int i;
 
@@ -75,7 +74,7 @@ void ChpegByteCode_free(ChpegByteCode *self)
     CHPEG_FREE(self);
 }
 
-const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index)
+CHPEG_API const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index)
 {
     if (index >= 0 && index < self->num_defs) {
         return self->def_names[index];
@@ -83,7 +82,7 @@ const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index)
     return 0;
 }
 
-void ChpegByteCode_print_instructions(const ChpegByteCode *self)
+CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
 {
     const char *arg_str = NULL;
     char *tmp = NULL;
@@ -113,14 +112,14 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
     }
 }
 
-void ChpegByteCode_print_defs(const ChpegByteCode *self)
+CHPEG_API void ChpegByteCode_print_defs(const ChpegByteCode *self)
 {
     for (int i = 0; i < self->num_defs; ++i) {
         printf("DEF  %8d %12s %8d %6d\n", i, self->def_names[i], self->def_addrs[i], self->def_flags[i]);
     }
 }
 
-void ChpegByteCode_print_strings(const ChpegByteCode *self)
+CHPEG_API void ChpegByteCode_print_strings(const ChpegByteCode *self)
 {
     char *tmp;
     for (int i = 0; i < self->num_strings; ++i) {
@@ -131,20 +130,20 @@ void ChpegByteCode_print_strings(const ChpegByteCode *self)
     }
 }
 
-void ChpegByteCode_print(const ChpegByteCode *self)
+CHPEG_API void ChpegByteCode_print(const ChpegByteCode *self)
 {
     ChpegByteCode_print_defs(self);
     ChpegByteCode_print_instructions(self);
     ChpegByteCode_print_strings(self);
 }
 
-void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
+CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes)
 {
     int i, j, slen;
 
     if (prefix == NULL) {
-        prefix = "chpeg";
+        prefix = "chpeg_bc";
     }
 
     // guard
@@ -168,10 +167,10 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
 
     fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
-    fprintf(fp, "#include \"chpeg/chpeg_api.h\"\n");
+    fprintf(fp, "#include \"chpeg/chpeg_util.h\"\n");
     fprintf(fp, "#include \"chpeg/bytecode.h\"\n");
     fprintf(fp, "#include \"%s\"\n", opcodes ? opcodes : "chpeg/opcodes.h");
-    fprintf(fp, "\n#endif\n\n");
+    fprintf(fp, "#endif\n\n");
 
     // #define for each def name
     for (j = 0; j < self->num_defs; j++) {
@@ -210,7 +209,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "_H\n");
 }
 
-void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
+CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
 {
     int i;
     char *str;
@@ -232,16 +231,16 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *bas
         fprintf(fp, "%s", i ? ", " : "");
         int flag_out = 0;
         if (self->def_flags[i] & 0x7) {
-            if (self->def_flags[i] & CHPEG_STOP) {
-                fprintf(fp, "%sCHPEG_STOP", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_STOP) {
+                fprintf(fp, "%sCHPEG_FLAG_STOP", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_IGNORE) {
-                fprintf(fp, "%sCHPEG_IGNORE", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_IGNORE) {
+                fprintf(fp, "%sCHPEG_FLAG_IGNORE", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_LEAF) {
-                fprintf(fp, "%sCHPEG_LEAF", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_LEAF) {
+                fprintf(fp, "%sCHPEG_FLAG_LEAF", flag_out ? " | " : "");
                 flag_out = 1;
             }
         }
@@ -306,7 +305,7 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *bas
     fprintf(fp, "};\n");
 }
 
-int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
+CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 {
     int i;
 
@@ -380,4 +379,3 @@ int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 }
 
 // } chpeg: bytecode.c
-

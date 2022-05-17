@@ -6,7 +6,7 @@
 #define CHPEG_OPCODES_H
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_api.h"
+#include "chpeg/chpeg_util.h"
 #endif
 
 enum ChpegOp
@@ -35,6 +35,7 @@ enum ChpegOp
     CHPEG_OP_PNOMATS,
     CHPEG_OP_CHRCLS,
     CHPEG_OP_LIT,
+    CHPEG_OP_LIT_NC,
     CHPEG_OP_DOT,
     CHPEG_OP_SUCC,
     CHPEG_OP_FAIL,
