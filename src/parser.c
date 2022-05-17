@@ -104,13 +104,15 @@ ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
 
 void ChpegNode_free(ChpegNode *self)
 {
-    ChpegNode *tmp;
-    for (ChpegNode *p = self->head; p; p = tmp) {
-        tmp = p->next;
-        ChpegNode_free(p);
+    if (self) {
+        ChpegNode *tmp;
+        for (ChpegNode *p = self->head; p; p = tmp) {
+            tmp = p->next;
+            ChpegNode_free(p);
+        }
+        self->head = NULL;
+        CHPEG_FREE(self);
     }
-    self->head = NULL;
-    CHPEG_FREE(self);
 }
 
 ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
@@ -184,11 +186,13 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
 void ChpegParser_free(ChpegParser *self)
 {
-    if (self->tree_root) {
-        ChpegNode_free(self->tree_root);
-        self->tree_root = NULL;
+    if (self) {
+        if (self->tree_root) {
+            ChpegNode_free(self->tree_root);
+            self->tree_root = NULL;
+        }
+        CHPEG_FREE(self);
     }
-    CHPEG_FREE(self);
 }
 
 void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)

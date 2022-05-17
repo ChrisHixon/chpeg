@@ -14,7 +14,7 @@ EXAMPLES=parse_file
 # rules
 all: $(EXAMPLES)
 
-parse_file: $(CHPEG_AMALGAMATION)
+parse_file: $(CHPEG_AMALGAMATION) parse_file.c
 	$(CC) $(LDFLAGS) $(CFLAGS) $(INCLUDES) parse_file.c -o parse_file
 
 .PHONY: clean

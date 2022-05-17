@@ -35,6 +35,8 @@ ChpegByteCode *ChpegByteCode_new()
 
 void ChpegByteCode_free(ChpegByteCode *self)
 {
+    if (self == NULL) return;
+
     int i;
 
     if (self->num_defs > 0) {

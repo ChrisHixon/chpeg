@@ -65,6 +65,8 @@ static ChpegGNode *ChpegGNode_new()
 
 static void ChpegGNode_free(ChpegGNode *self)
 {
+    if (self == NULL) return;
+
     ChpegGNode *tmp;
     for (ChpegGNode *p = self->head; p; p = tmp) {
         tmp = p->next;
@@ -535,17 +537,17 @@ int chpeg_compile(const unsigned char *input, size_t length,
 
     if (verbose) {
         if (parse_result == 0) {
-            printf("Parse successful.\n");
-            if (verbose & 0x2) {
+            printf("chpeg_compile: Parse successful.\n");
+            if (verbose > 2) {
                 ChpegParser_print_tree(cu.parser, input);
             }
         }
         else {
             if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
+                printf("chpeg_compile: Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
             }
             else {
-                printf("Parse failed with result: %d\n", parse_result);
+                printf("chpeg_compile: Parse failed with result: %d\n", parse_result);
             }
             ChpegParser_print_error(cu.parser, input);
             goto done;
