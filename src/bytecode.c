@@ -97,20 +97,20 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
                 arg_str = ChpegByteCode_def_name(self, arg);
-                printf("CHPEG_INST %8d %12s %8d %s\n",
+                printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
                 tmp = chpeg_esc_bytes(
                     self->strings[arg], self->str_len[arg], 256);
-                printf("CHPEG_INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
+                printf("INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
                 if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
                 break;
             default:
                 arg_str = "";
-                printf("CHPEG_INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
+                printf("INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
         }
     }
 }
@@ -173,7 +173,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "#include \"chpeg/chpeg_api.h\"\n");
     fprintf(fp, "#include \"chpeg/bytecode.h\"\n");
     fprintf(fp, "#include \"%s\"\n", opcodes ? opcodes : "chpeg/opcodes.h");
-    fprintf(fp, "\n#endif\n\n");
+    fprintf(fp, "#endif\n\n");
 
     // #define for each def name
     for (j = 0; j < self->num_defs; j++) {
@@ -212,7 +212,8 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "_H\n");
 }
 
-void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
+void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
+    const char *basename, const char *varname)
 {
     int i;
     char *str;

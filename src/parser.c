@@ -58,34 +58,32 @@
 // ChpegNode
 //
 
-void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
+void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth, FILE *fp)
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
     const char *def_name = ChpegByteCode_def_name(parser->bc, self->def);
 
     if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n");
-        printf(" Begin    Len  DefID  Flags  Def. Name / Data\n");
-        printf("---------------------------------------------------------------------------------\n");
+        fprintf(fp, " offset   len     id dp flg ident \"data\"\n");
     }
-    printf("%6lu %6lu %6d | %s%s%s | %*s%s \"%s\"\n",
+
+    fprintf(fp, "%6zu %6zu %6d %2d %s%s%s %*s%s \"%s\"\n",
         self->offset,
         self->length,
         self->def,
-        flags & CHPEG_STOP ? "S" : " ",
-        flags & CHPEG_IGNORE ? "I" : " ",
-        flags & CHPEG_LEAF ? "L" : " ",
+        depth,
+        flags & CHPEG_STOP ? "S" : "-",
+        flags & CHPEG_IGNORE ? "I" : "-",
+        flags & CHPEG_LEAF ? "L" : "-",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
         );
+
     if (data) { CHPEG_FREE(data); data = NULL; }
     for (ChpegNode *p = self->head; p; p = p->next) {
-        ChpegNode_print(p, parser, input, depth + 1);
-    }
-    if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n");
+        ChpegNode_print(p, parser, input, depth + 1, fp);
     }
 }
 
@@ -195,9 +193,9 @@ void ChpegParser_free(ChpegParser *self)
     }
 }
 
-void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)
+void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp)
 {
-    ChpegNode_print(self->tree_root, self, input, 0);
+    ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
 
 void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
@@ -237,7 +235,7 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
                         sizeof(int), 20);
                     break;
             }
-            printf("%s \"%s\" in %s at offset %lu\n",
+            fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? str : (esc ? esc : "<NULL>"),
                     def_name ? def_name : "<N/A>",
@@ -249,14 +247,14 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
         }
         else {
             if (parent_def_name) {
-                printf("%s %s in %s at offset %lu\n",
+                fprintf(stderr, "%s %s in %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
                         self->error_offset);
             }
             else {
-                printf("%s %s at offset %lu\n",
+                fprintf(stderr, "%s %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         self->error_offset);
@@ -264,10 +262,10 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
         }
     }
     else {
-        printf("No errors detected / tracked.\n");
+        fprintf(stderr, "No errors detected / tracked.\n");
     }
 #else
-    printf("Error tracking disabled at compile time.\n");
+    fprintf(stderr, "Error tracking disabled at compile time.\n");
 #endif
 }
 
@@ -773,7 +771,7 @@ pred_cleanup:
 
 #if VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
-            ChpegParser_print_tree(self, input);
+            ChpegParser_print_tree(self, input, stderr);
         }
 #endif
         if (pc < 0) {

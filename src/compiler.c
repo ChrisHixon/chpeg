@@ -521,6 +521,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 
 // This is more of a convenience function, thus the lowercase chpeg_ prefix.
 // I plan to create a more OO-like API to the compiler to allow more flexibility.
+// verbose is a bit field: 1: info | 2: print parse tree | 1<<15: disable errors
 int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
@@ -535,28 +536,27 @@ int chpeg_compile(const unsigned char *input, size_t length,
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
 
-    if (verbose) {
-        if (parse_result == 0) {
-            printf("chpeg_compile: Parse successful.\n");
-            if (verbose > 2) {
-                ChpegParser_print_tree(cu.parser, input);
-            }
+    if (parse_result == 0) {
+        if (verbose & 1) {
+            fprintf(stderr, "chpeg_compile: Parse successful.\n");
         }
-        else {
-            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                printf("chpeg_compile: Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
-            }
-            else {
-                printf("chpeg_compile: Parse failed with result: %d\n", parse_result);
-            }
-            ChpegParser_print_error(cu.parser, input);
-            goto done;
+        if (verbose & 2) {
+            ChpegParser_print_tree(cu.parser, input, stderr);
         }
     }
     else {
-        if (parse_result != 0) {
-            goto done;
+        if ((verbose & (1<<15)) == 0) {
+            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
+                fprintf(stderr, "chpeg_compile: Extraneous input: "
+                    "parse consumed %lu bytes out of %lu\n", consumed, length);
+            }
+            else {
+                fprintf(stderr, "chpeg_compile: Parse failed with result: %d\n",
+                    parse_result);
+            }
+            ChpegParser_print_error(cu.parser, input);
         }
+        goto done;
     }
 
     cu.bc = ChpegByteCode_new();
