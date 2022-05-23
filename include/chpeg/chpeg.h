@@ -2401,23 +2401,12 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
         case CHPEG_BC(CHARCLASS):
         case CHPEG_BC(LITERAL):
 #ifdef CHPEG_HAS_NOCASE
-        case CHPEG_BC(LITERALSQ):
-        case CHPEG_BC(LITERALDQ):
+        //case CHPEG_BC(LITERALSQ):
+        //case CHPEG_BC(LITERALDQ):
 #endif /*CHPEG_OP(NOCASE)*/
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
-#ifdef CHPEG_HAS_NOCASE
-        case CHPEG_BC(NOCASE):
-            {
-                int lit_inst = cu->bc->num_instructions-2; //assuming CHPEG_OP_LITERAL is the previous isntruction
-                int op = cu->bc->instructions[lit_inst] & 0xff;
-                int arg = cu->bc->instructions[lit_inst] >> 8;
-                assert(op == CHPEG_OP_LIT); // ensure it's what we expect
-                cu->bc->instructions[lit_inst] = CHPEG_INST(CHPEG_OP_LIT_NC, arg); // overwrite it and do not generate any new instruction
-            }
-            break;
-#endif /*CHPEG_HAS_NOCASE*/
     }
 }
 
@@ -2515,12 +2504,19 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
         case CHPEG_BC(LITERAL):
+            {
+                int literal_op = CHPEG_OP_LIT;
 #ifdef CHPEG_HAS_NOCASE
-        case CHPEG_BC(LITERALSQ):
-        case CHPEG_BC(LITERALDQ):
+        //case CHPEG_BC(LITERALSQ):
+        //case CHPEG_BC(LITERALDQ):
+                for (ChpegGNode *p = gp->head; p; p = p->next) {
+                    if(p->node->def == CHPEG_BC(NOCASE))
+                        literal_op = CHPEG_OP_LIT_NC;
+                }
 #endif /*CHPEG_HAS_NOCASE*/
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+                ChpegCU_add_inst(cu, CHPEG_INST(literal_op, gp->val.ival));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            }
             break;
     }
 }
@@ -2555,8 +2551,8 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
 #ifdef CHPEG_HAS_NOCASE
-        case CHPEG_BC(LITERALSQ):
-        case CHPEG_BC(LITERALDQ):
+        //case CHPEG_BC(LITERALSQ):
+        //case CHPEG_BC(LITERALDQ):
 #endif /*CHPEG_HAS_NOCASE*/
         case CHPEG_BC(LITERAL):
         case CHPEG_BC(CHARCLASS):

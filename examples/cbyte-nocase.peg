@@ -17,9 +17,7 @@ Primary     { } <- Identifier S ![{<]
 # Lexical syntax
 Options     { } <- [ILS]*
 Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
-Literal     {S} <- ( LiteralSQ / LiteralDQ ) NoCase?
-LiteralSQ   {S} <- ['] (!['] Char)* [']
-LiteralDQ   {S} <- ["] (!["] Char)* ["]
+Literal     {S} <- ( ['] (!['] Char)* ['] /  ["] (!["] Char)* ["] ) NoCase?
 CharClass   {S} <- '[' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
 Char        { } <- EscChar / HexChar / OctChar / PlainChar
