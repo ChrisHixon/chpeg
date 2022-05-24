@@ -300,7 +300,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     size_t stack[max_stack_size]; int top = -1;
     ChpegNode *tree_stack[max_tree_depth]; int tree_top = -1;
 
-    self->tree_root = ChpegNode_new(0, 0, -1, 0);
+    self->tree_root = ChpegNode_new(0, 0, 0, 0);
     if (tree_top >= max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
@@ -378,7 +378,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     else {
                         stack[++top] = 0;
                     }
-                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, -1, def_flags[arg]);
+                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, 0, def_flags[arg]);
                     ++tree_top;
                 }
                 else {
