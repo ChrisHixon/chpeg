@@ -66,6 +66,25 @@ void help(App *app, FILE *fp)
     fprintf(fp, "  -v              increase verbosity\n");
     fprintf(fp, "  -vN             set verbosity to N (use 0 to disable)\n");
     fprintf(fp, "\n");
+
+#if VM_TRACE || VM_PRINT_TREE
+    fprintf(fp, "Tracing options:\n");
+#endif
+
+#if VM_TRACE
+    fprintf(fp, "  -t              increase VM trace level\n");
+    fprintf(fp, "  -tN             set VM trace level to N (0=off,1=on)\n");
+#endif
+
+#if VM_PRINT_TREE
+    fprintf(fp, "  -tp             increase VM print tree level\n");
+    fprintf(fp, "  -tpN            set VM print tree level to N (0=off,1=on)\n");
+#endif
+
+#if VM_TRACE || VM_PRINT_TREE
+    fprintf(fp, "\n");
+#endif
+
     fprintf(fp, "Actions: (in form --ACTION)\n");
     for (int i = 0; i < app->num_actions; i++) {
         const Action *action = app->actions[i];
