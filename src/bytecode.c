@@ -185,6 +185,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
             }
             fputc('_', fp);
         }
+        fprintf(fp, "DEF_");
         slen = strlen(self->def_names[j]);
         for (i = 0; i < slen; i++) {
             fputc(toupper(self->def_names[j][i]), fp);

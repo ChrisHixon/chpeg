@@ -188,26 +188,26 @@ enum ChpegFlags {
 #include "chpeg/opcodes.h"
 #endif
 
-#define CHPEG_GRAMMAR 0
-#define CHPEG_DEFINITION 1
-#define CHPEG_CHOICE 2
-#define CHPEG_SEQUENCE 3
-#define CHPEG_PREDICATE 4
-#define CHPEG_REPEAT 5
-#define CHPEG_PRIMARY 6
-#define CHPEG_OPTIONS 7
-#define CHPEG_IDENTIFIER 8
-#define CHPEG_LITERAL 9
-#define CHPEG_CHARCLASS 10
-#define CHPEG_CHARRANGE 11
-#define CHPEG_CHAR 12
-#define CHPEG_ESCCHAR 13
-#define CHPEG_OCTCHAR 14
-#define CHPEG_PLAINCHAR 15
-#define CHPEG_PREDOP 16
-#define CHPEG_REPOP 17
-#define CHPEG_DOT 18
-#define CHPEG_S 19
+#define CHPEG_DEF_GRAMMAR 0
+#define CHPEG_DEF_DEFINITION 1
+#define CHPEG_DEF_CHOICE 2
+#define CHPEG_DEF_SEQUENCE 3
+#define CHPEG_DEF_PREDICATE 4
+#define CHPEG_DEF_REPEAT 5
+#define CHPEG_DEF_PRIMARY 6
+#define CHPEG_DEF_OPTIONS 7
+#define CHPEG_DEF_IDENTIFIER 8
+#define CHPEG_DEF_LITERAL 9
+#define CHPEG_DEF_CHARCLASS 10
+#define CHPEG_DEF_CHARRANGE 11
+#define CHPEG_DEF_CHAR 12
+#define CHPEG_DEF_ESCCHAR 13
+#define CHPEG_DEF_OCTCHAR 14
+#define CHPEG_DEF_PLAINCHAR 15
+#define CHPEG_DEF_PREDOP 16
+#define CHPEG_DEF_REPOP 17
+#define CHPEG_DEF_DOT 18
+#define CHPEG_DEF_S 19
 
 CHPEG_API const ChpegByteCode chpeg_bytecode;
 
@@ -629,6 +629,7 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
             }
             fputc('_', fp);
         }
+        fprintf(fp, "DEF_");
         slen = strlen(self->def_names[j]);
         for (i = 0; i < slen; i++) {
             fputc(toupper(self->def_names[j][i]), fp);
@@ -2324,17 +2325,17 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
     cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
     for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
-        if (CHPEG_DEFINITION != p->def) { continue; }
+        if (CHPEG_DEF_DEFINITION != p->def) { continue; }
 
         ChpegNode *tmp = p->head; // Identifier, definition name
-        if (NULL == tmp || CHPEG_IDENTIFIER != tmp->def) { continue; }
+        if (NULL == tmp || CHPEG_DEF_IDENTIFIER != tmp->def) { continue; }
         cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
         memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
         cu->bc->def_names[i][tmp->length] = '\0';
 
         int flags = 0;
         tmp = tmp->next; // Options, flags
-        if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
+        if (NULL != tmp && CHPEG_DEF_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
                     case 'S': flags |= CHPEG_FLAG_STOP; break;
@@ -2395,7 +2396,7 @@ static inline int ChpegCU_alloc_inst(ChpegCU *cu)
 static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_DEF_GRAMMAR:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
@@ -2403,12 +2404,12 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_alloc_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_DEF_DEFINITION:
             ChpegCU_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_DEF_CHOICE:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
@@ -2417,30 +2418,30 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_DEF_SEQUENCE:
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
             }
             gp->parse_state = gp->head->parse_state;
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_DEF_REPEAT:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_DEF_PREDICATE:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head->next);
             gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_DOT:
+        case CHPEG_DEF_DOT:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_IDENTIFIER:
-        case CHPEG_CHARCLASS:
-        case CHPEG_LITERAL:
+        case CHPEG_DEF_IDENTIFIER:
+        case CHPEG_DEF_CHARCLASS:
+        case CHPEG_DEF_LITERAL:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
@@ -2456,7 +2457,7 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_GRAMMAR:
+        case CHPEG_DEF_GRAMMAR:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_FAIL, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_SUCC, 0));
@@ -2464,12 +2465,12 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-        case CHPEG_DEFINITION:
+        case CHPEG_DEF_DEFINITION:
             ChpegCU_add_instructions(cu, gp->head->next);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, ChpegCU_find_def(cu, gp->head->node)));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, 0));
             break;
-        case CHPEG_CHOICE:
+        case CHPEG_DEF_CHOICE:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
@@ -2478,14 +2479,14 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
             break;
-        case CHPEG_SEQUENCE:
+        case CHPEG_DEF_SEQUENCE:
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 p->parent_next_state = p->next ? p->next->parse_state : gp->parent_next_state;
                 p->parent_fail_state = gp->parent_fail_state;
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-        case CHPEG_REPEAT:
+        case CHPEG_DEF_REPEAT:
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
                 switch (op) {
@@ -2510,7 +2511,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
             }
             break;
-        case CHPEG_PREDICATE:
+        case CHPEG_DEF_PREDICATE:
             {
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
@@ -2529,18 +2530,18 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
             }
             break;
-        case CHPEG_DOT:
+        case CHPEG_DEF_DOT:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
             break;
-        case CHPEG_IDENTIFIER:
+        case CHPEG_DEF_IDENTIFIER:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, gp->node)));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_CHARCLASS:
+        case CHPEG_DEF_CHARCLASS:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
-        case CHPEG_LITERAL:
+        case CHPEG_DEF_LITERAL:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
             break;
@@ -2576,8 +2577,8 @@ static int ChpegCU_alloc_string(ChpegCU *cu, const unsigned char *str, int len)
 static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
-        case CHPEG_LITERAL:
-        case CHPEG_CHARCLASS:
+        case CHPEG_DEF_LITERAL:
+        case CHPEG_DEF_CHARCLASS:
             {
                 int len = 0, offset = 0;
                 for (ChpegGNode *p = gp->head; p; p = p->next) {
@@ -2598,7 +2599,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 CHPEG_FREE(str);
             }
             break;
-        case CHPEG_CHARRANGE:
+        case CHPEG_DEF_CHARRANGE:
             {
                 for (ChpegGNode *p = gp->head; p; p = p->next) {
                     ChpegCU_alloc_strings(cu, p);
@@ -2614,7 +2615,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 #endif
             }
             break;
-        case CHPEG_PLAINCHAR:
+        case CHPEG_DEF_PLAINCHAR:
             {
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
@@ -2625,7 +2626,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 #endif
             }
             break;
-        case CHPEG_ESCCHAR:
+        case CHPEG_DEF_ESCCHAR:
             {
                 gp->val.cval[0] = cu->input[gp->node->offset + 1];
                 gp->value_len = 1;
@@ -2641,7 +2642,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 #endif
             }
             break;
-        case CHPEG_OCTCHAR:
+        case CHPEG_DEF_OCTCHAR:
             {
                 int val = 0; int len = gp->node->length - 1;
                 const unsigned char *ip = cu->input + gp->node->offset + 1;
