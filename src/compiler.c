@@ -148,9 +148,9 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & CHPEG_STOP ? "S" : " ",
-        flags & CHPEG_IGNORE ? "I" : " ",
-        flags & CHPEG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : " ",
+        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
+        flags & CHPEG_FLAG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -191,9 +191,9 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
         if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= CHPEG_STOP; break;
-                    case 'I': flags |= CHPEG_IGNORE; break;
-                    case 'L': flags |= CHPEG_LEAF; break;
+                    case 'S': flags |= CHPEG_FLAG_STOP; break;
+                    case 'I': flags |= CHPEG_FLAG_IGNORE; break;
+                    case 'L': flags |= CHPEG_FLAG_LEAF; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node

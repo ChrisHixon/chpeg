@@ -235,16 +235,16 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
         fprintf(fp, "%s", i ? ", " : "");
         int flag_out = 0;
         if (self->def_flags[i] & 0x7) {
-            if (self->def_flags[i] & CHPEG_STOP) {
-                fprintf(fp, "%sCHPEG_STOP", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_STOP) {
+                fprintf(fp, "%sCHPEG_FLAG_STOP", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_IGNORE) {
-                fprintf(fp, "%sCHPEG_IGNORE", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_IGNORE) {
+                fprintf(fp, "%sCHPEG_FLAG_IGNORE", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_LEAF) {
-                fprintf(fp, "%sCHPEG_LEAF", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_LEAF) {
+                fprintf(fp, "%sCHPEG_FLAG_LEAF", flag_out ? " | " : "");
                 flag_out = 1;
             }
         }

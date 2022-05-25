@@ -162,9 +162,9 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
 
 // rule/node flags AKA options
 enum ChpegFlags {
-    CHPEG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
-    CHPEG_IGNORE = 1<<1,  // deletes nodes matching this identifier
-    CHPEG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
+    CHPEG_FLAG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
+    CHPEG_FLAG_IGNORE = 1<<1,  // deletes nodes matching this identifier
+    CHPEG_FLAG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H
@@ -679,16 +679,16 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
         fprintf(fp, "%s", i ? ", " : "");
         int flag_out = 0;
         if (self->def_flags[i] & 0x7) {
-            if (self->def_flags[i] & CHPEG_STOP) {
-                fprintf(fp, "%sCHPEG_STOP", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_STOP) {
+                fprintf(fp, "%sCHPEG_FLAG_STOP", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_IGNORE) {
-                fprintf(fp, "%sCHPEG_IGNORE", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_IGNORE) {
+                fprintf(fp, "%sCHPEG_FLAG_IGNORE", flag_out ? " | " : "");
                 flag_out = 1;
             }
-            if (self->def_flags[i] & CHPEG_LEAF) {
-                fprintf(fp, "%sCHPEG_LEAF", flag_out ? " | " : "");
+            if (self->def_flags[i] & CHPEG_FLAG_LEAF) {
+                fprintf(fp, "%sCHPEG_FLAG_LEAF", flag_out ? " | " : "");
                 flag_out = 1;
             }
         }
@@ -843,7 +843,7 @@ int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   .num_defs = 20,
   .def_names = (char*[20]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
-  .def_flags = (int[20]) {CHPEG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_LEAF, CHPEG_STOP, CHPEG_STOP, 0, 0, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_LEAF, CHPEG_IGNORE},
+  .def_flags = (int[20]) {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE},
   .def_addrs = (int[20]) {2, 15, 42, 55, 62, 73, 84, 129, 136, 145, 181, 197, 218, 234, 240, 265, 273, 277, 281, 285}, // presubtracted by 1
   .num_instructions = 315,
   .instructions = (int[315]) {
@@ -1430,9 +1430,9 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
         self->length,
         self->def,
         depth,
-        flags & CHPEG_STOP ? "S" : "-",
-        flags & CHPEG_IGNORE ? "I" : "-",
-        flags & CHPEG_LEAF ? "L" : "-",
+        flags & CHPEG_FLAG_STOP ? "S" : "-",
+        flags & CHPEG_FLAG_IGNORE ? "I" : "-",
+        flags & CHPEG_FLAG_LEAF ? "L" : "-",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
@@ -1494,7 +1494,7 @@ void ChpegNode_pop_child(ChpegNode *self)
 // be called once on the tree root after a successful parse.
 ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 {
-    if (!(self->flags & (CHPEG_STOP | CHPEG_LEAF)) && self->num_children == 1) {
+    if (!(self->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF)) && self->num_children == 1) {
         ChpegNode *tmp = ChpegNode_unwrap(self->head);
         self->head = NULL;
         ChpegNode_free(self);
@@ -1729,7 +1729,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     if (tree_top >= max_tree_depth - 2) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
-                    if (def_flags[arg] & (CHPEG_LEAF | CHPEG_IGNORE)) {
+                    if (def_flags[arg] & (CHPEG_FLAG_LEAF | CHPEG_FLAG_IGNORE)) {
                         stack[++top] = 1; locked = 1;
                     }
                     else {
@@ -1761,7 +1761,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (!locked) {
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     --tree_top;
-                    if (def_flags[arg] & CHPEG_IGNORE) {
+                    if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
 #if SANITY_CHECKS
                         if (tree_top < 0) {
                             pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
@@ -2294,9 +2294,9 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & CHPEG_STOP ? "S" : " ",
-        flags & CHPEG_IGNORE ? "I" : " ",
-        flags & CHPEG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : " ",
+        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
+        flags & CHPEG_FLAG_LEAF ? "L" : " ",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -2337,9 +2337,9 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
         if (NULL != tmp && CHPEG_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= CHPEG_STOP; break;
-                    case 'I': flags |= CHPEG_IGNORE; break;
-                    case 'L': flags |= CHPEG_LEAF; break;
+                    case 'S': flags |= CHPEG_FLAG_STOP; break;
+                    case 'I': flags |= CHPEG_FLAG_IGNORE; break;
+                    case 'L': flags |= CHPEG_FLAG_LEAF; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node
