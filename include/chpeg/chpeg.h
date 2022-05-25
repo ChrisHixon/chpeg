@@ -1581,23 +1581,45 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
             const char *str = NULL;
             switch (op) {
                 case CHPEG_OP_DOT:
-                    str = "character"; break;
+                    fprintf(stderr, "%s character in %s at offset %lu\n",
+                        self->error_expected ? "Expected" : "Unexpected",
+                        def_name ? def_name : "<N/A>",
+                        self->error_offset);
+                    break;
                 case CHPEG_OP_IDENT:
                     str = ChpegByteCode_def_name(self->bc, arg); break;
+                    fprintf(stderr, "%s %s in %s at offset %lu\n",
+                        self->error_expected ? "Expected" : "Unexpected",
+                        str ? str : "<N/A>>",
+                        def_name ? def_name : "<N/A>",
+                        self->error_offset);
+                    break;
+                case CHPEG_OP_CHRCLS:
+                    esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
+                        self->bc->str_len[arg], 20);
+                    fprintf(stderr, "%s [%s] in %s at offset %lu\n",
+                        self->error_expected ? "Expected" : "Unexpected",
+                        esc ? esc : "<NULL>",
+                        def_name ? def_name : "<N/A>",
+                        self->error_offset);
+                    break;
                 case CHPEG_OP_LIT:
                     esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                         self->bc->str_len[arg], 20);
+                    fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
+                        self->error_expected ? "Expected" : "Unexpected",
+                        esc ? esc : "<NULL>",
+                        def_name ? def_name : "<N/A>",
+                        self->error_offset);
                     break;
                 default: // unhandled op, show instruction in <> for debugging
-                    esc = chpeg_esc_bytes((unsigned char *)&self->error_inst,
-                        sizeof(int), 20);
+                    fprintf(stderr, "%s <%s,%d> in %s at offset %lu\n",
+                        self->error_expected ? "Expected" : "Unexpected",
+                        Chpeg_op_name(op), arg,
+                        def_name ? def_name : "<N/A>",
+                        self->error_offset);
                     break;
             }
-            fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
-                    self->error_expected ? "Expected" : "Unexpected",
-                    str ? str : (esc ? esc : "<NULL>"),
-                    def_name ? def_name : "<N/A>",
-                    self->error_offset);
             if (esc) {
                 CHPEG_FREE(esc);
                 esc = NULL;
