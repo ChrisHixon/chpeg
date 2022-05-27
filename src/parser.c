@@ -608,7 +608,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 
 // Predicate
-            case CHPEG_OP_PRED:
+            case CHPEG_OP_PREDA:
+            case CHPEG_OP_PREDN:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
                 if (top >= max_stack_size - 3) {

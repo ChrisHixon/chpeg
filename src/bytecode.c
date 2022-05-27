@@ -96,6 +96,7 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
                 arg_str = ChpegByteCode_def_name(self, arg);
                 printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -272,6 +273,7 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
                 arg_str = ChpegByteCode_def_name(self, arg);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
