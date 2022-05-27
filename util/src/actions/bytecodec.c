@@ -39,24 +39,23 @@ int ByteCodeCAction_arg(void *data, App *app)
     ByteCodeCAction *self = (ByteCodeCAction *)data;
 
     static const char *str_args[] = {
-        "-basename", "-varname", "-prefix", "-c", "-h", NULL
+        "-basename", "-varname", "-prefix", "-cout", "-hout", NULL
     };
     const char **str_addrs[] = {
         &self->basename, &self->varname, &self->prefix,
         &self->c, &self->h, NULL
     };
 
-    const char *arg = app->argv[app->arg];
-    for (int i = 0;; i++) {
-        if (str_args[i] == NULL) break;
-        if (strcmp(arg, str_args[i]) == 0) {
-            if (++app->arg >= app->argc) {
+    for (int i = 0; str_args[i]; i++) {
+        if (strcmp(app->argv[app->arg], str_args[i]) == 0) {
+            if (app->arg + 1 >= app->argc) {
                 fprintf(stderr, "%s: option '%s' requires a value (action: %s, arg: %d)\n",
                     app->argv[0], str_args[i], app->action->name, app->arg);
                 // set app->error = 1 and return 0 for error
                 app->error = 1;
                 return 0;
             }
+            app->arg++;
             assert(str_addrs[i]);
             if (str_addrs[i]) {
                 *str_addrs[i] = app->argv[app->arg];
@@ -70,7 +69,7 @@ int ByteCodeCAction_arg(void *data, App *app)
 
 void ByteCodeCAction_usage(App *app, FILE *fp)
 {
-    fprintf(fp, "Usage: --bytecodec [ (-g GRAMMAR_FILE | -G GRAMMAR_STRING ) --basename BASENAME] [--varname VARNAME] [--prefix PREFIX] [-c CFILE] [-h HFILE]\n");
+    fprintf(fp, "Usage: --bytecodec [ (-g GRAMMAR_FILE | -G GRAMMAR_STRING ) -basename BASENAME] [-varname VARNAME] [-prefix PREFIX] [-cout CFILE] [-hout HFILE]\n");
 }
 
 int ByteCodeCAction_run(void *data, App *app)

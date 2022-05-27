@@ -35,7 +35,9 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "LIT",
     "DOT",
     "SUCC",
-    "FAIL"
+    "FAIL",
+
+    "TRIM",
 };
 
 // } chpeg: opcodes.c

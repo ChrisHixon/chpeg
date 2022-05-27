@@ -298,6 +298,9 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
+        case CHPEG_DEF_TRIMOP:
+            gp->parse_state = ChpegCU_alloc_inst(cu);
+            break;
     }
 }
 
@@ -400,6 +403,9 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
         case CHPEG_DEF_LITERAL:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            break;
+        case CHPEG_DEF_TRIMOP:
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, cu->input[gp->node->offset]));
             break;
     }
 }
