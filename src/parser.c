@@ -427,8 +427,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
                 if (!locked) {
                     // if we haven't set length by trimming right, set length
-                    if ((tree_stack[tree_top]->flags & 16) == 0) {
-                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+                    if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0) {
+                        tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     }
                     --tree_top;
                     if (def_flags[arg] & CHPEG_FLAG_IGNORE) {

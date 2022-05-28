@@ -51,8 +51,8 @@ enum ChpegFlags {
     CHPEG_FLAG_LEAF   = 1<<2,  // {L} collects this node and anything underneath as a final leaf (text) node
 
     // These flags are used internally
-    CHPEG_FLAG_TRIMMED_LEFT  = 1<<4, // node has been 'trimmed left': offset has been adjusted
-    CHPEG_FLAG_TRIMMED_RIGHT = 1<<5, // node has been 'trimmed right': length has been adjusted
+    CHPEG_FLAG_TRIMMED_LEFT  = 1<<3, // node has been 'trimmed left': offset has been adjusted
+    CHPEG_FLAG_TRIMMED_RIGHT = 1<<4, // node has been 'trimmed right': length has been adjusted
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H
