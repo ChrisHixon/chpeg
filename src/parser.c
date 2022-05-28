@@ -348,6 +348,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             switch (op) {
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
+                case CHPEG_OP_IFAIL:
+                case CHPEG_OP_TRIM:
                     def_name = ChpegByteCode_def_name(self->bc, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",

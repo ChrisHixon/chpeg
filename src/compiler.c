@@ -41,6 +41,7 @@ typedef struct _ChpegGNode
     int num_children;
     struct _ChpegGNode *head;
     struct _ChpegGNode *next;
+    struct _ChpegGNode *parent;
 } ChpegGNode;
 
 static ChpegGNode *ChpegGNode_new()
@@ -60,6 +61,7 @@ static ChpegGNode *ChpegGNode_new()
     self->num_children = 0;
     self->head = NULL;
     self->next = NULL;
+    self->parent = NULL;
     return self;
 }
 
@@ -78,6 +80,7 @@ static void ChpegGNode_free(ChpegGNode *self)
 
 static ChpegGNode *ChpegGNode_push_child(ChpegGNode *self, ChpegGNode *child)
 {
+    child->parent = self;
     child->next = self->head;
     self->head = child;
     ++(self->num_children);
@@ -122,6 +125,24 @@ typedef struct _ChpegCU
     ChpegGNode *root;
     int strings_allocated;
 } ChpegCU;
+
+static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
+{
+    ChpegGNode *parent = gnode;
+
+    for (; parent && parent != cu->root; parent = parent->parent) {
+        if (parent->type == CHPEG_DEF_DEFINITION) {
+            if (def_return) {
+                *def_return = parent;
+            }
+            return 0;
+        }
+    }
+    if (def_return) {
+        *def_return = NULL;
+    }
+    return 1;
+}
 
 #if DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
@@ -348,7 +369,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             break;
         case CHPEG_DEF_TRIM:
-            def = ChpegCU_find_def(cu, gp->node);
+            {
+                ChpegGNode *def_node;
+                def = -1;
+                if (0 == ChpegCU_find_def_node(cu, gp, &def_node)) {
+                    def = ChpegCU_find_def(cu, def_node->head->node);
+                }
+            }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
             ChpegCU_add_instructions(cu, gp->head);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
