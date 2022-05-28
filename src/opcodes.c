@@ -38,6 +38,8 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "FAIL",
 
     "TRIM",
+    "TRIMS",
+    "TRIMF",
 };
 
 // } chpeg: opcodes.c

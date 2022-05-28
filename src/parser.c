@@ -364,10 +364,6 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     CHPEG_FREE(tmp);
                     tmp = NULL;
                     break;
-                case CHPEG_OP_TRIM:
-                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%c\n",
-                        cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "", (char)arg);
-                    break;
                 default:
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s-\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "");
@@ -391,63 +387,46 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
-                if (top >= max_stack_size - 5) { // pushes 4 items
+                if (top >= max_stack_size - 4) { // pushes 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
-                stack[++top] = 0; // s+1: trim state
                 if (!locked) {
                     if (tree_top >= max_tree_depth - 2) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
                     if (def_flags[arg] & (CHPEG_FLAG_LEAF | CHPEG_FLAG_IGNORE)) {
-                        stack[++top] = 1; locked = 1; // s+2: locked
+                        stack[++top] = 1; locked = 1; // s+1: locked
                     }
                     else {
-                        stack[++top] = 0; // s+2: locked
+                        stack[++top] = 0; // s+1: locked
                     }
                     tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, 0, def_flags[arg]);
                     ++tree_top;
                 }
                 else {
-                    stack[++top] = 0; // s+2: locked
+                    stack[++top] = 0; // s+1: locked
                 }
-                stack[++top] = offset; // s+3: offset
-                stack[++top] = pc; // s+4: pc
+                stack[++top] = offset; // s+2: offset
+                stack[++top] = pc; // s+3: pc
                 pc = def_addrs[arg];
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
 
-            case CHPEG_OP_TRIM:
-                switch (arg) {
-                    case '<':
-                        tree_stack[tree_top]->offset = offset;
-                        stack[top-3] |= 1;
-                        break;
-                    case '>':
-                        tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-                        stack[top-3] |= 2;
-                        break;
-                    default:
-                        pc = -1; retval = CHPEG_ERR_INVALID_ARGUMENT;
-                        break;
-                }
-                break;
-
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
 #if SANITY_CHECKS
-                if (top < 3) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--] + 1; // top -> s+3: offset
-                --top; // top -> s+2: locked
-                if (stack[top--] == 1) { locked = 0; } // top -> s+1: trim
+                pc = stack[top--] + 1; // s+2: offset
+                --top; // s+1: locked
+                if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
                 if (!locked) {
                     // if we haven't set length by trimming right, set length
-                    if ((stack[top--] & 2) == 0) { // top -> s+0, done popping stack
-                        tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+                    if ((tree_stack[tree_top]->flags & 16) == 0) {
+                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
                     }
                     --tree_top;
                     if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
@@ -466,12 +445,12 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
 #if SANITY_CHECKS
-                if (top < 3) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--]; // top -> offset
-                offset = stack[top--]; // top -> locked
+                pc = stack[top--]; // top=s+2: offset
+                offset = stack[top--]; // top=s+1: locked
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
@@ -484,7 +463,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
 #endif
 
-                if (stack[top--] == 1) { locked = 0; } // top-> trim
+                if (stack[top--] == 1) { locked = 0; } // top=s+0 (done popping)
                 if (!locked) {
 #if SANITY_CHECKS
                     if (tree_top < 0) {
@@ -493,7 +472,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
-                --top; // (top: done popping stack)
+                //--top; // (top=s+0 (done popping)
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -511,7 +490,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_CISUCC: // arg = success/fail pc addr
             case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
-                if (top < 1) {
+                if (top < 1) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -559,7 +538,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
-                if (top < 3) {
+                if (top < 3) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -610,7 +589,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
             case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
-                if (top < 2) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -630,6 +609,68 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_RQMAT: // no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
+                break;
+
+//
+// Trim
+//
+            case CHPEG_OP_TRIM: // TRIM start ('<')
+                                // arg: unused
+
+                if (top >= max_stack_size - 5) { // pushes 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
+
+                // Save original offset and flags
+                stack[++top] = tree_stack[tree_top]->offset;
+                stack[++top] = tree_stack[tree_top]->flags;
+
+                // Trim on left (set offset and mark as 'trimmed left')
+                tree_stack[tree_top]->offset = offset;
+                tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_LEFT;
+
+                // Save changed offset and flags on the stack
+                stack[++top] = tree_stack[tree_top]->offset;
+                stack[++top] = tree_stack[tree_top]->flags;
+
+                break;
+
+            case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
+                                 // arg = next pc
+
+                if (top < 3) { // pops 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+
+                // Restore the changed flags and offset values from the stack
+                tree_stack[tree_top]->flags = stack[top--];
+                tree_stack[tree_top]->offset = stack[top--];
+
+                // Trim of right (set length and mark as 'trimmed right')
+                tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+                tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_RIGHT;
+
+                // Discard the original flags and offset values saved on stack
+                top -= 2;
+
+                pc = arg;
+                break;
+
+            case CHPEG_OP_TRIMF: // TRIM Failed ('>'): the contents inside ('<' ... '>') did not match
+                                 // arg = next pc
+
+                if (top < 3) { // pops 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+
+                // Discard the changed flags and offset values saved on stack
+                top -= 2;
+
+                // Restore the original flags and offset values from the stack
+                tree_stack[tree_top]->flags = stack[top--];
+                tree_stack[tree_top]->offset = stack[top--];
+
+                pc = arg;
                 break;
 
 // Predicate
@@ -678,7 +719,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_PNOMATS: // Predicate not matched, not match is considered success
 pred_cleanup:
 #if SANITY_CHECKS
-                if (top < 3) {
+                if (top < 3) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif

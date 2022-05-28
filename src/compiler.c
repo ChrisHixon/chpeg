@@ -277,6 +277,12 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
+        case CHPEG_DEF_TRIM:
+            gp->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, gp->head);
+            gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
+            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            break;
         case CHPEG_DEF_REPEAT:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -298,9 +304,6 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
-        case CHPEG_DEF_TRIMOP:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
-            break;
     }
 }
 
@@ -312,6 +315,7 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
+    int def = 0;
     switch (gp->type) {
         case CHPEG_DEF_GRAMMAR:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
@@ -322,12 +326,10 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             break;
         case CHPEG_DEF_DEFINITION:
-            {
-                int def = ChpegCU_find_def(cu, gp->head->node);
-                ChpegCU_add_instructions(cu, gp->head->next);
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def));
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def));
-            }
+            def = ChpegCU_find_def(cu, gp->head->node);
+            ChpegCU_add_instructions(cu, gp->head->next);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def));
             break;
         case CHPEG_DEF_CHOICE:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
@@ -344,6 +346,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 p->parent_fail_state = gp->parent_fail_state;
                 ChpegCU_add_instructions(cu, p);
             }
+            break;
+        case CHPEG_DEF_TRIM:
+            def = ChpegCU_find_def(cu, gp->node);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
+            ChpegCU_add_instructions(cu, gp->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
             break;
         case CHPEG_DEF_REPEAT:
             {
@@ -403,9 +412,6 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
         case CHPEG_DEF_LITERAL:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
-            break;
-        case CHPEG_DEF_TRIMOP:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, cu->input[gp->node->offset]));
             break;
     }
 }

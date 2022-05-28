@@ -97,6 +97,7 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
             case CHPEG_OP_IFAIL:
+            case CHPEG_OP_TRIM:
                 arg_str = ChpegByteCode_def_name(self, arg);
                 printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -108,9 +109,6 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
                 printf("INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
                 if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
-                break;
-            case CHPEG_OP_TRIM:
-                printf("INST %8d %12s %8d %c\n", i, Chpeg_op_name(op), arg, (char)arg);
                 break;
             default:
                 printf("INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
@@ -277,6 +275,7 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
             case CHPEG_OP_IFAIL:
+            case CHPEG_OP_TRIM:
                 arg_str = ChpegByteCode_def_name(self, arg);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -287,10 +286,6 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* \"%s\" */\n",
                     i, Chpeg_op_name(op), arg, str ? str : "<NULL>");
                 if (str) { CHPEG_FREE(str); str = NULL; }
-                break;
-            case CHPEG_OP_TRIM:
-                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %c */\n",
-                    i, Chpeg_op_name(op), arg, (char)arg);
                 break;
             default:
                 arg_str = "";

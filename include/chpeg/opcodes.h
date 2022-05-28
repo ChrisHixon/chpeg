@@ -41,6 +41,8 @@ enum ChpegOp
     CHPEG_OP_FAIL,
 
     CHPEG_OP_TRIM,
+    CHPEG_OP_TRIMS,
+    CHPEG_OP_TRIMF,
 
     CHPEG_NUM_OPS
 };
