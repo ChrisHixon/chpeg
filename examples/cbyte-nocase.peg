@@ -31,6 +31,6 @@ RepOp       {L} <- [*+?]
 Dot         {L} <- '.'
 NoCase      {L} <- 'i' !Identifier
 EndLine     {L} <- '\r\n' / '\n\r' / '\n' / '\r'
-Comment     {L} <- '#' (!EndLine .)* EndLine
+Comment     {L} <- '#' (!EndLine .)* EndLine?
 Space       {L} <- [ \t\r\n\f\v]
 S           {I} <- (Space+ / Comment)*
