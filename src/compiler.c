@@ -50,21 +50,14 @@ typedef struct _ChpegGNode
 
 static ChpegGNode *ChpegGNode_new()
 {
-    ChpegGNode *self = (ChpegGNode *)CHPEG_MALLOC(sizeof(ChpegGNode));
+    ChpegGNode *self = (ChpegGNode *)CHPEG_CALLOC(1, sizeof(ChpegGNode));
 
-    self->node = NULL;
     self->type = -1;
 
     self->parse_state = -1;
     self->parent_next_state = -1;
     self->parent_fail_state = -1;
 
-    memset(self->val.cval, 0, 4);
-    self->value_len = 0;
-
-    self->num_children = 0;
-    self->head = NULL;
-    self->next = NULL;
     return self;
 }
 
@@ -506,6 +499,13 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[0] = cu->input[gp->node->offset + 1];
                 gp->value_len = 1;
                 switch (gp->val.cval[0]) {
+#ifdef CHPEG_HAS_EXTRA_ESCAPE
+                    case 'a': gp->val.cval[0] = '\a'; break;
+                    case 'b': gp->val.cval[0] = '\b'; break;
+                    case 'e': gp->val.cval[0] = '\e'; break;
+                    case 'f': gp->val.cval[0] = '\f'; break;
+                    case 'v': gp->val.cval[0] = '\v'; break;
+#endif
                     case 'n': gp->val.cval[0] = '\n'; break;
                     case 'r': gp->val.cval[0] = '\r'; break;
                     case 't': gp->val.cval[0] = '\t'; break;
