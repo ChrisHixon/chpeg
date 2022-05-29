@@ -1,5 +1,5 @@
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_bytecode.h"
+#include "chpeg/chpeg_ext_bytecode.h"
 #endif
 
 CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
