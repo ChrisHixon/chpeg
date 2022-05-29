@@ -18,17 +18,7 @@
 
 CHPEG_API ChpegByteCode *ChpegByteCode_new()
 {
-    ChpegByteCode *self = (ChpegByteCode *)CHPEG_MALLOC(sizeof(ChpegByteCode));
-    if (NULL == self) { return self; }
-    self->num_defs = 0;
-    self->def_names = NULL;
-    self->def_flags = NULL;
-    self->def_addrs = NULL;
-    self->num_instructions = 0;
-    self->instructions = NULL;
-    self->num_strings = 0;
-    self->strings = NULL;
-    self->str_len = NULL;
+    ChpegByteCode *self = (ChpegByteCode *)CHPEG_CALLOC(1, sizeof(ChpegByteCode));
     return self;
 }
 
