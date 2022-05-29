@@ -330,9 +330,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     unsigned long long cnt = 0, cnt_max = 0;
     const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
-    for(cnt = 0; cnt < cnt_max && pc < num_instructions; ++cnt, ++pc)
+    for(cnt = 0; cnt < cnt_max && pc < num_instructions; ++cnt)
 #else
-    for(;; ++pc)
+    for(;;)
 #endif
     {
         op = instructions[pc] & 0xff;
@@ -412,20 +412,23 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
                 stack[++top] = offset; // s+2: offset
                 stack[++top] = pc; // s+3: pc
-                pc = def_addrs[arg];
+
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+
+                pc = def_addrs[arg];
                 break;
 
-            case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
+            case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return"
+                                 // pc restored to pc+2, skipping next instruction
 #if SANITY_CHECKS
                 if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--] + 1; // s+2: offset
-                --top; // s+1: locked
+                pc = stack[top--] + 2; // top=s+2: offset
+                --top; // top=s+1: locked
                 if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
                 if (!locked) {
 #ifdef CHPEG_EXTENSIONS
@@ -447,18 +450,21 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                         ChpegNode_pop_child(tree_stack[tree_top]);
                     }
                 }
+
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                // pc is restored +2 (next instruction skipped)
                 break;
 
-            case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
+            case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return"
+                                 // pc restored +1 (next instruction not skipped)
 #if SANITY_CHECKS
                 if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--]; // top=s+2: offset
+                pc = stack[top--] + 1; // top=s+2: offset
                 offset = stack[top--]; // top=s+1: locked
 
 #if ERRORS && ERRORS_IDENT
@@ -485,6 +491,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                // pc is restored +1 (so resume execution at next instruction)
                 break;
 
 // Choice
@@ -494,6 +501,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_CISUCC: // arg = success/fail pc addr
@@ -515,6 +523,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                ++pc; // next instruction
                 break;
 
 
@@ -529,6 +538,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // offset - backtrack point
                 stack[++top] = 0; // cnt (match count)
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_RPMAT: // arg = loop pc addr
@@ -543,6 +553,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     }
 #endif
                 }
+                else {
+                    ++pc; // next instruction
+                }
                 break;
 
             case CHPEG_OP_RPDONE: // arg = match fail pc addr
@@ -556,6 +569,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     ChpegNode_pop_child(tree_stack[tree_top]);
                 if (stack[top] > 0) { // op+ SUCCESS
                     top -= 3;
+                    ++pc; // next instruction
                 }
                 else { // op+ FAIL
                     top -= 3;
@@ -585,6 +599,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_RSMAT: // arg = loop pc addr
@@ -593,6 +608,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     stack[top] = offset; // update backtrack point
                     pc = arg; // continue looping
                 } // else next instruction, which is a R*DONE
+                else {
+                    ++pc; // next instruction
+                }
                 break;
 
             case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
@@ -612,12 +630,14 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                ++pc; // next instruction
                 break;
 
 // Repeat ?
             case CHPEG_OP_RQMAT: // no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
+                ++pc; // next instruction
                 break;
 
 #ifdef CHPEG_EXTENSIONS
@@ -643,6 +663,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[++top] = tree_stack[tree_top]->offset;
                 stack[++top] = tree_stack[tree_top]->flags;
 
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
@@ -705,6 +726,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     stack[++top] = 0;
                 }
 #endif
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_PMATCHF: // Predicate matched, match is considered failure, arg = failure address
@@ -724,10 +746,13 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 goto pred_cleanup;
 
             case CHPEG_OP_PMATCHS: // Predicate matched, match is considered success; next instruction skipped
-                ++pc;
-                // passthrough to pred_cleanup
+                pc += 2;
+                goto pred_cleanup;
 
             case CHPEG_OP_PNOMATS: // Predicate not matched, not match is considered success
+                ++pc; // next instruction
+
+                // pc is expected to be set when hitting pred_cleanup (and thus should not change)
 pred_cleanup:
 #if SANITY_CHECKS
                 if (top < 3) { // pops 4 items
@@ -757,19 +782,18 @@ pred_cleanup:
                         for (i = 0; i < mlen; ++i) {
                             if (mstr[i] == input[offset]) {
                                 ++offset;
-                                ++pc;
-                                break;
+                                pc += 2;
+                                goto chrcls_done; // need to break two levels
                             }
                             if ((i < mlen - 2) && (mstr[i+1] == '-')) {
                                 if ((input[offset] >= mstr[i]) && (input[offset] <= mstr[i+2])) {
                                     ++offset;
-                                    ++pc;
-                                    break;
+                                    pc += 2;
+                                    goto chrcls_done; // need to break two levels
                                 }
                                 i+=2;
                             }
                         }
-                        if (i < mlen) break;
                     }
 #if ERRORS && ERRORS_TERMINALS
                     if (!err_locked) {
@@ -781,7 +805,9 @@ pred_cleanup:
 #endif
                     }
 #endif
+                    ++pc; // next instruction (upon failure)
                 }
+chrcls_done:
                 break;
 
 // Literal
@@ -790,7 +816,7 @@ pred_cleanup:
                     int len = str_len[arg];
                     if ((offset < (length - (len - 1))) && !memcmp(&input[offset], strings[arg], len)) {
                         offset += len;
-                        ++pc;
+                        pc += 2;
                         break;
                     }
                 }
@@ -804,11 +830,16 @@ pred_cleanup:
 #endif
                 }
 #endif
+                ++pc; // next instruction
                 break;
 
 // Dot
             case CHPEG_OP_DOT: // arg = fail addr; match any char; goto addr on failure
-                if (offset < length) { offset++; break; }
+                if (offset < length) {
+                    offset++;
+                    ++pc; // next instruction
+                    break;
+                }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
                     ChpegParser_expected(self,

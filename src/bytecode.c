@@ -262,7 +262,7 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     for (i = 0; i < self->num_defs; i++) {
         fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
     }
-    fprintf(fp, "}, // presubtracted by 1\n");
+    fprintf(fp, "},\n");
 
     fprintf(fp, "  .num_instructions = %d,\n", self->num_instructions);
 

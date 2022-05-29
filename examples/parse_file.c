@@ -1,6 +1,10 @@
 #include <stdio.h>
 
-#include "chpeg/chpeg.h"
+#ifdef CHPEG_EXTENSIONS
+#include "chpeg_ext.h"
+#else
+#include "chpeg.h"
+#endif
 
 int main(int argc, char *argv[])
 {
