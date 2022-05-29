@@ -349,7 +349,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
                 case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
                 case CHPEG_OP_TRIM:
+#endif
                     def_name = ChpegByteCode_def_name(self->bc, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
@@ -426,10 +428,15 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 --top; // s+1: locked
                 if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
                 if (!locked) {
+#ifdef CHPEG_EXTENSIONS
                     // if we haven't set length by trimming right, set length
-                    if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0) {
+                    if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
+                    {
+#endif
                         tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+#ifdef CHPEG_EXTENSIONS
                     }
+#endif
                     --tree_top;
                     if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
 #if SANITY_CHECKS
@@ -474,7 +481,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
-                //--top; // (top=s+0 (done popping)
+
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -613,6 +620,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[top] = offset; // update backtrack point
                 break;
 
+#ifdef CHPEG_EXTENSIONS
 //
 // Trim
 //
@@ -674,6 +682,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
                 pc = arg;
                 break;
+#endif
 
 // Predicate
             case CHPEG_OP_PREDA:

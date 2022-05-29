@@ -126,6 +126,7 @@ typedef struct _ChpegCU
     int strings_allocated;
 } ChpegCU;
 
+#ifdef CHPEG_EXTENSIONS
 static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
 {
     ChpegGNode *parent = gnode;
@@ -143,6 +144,7 @@ static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **de
     }
     return 1;
 }
+#endif
 
 #if DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
@@ -298,12 +300,14 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
+#ifdef CHPEG_EXTENSIONS
         case CHPEG_DEF_TRIM:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
+#endif
         case CHPEG_DEF_REPEAT:
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -368,6 +372,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
+#ifdef CHPEG_EXTENSIONS
         case CHPEG_DEF_TRIM:
             {
                 ChpegGNode *def_node;
@@ -381,6 +386,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
             break;
+#endif
         case CHPEG_DEF_REPEAT:
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];

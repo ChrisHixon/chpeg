@@ -1,8 +1,11 @@
 SHELL=/bin/sh
 
 CC=gcc
-CFLAGS=-Wall -std=c17 -pedantic -O3
-CFLAGS_TRACE=-Wall -std=c17 -pedantic -g -DVM_TRACE=1 -DVM_PRINT_TREE
+
+CFLAGS_COMMON = -Wall -std=c17 -pedantic -DCHPEG_EXTENSIONS
+CFLAGS = $(CFLAGS_COMMON) -O3
+CFLAGS_TRACE = $(CFLAGS_COMMON) -g -DVM_TRACE -DVM_PRINT_TREE
+
 INCLUDES=-I$(INCLUDE) -I./src
 LDFLAGS=
 

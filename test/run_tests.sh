@@ -5,7 +5,7 @@ bytecode_output_c_pt2_compare() {
 }
 
 compare_bytecode_with_internal() {
-    ./compare_bytecode_with_internal ../grammars/chpeg-trim2.chpeg
+    ./compare_bytecode_with_internal ../grammars/chpeg.chpeg
 }
 
 count=0

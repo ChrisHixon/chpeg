@@ -36,10 +36,11 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "DOT",
     "SUCC",
     "FAIL",
-
+#ifdef CHPEG_EXTENSIONS
     "TRIM",
     "TRIMS",
     "TRIMF",
+#endif
 };
 
 // } chpeg: opcodes.c

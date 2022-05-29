@@ -3,7 +3,12 @@
 #include <string.h>
 #include <limits.h>
 
-#include "chpeg/chpeg.h" // chpeg amalgamation
+
+#ifdef CHPEG_EXTENSIONS
+#include "chpeg_ext.h" // chpeg ext amalgamation
+#else
+#include "chpeg.h" // chpeg amalgamation
+#endif
 
 #include "app.h"
 #include "actions/default.h"
