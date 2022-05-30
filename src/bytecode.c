@@ -24,6 +24,8 @@ CHPEG_API ChpegByteCode *ChpegByteCode_new()
 
 CHPEG_API void ChpegByteCode_free(ChpegByteCode *self)
 {
+    if (self == NULL) return;
+
     int i;
 
     if (self->num_defs > 0) {
@@ -83,6 +85,10 @@ CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
+            case CHPEG_OP_TRIM:
+#endif
                 arg_str = ChpegByteCode_def_name(self, arg);
                 printf("CHPEG_INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -199,7 +205,8 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "_H\n");
 }
 
-CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
+CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
+    const char *basename, const char *varname)
 {
     int i;
     char *str;
@@ -257,6 +264,10 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
+            case CHPEG_OP_TRIM:
+#endif
                 arg_str = ChpegByteCode_def_name(self, arg);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");

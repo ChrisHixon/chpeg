@@ -62,7 +62,8 @@ enum ChpegOp
     CHPEG_OP_RSDONE,
     CHPEG_OP_RQDONE,
     CHPEG_OP_RQMAT,
-    CHPEG_OP_PRED,
+    CHPEG_OP_PREDA,
+    CHPEG_OP_PREDN,
     CHPEG_OP_PMATCHF,
     CHPEG_OP_PNOMATF,
     CHPEG_OP_PMATCHS,
@@ -73,6 +74,13 @@ enum ChpegOp
     CHPEG_OP_DOT,
     CHPEG_OP_SUCC,
     CHPEG_OP_FAIL,
+
+#ifdef CHPEG_EXTENSIONS
+    CHPEG_OP_TRIM,
+    CHPEG_OP_TRIMS,
+    CHPEG_OP_TRIMF,
+#endif
+
     CHPEG_NUM_OPS
 };
 
@@ -132,11 +140,19 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
 CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
 
-// rule/node flags AKA options
+// node flags
 enum ChpegFlags {
-    CHPEG_FLAG_STOP = 1<<0,    // stop automatic unwrapping, forcing this node to be a container
-    CHPEG_FLAG_IGNORE = 1<<1,  // deletes nodes matching this identifier
-    CHPEG_FLAG_LEAF = 1<<2,    // collects this node and anything underneath as a final leaf (text) node
+    // These flags correspond to Options used in the Definition:
+    CHPEG_FLAG_STOP   = 1<<0,  // {S} stop automatic unwrapping, forcing this node to be a container
+    CHPEG_FLAG_IGNORE = 1<<1,  // {I} deletes nodes matching this identifier
+    CHPEG_FLAG_LEAF   = 1<<2,  // {L} collects this node and anything underneath as a final leaf (text) node
+
+#ifdef CHPEG_EXTENSIONS
+    // These flags are used internally
+    CHPEG_FLAG_TRIMMED_LEFT  = 1<<3, // node has been 'trimmed left': offset has been adjusted
+    CHPEG_FLAG_TRIMMED_RIGHT = 1<<4, // node has been 'trimmed right': length has been adjusted
+#endif
+
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H
@@ -199,6 +215,8 @@ CHPEG_API const ChpegByteCode chpeg_bytecode;
 #include "chpeg/bytecode.h"
 #endif
 
+#include <stdio.h>
+
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
@@ -237,7 +255,7 @@ CHPEG_API void ChpegNode_free(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
 CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self);
-CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
+CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth, FILE *fp);
 
 //
 // ChpegParser
@@ -273,7 +291,7 @@ typedef struct _ChpegParser
 CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 
@@ -337,7 +355,8 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "RSDONE",
     "RQDONE",
     "RQMAT",
-    "PRED",
+    "PREDA",
+    "PREDN",
     "PMATCHF",
     "PNOMATF",
     "PMATCHS",
@@ -347,7 +366,12 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "LIT_NC",
     "DOT",
     "SUCC",
-    "FAIL"
+    "FAIL",
+#ifdef CHPEG_EXTENSIONS
+    "TRIM",
+    "TRIMS",
+    "TRIMF",
+#endif
 };
 
 // } chpeg: opcodes.c
@@ -378,6 +402,8 @@ CHPEG_API ChpegByteCode *ChpegByteCode_new()
 
 CHPEG_API void ChpegByteCode_free(ChpegByteCode *self)
 {
+    if (self == NULL) return;
+
     int i;
 
     if (self->num_defs > 0) {
@@ -437,6 +463,10 @@ CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
+            case CHPEG_OP_TRIM:
+#endif
                 arg_str = ChpegByteCode_def_name(self, arg);
                 printf("CHPEG_INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -553,7 +583,8 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "_H\n");
 }
 
-CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const char *basename, const char *varname)
+CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
+    const char *basename, const char *varname)
 {
     int i;
     char *str;
@@ -611,6 +642,10 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp, const
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
+            case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
+            case CHPEG_OP_TRIM:
+#endif
                 arg_str = ChpegByteCode_def_name(self, arg);
                 fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
@@ -752,7 +787,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*     7 <----:Identifier 6 (Grammar[1][0]) "Definition"> */ CHPEG_INST(CHPEG_OP_GOTO, 8),
   /*     8 <---:Repeat 5 (Grammar[1]) []>           */ CHPEG_INST(CHPEG_OP_RPMAT, 5),
   /*     9 <---:Repeat 5 (Grammar[1]) []>           */ CHPEG_INST(CHPEG_OP_RPDONE, 14),
-  /*    10 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*    10 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*    11 <----:Dot 8 (Grammar[2][0]) ".">         */ CHPEG_INST(CHPEG_OP_DOT, 12),
   /*    12 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PMATCHF, 14),
   /*    13 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PNOMATS, 14),
@@ -832,7 +867,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*    87 <----:Identifier 54 (Primary[0][0]) "Identifier"> */ CHPEG_INST(CHPEG_OP_GOTO, 95),
   /*    88 <----:Identifier 55 (Primary[0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
   /*    89 <----:Identifier 55 (Primary[0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 95),
-  /*    90 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*    90 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*    91 <-----:CharClass  (Primary[0][2][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 4),
   /*    92 <-----:CharClass  (Primary[0][2][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 93),
   /*    93 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PMATCHF, 95),
@@ -892,7 +927,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   147 <----:CharClass  (Literal[0][0]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 10),
   /*   148 <----:CharClass  (Literal[0][0]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 161),
   /*   149 <----:Repeat 81 (Literal[0][1]) []>      */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   150 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   150 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   151 <-------:CharClass  (Literal[0][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 10),
   /*   152 <-------:CharClass  (Literal[0][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 153),
   /*   153 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 157),
@@ -908,7 +943,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   163 <----:CharClass  (Literal[1][0]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 11),
   /*   164 <----:CharClass  (Literal[1][0]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 177),
   /*   165 <----:Repeat 86 (Literal[1][1]) []>      */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   166 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   166 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   167 <-------:CharClass  (Literal[1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 11),
   /*   168 <-------:CharClass  (Literal[1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 169),
   /*   169 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 173),
@@ -927,7 +962,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   182 <---:Literal  (CharClass[0]) "[">        */ CHPEG_INST(CHPEG_OP_LIT, 12),
   /*   183 <---:Literal  (CharClass[0]) "[">        */ CHPEG_INST(CHPEG_OP_GOTO, 196),
   /*   184 <---:Repeat 93 (CharClass[1]) []>        */ CHPEG_INST(CHPEG_OP_RPBEG, 0),
-  /*   185 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   185 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   186 <------:Literal  (CharClass[1][0][0][0]) "]"> */ CHPEG_INST(CHPEG_OP_LIT, 13),
   /*   187 <------:Literal  (CharClass[1][0][0][0]) "]"> */ CHPEG_INST(CHPEG_OP_GOTO, 188),
   /*   188 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 192),
@@ -945,7 +980,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   200 <----:Identifier 101 (CharRange[0][0]) "Char"> */ CHPEG_INST(CHPEG_OP_GOTO, 210),
   /*   201 <----:Literal  (CharRange[0][1]) "-">    */ CHPEG_INST(CHPEG_OP_LIT, 14),
   /*   202 <----:Literal  (CharRange[0][1]) "-">    */ CHPEG_INST(CHPEG_OP_GOTO, 210),
-  /*   203 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   203 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   204 <-----:Literal  (CharRange[0][2][0]) "]"> */ CHPEG_INST(CHPEG_OP_LIT, 13),
   /*   205 <-----:Literal  (CharRange[0][2][0]) "]"> */ CHPEG_INST(CHPEG_OP_GOTO, 206),
   /*   206 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 210),
@@ -1008,7 +1043,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   263 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CFAIL, 264),
   /*   264 <-:Definition 114 (def:OctChar) []> {L}  */ CHPEG_INST(CHPEG_OP_ISUCC, 14),
   /*   265 <-:Definition 114 (def:OctChar) []> {L}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   266 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   266 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   267 <----:Literal  (PlainChar[0][0]) "\\">   */ CHPEG_INST(CHPEG_OP_LIT, 15),
   /*   268 <----:Literal  (PlainChar[0][0]) "\\">   */ CHPEG_INST(CHPEG_OP_GOTO, 269),
   /*   269 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PMATCHF, 272),
@@ -1040,7 +1075,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   295 <-----:Literal  (S[0][1][0]) "#">        */ CHPEG_INST(CHPEG_OP_LIT, 23),
   /*   296 <-----:Literal  (S[0][1][0]) "#">        */ CHPEG_INST(CHPEG_OP_GOTO, 308),
   /*   297 <-----:Repeat 137 (S[0][1][1]) []>       */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   298 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PRED, 0),
+  /*   298 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
   /*   299 <--------:CharClass  (S[0][1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 24),
   /*   300 <--------:CharClass  (S[0][1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 301),
   /*   301 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 304),
@@ -1350,34 +1385,32 @@ CHPEG_API void chpeg_free(void *ptr) {
 // ChpegNode
 //
 
-CHPEG_API void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth)
+CHPEG_API void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth, FILE *fp)
 {
     int flags = self->flags;
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
     const char *def_name = ChpegByteCode_def_name(parser->bc, self->def);
 
     if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n");
-        printf(" Begin    Len  DefID  Flags  Def. Name / Data\n");
-        printf("---------------------------------------------------------------------------------\n");
+        fprintf(fp, " offset   len     id dp flg ident \"data\"\n");
     }
-    printf("%6lu %6lu %6d | %s%s%s | %*s%s \"%s\"\n",
+
+    fprintf(fp, "%6zu %6zu %6d %2d %s%s%s %*s%s \"%s\"\n",
         self->offset,
         self->length,
         self->def,
-        flags & CHPEG_FLAG_STOP ? "S" : " ",
-        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
-        flags & CHPEG_FLAG_LEAF ? "L" : " ",
+        depth,
+        flags & CHPEG_FLAG_STOP ? "S" : "-",
+        flags & CHPEG_FLAG_IGNORE ? "I" : "-",
+        flags & CHPEG_FLAG_LEAF ? "L" : "-",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
         );
+
     if (data) { CHPEG_FREE(data); data = NULL; }
     for (ChpegNode *p = self->head; p; p = p->next) {
-        ChpegNode_print(p, parser, input, depth + 1);
-    }
-    if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n");
+        ChpegNode_print(p, parser, input, depth + 1, fp);
     }
 }
 
@@ -1396,13 +1429,15 @@ CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int fl
 
 CHPEG_API void ChpegNode_free(ChpegNode *self)
 {
-    ChpegNode *tmp;
-    for (ChpegNode *p = self->head; p; p = tmp) {
-        tmp = p->next;
-        ChpegNode_free(p);
+    if (self) {
+        ChpegNode *tmp;
+        for (ChpegNode *p = self->head; p; p = tmp) {
+            tmp = p->next;
+            ChpegNode_free(p);
+        }
+        self->head = NULL;
+        CHPEG_FREE(self);
     }
-    self->head = NULL;
-    CHPEG_FREE(self);
 }
 
 CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags)
@@ -1476,16 +1511,18 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
 CHPEG_API void ChpegParser_free(ChpegParser *self)
 {
-    if (self->tree_root) {
-        ChpegNode_free(self->tree_root);
-        self->tree_root = NULL;
+    if (self) {
+        if (self->tree_root) {
+            ChpegNode_free(self->tree_root);
+            self->tree_root = NULL;
+        }
+        CHPEG_FREE(self);
     }
-    CHPEG_FREE(self);
 }
 
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input)
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp)
 {
-    ChpegNode_print(self->tree_root, self, input, 0);
+    ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
 
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
@@ -1531,7 +1568,7 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
                     str = buf;
                     break;
             }
-            printf("%s \"%s\" in %s at offset %lu\n",
+            fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? str : (esc ? esc : "<NULL>"),
                     def_name ? def_name : "<N/A>",
@@ -1543,14 +1580,14 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
         }
         else {
             if (parent_def_name) {
-                printf("%s %s in %s at offset %lu\n",
+                fprintf(stderr, "%s %s in %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
                         self->error_offset);
             }
             else {
-                printf("%s %s at offset %lu\n",
+                fprintf(stderr, "%s %s at offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         self->error_offset);
@@ -1558,10 +1595,10 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
         }
     }
     else {
-        printf("No errors detected / tracked.\n");
+        fprintf(stderr, "No errors detected / tracked.\n");
     }
 #else
-    printf("Error tracking disabled at compile time.\n");
+    fprintf(stderr, "Error tracking disabled at compile time.\n");
 #endif
 }
 
@@ -1596,7 +1633,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     size_t stack[max_stack_size]; int top = -1;
     ChpegNode *tree_stack[max_tree_depth]; int tree_top = -1;
 
-    self->tree_root = ChpegNode_new(0, 0, -1, 0);
+    self->tree_root = ChpegNode_new(0, 0, 0, 0);
     if (tree_top >= max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
     tree_stack[++tree_top] = self->tree_root;
 
@@ -1622,6 +1659,10 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             switch (op) {
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
+                case CHPEG_OP_IFAIL:
+#ifdef CHPEG_EXTENSIONS
+                case CHPEG_OP_TRIM:
+#endif
                     def_name = ChpegByteCode_def_name(self->bc, arg);
                     fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
@@ -1661,7 +1702,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
-                if (top >= max_stack_size - 4) {
+                if (top >= max_stack_size - 4) { // pushes 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 if (!locked) {
@@ -1669,19 +1710,19 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
                     if (def_flags[arg] & (CHPEG_FLAG_LEAF | CHPEG_FLAG_IGNORE)) {
-                        stack[++top] = 1; locked = 1;
+                        stack[++top] = 1; locked = 1; // s+1: locked
                     }
                     else {
-                        stack[++top] = 0;
+                        stack[++top] = 0; // s+1: locked
                     }
-                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, -1, def_flags[arg]);
+                    tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, 0, def_flags[arg]);
                     ++tree_top;
                 }
                 else {
-                    stack[++top] = 0;
+                    stack[++top] = 0; // s+1: locked
                 }
-                stack[++top] = offset;
-                stack[++top] = pc;
+                stack[++top] = offset; // s+2: offset
+                stack[++top] = pc; // s+3: pc
                 pc = def_addrs[arg];
 #if VM_PRINT_TREE
                 tree_changed = 1;
@@ -1690,15 +1731,23 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
 #if SANITY_CHECKS
-                if (top < 2) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--] + 1;
-                --top;
-                if (stack[top--] == 1) { locked = 0; }
+                pc = stack[top--] + 1; // s+2: offset
+                --top; // s+1: locked
+                if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
                 if (!locked) {
-                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+#ifdef CHPEG_EXTENSIONS
+                    // if we haven't set length by trimming right, set length
+                    if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
+                    {
+#endif
+                        tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+#ifdef CHPEG_EXTENSIONS
+                    }
+#endif
                     --tree_top;
                     if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
 #if SANITY_CHECKS
@@ -1716,12 +1765,12 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
             case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
 #if SANITY_CHECKS
-                if (top < 2) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--];
-                offset = stack[top--];
+                pc = stack[top--]; // top=s+2: offset
+                offset = stack[top--]; // top=s+1: locked
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
@@ -1734,7 +1783,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 }
 #endif
 
-                if (stack[top--] == 1) { locked = 0; }
+                if (stack[top--] == 1) { locked = 0; } // top=s+0 (done popping)
                 if (!locked) {
 #if SANITY_CHECKS
                     if (tree_top < 0) {
@@ -1743,6 +1792,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #endif
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
+
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -1750,7 +1800,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
 // Choice
             case CHPEG_OP_CHOICE:
-                if (top >= max_stack_size - 3) {
+                if (top >= max_stack_size - 3) { // pushes 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -1760,7 +1810,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_CISUCC: // arg = success/fail pc addr
             case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
-                if (top < 1) {
+                if (top < 1) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1781,7 +1831,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
 // Repeat +
             case CHPEG_OP_RPBEG:
-                if (top >= max_stack_size - 4) {
+                if (top >= max_stack_size - 5) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -1808,7 +1858,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
             case CHPEG_OP_RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
-                if (top < 3) {
+                if (top < 3) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1833,7 +1883,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 // Repeat *|?
             case CHPEG_OP_RSBEG:
             case CHPEG_OP_RQBEG:
-                if (top >= max_stack_size - 4) {
+                if (top >= max_stack_size - 4) { // pushes 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -1859,7 +1909,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
             case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
-                if (top < 2) {
+                if (top < 2) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1881,11 +1931,76 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 stack[top] = offset; // update backtrack point
                 break;
 
+#ifdef CHPEG_EXTENSIONS
+//
+// Trim
+//
+            case CHPEG_OP_TRIM: // TRIM start ('<')
+                                // arg: unused
+
+                if (top >= max_stack_size - 5) { // pushes 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
+
+                // Save original offset and flags
+                stack[++top] = tree_stack[tree_top]->offset;
+                stack[++top] = tree_stack[tree_top]->flags;
+
+                // Trim on left (set offset and mark as 'trimmed left')
+                tree_stack[tree_top]->offset = offset;
+                tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_LEFT;
+
+                // Save changed offset and flags on the stack
+                stack[++top] = tree_stack[tree_top]->offset;
+                stack[++top] = tree_stack[tree_top]->flags;
+
+                break;
+
+            case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
+                                 // arg = next pc
+
+                if (top < 3) { // pops 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+
+                // Restore the changed flags and offset values from the stack
+                tree_stack[tree_top]->flags = stack[top--];
+                tree_stack[tree_top]->offset = stack[top--];
+
+                // Trim of right (set length and mark as 'trimmed right')
+                tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+                tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_RIGHT;
+
+                // Discard the original flags and offset values saved on stack
+                top -= 2;
+
+                pc = arg;
+                break;
+
+            case CHPEG_OP_TRIMF: // TRIM Failed ('>'): the contents inside ('<' ... '>') did not match
+                                 // arg = next pc
+
+                if (top < 3) { // pops 4 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+
+                // Discard the changed flags and offset values saved on stack
+                top -= 2;
+
+                // Restore the original flags and offset values from the stack
+                tree_stack[tree_top]->flags = stack[top--];
+                tree_stack[tree_top]->offset = stack[top--];
+
+                pc = arg;
+                break;
+#endif
+
 // Predicate
-            case CHPEG_OP_PRED:
+            case CHPEG_OP_PREDA:
+            case CHPEG_OP_PREDN:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
-                if (top >= max_stack_size - 3) {
+                if (top >= max_stack_size - 5) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -1926,7 +2041,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_PNOMATS: // Predicate not matched, not match is considered success
 pred_cleanup:
 #if SANITY_CHECKS
-                if (top < 2) {
+                if (top < 3) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -2074,7 +2189,7 @@ pred_cleanup:
 
 #if VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
-            ChpegParser_print_tree(self, input);
+            ChpegParser_print_tree(self, input, stderr);
         }
 #endif
         if (pc < 0) {
@@ -2138,6 +2253,7 @@ typedef struct _ChpegGNode
     int num_children;
     struct _ChpegGNode *head;
     struct _ChpegGNode *next;
+    struct _ChpegGNode *parent;
 } ChpegGNode;
 
 static ChpegGNode *ChpegGNode_new()
@@ -2155,6 +2271,8 @@ static ChpegGNode *ChpegGNode_new()
 
 static void ChpegGNode_free(ChpegGNode *self)
 {
+    if (self == NULL) return;
+
     ChpegGNode *tmp;
     for (ChpegGNode *p = self->head; p; p = tmp) {
         tmp = p->next;
@@ -2166,6 +2284,7 @@ static void ChpegGNode_free(ChpegGNode *self)
 
 static ChpegGNode *ChpegGNode_push_child(ChpegGNode *self, ChpegGNode *child)
 {
+    child->parent = self;
     child->next = self->head;
     self->head = child;
     ++(self->num_children);
@@ -2210,6 +2329,26 @@ typedef struct _ChpegCU
     ChpegGNode *root;
     int strings_allocated;
 } ChpegCU;
+
+#ifdef CHPEG_EXTENSIONS
+static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
+{
+    ChpegGNode *parent = gnode;
+
+    for (; parent && parent != cu->root; parent = parent->parent) {
+        if (parent->type == CHPEG_BC(DEFINITION)) {
+            if (def_return) {
+                *def_return = parent;
+            }
+            return 0;
+        }
+    }
+    if (def_return) {
+        *def_return = NULL;
+    }
+    return 1;
+}
+#endif
 
 #if DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
@@ -2365,6 +2504,14 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
+#ifdef CHPEG_EXTENSIONS
+        case CHPEG_BC(TRIM):
+            gp->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, gp->head);
+            gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
+            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            break;
+#endif
         case CHPEG_BC(REPEAT):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -2401,6 +2548,7 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
+    int def = 0;
     switch (gp->type) {
         case CHPEG_BC(GRAMMAR):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
@@ -2411,9 +2559,10 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             break;
         case CHPEG_BC(DEFINITION):
+            def = ChpegCU_find_def(cu, gp->head->node);
             ChpegCU_add_instructions(cu, gp->head->next);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, ChpegCU_find_def(cu, gp->head->node)));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, 0));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def));
             break;
         case CHPEG_BC(CHOICE):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
@@ -2431,6 +2580,21 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
+#ifdef CHPEG_EXTENSIONS
+        case CHPEG_BC(TRIM):
+            {
+                ChpegGNode *def_node;
+                def = -1;
+                if (0 == ChpegCU_find_def_node(cu, gp, &def_node)) {
+                    def = ChpegCU_find_def(cu, def_node->head->node);
+                }
+            }
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
+            ChpegCU_add_instructions(cu, gp->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
+            break;
+#endif
         case CHPEG_BC(REPEAT):
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
@@ -2461,13 +2625,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
                     case '&':
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
                         break;
                     case '!':
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
@@ -2686,6 +2850,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 
 // This is more of a convenience function, thus the lowercase chpeg_ prefix.
 // I plan to create a more OO-like API to the compiler to allow more flexibility.
+// verbose is a bit field: 1: info | 2: print parse tree | 1<<15: disable errors
 CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
@@ -2700,28 +2865,27 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
 
-    if (verbose) {
-        if (parse_result == 0) {
-            printf("Parse successful.\n");
-            if (verbose & 0x2) {
-                ChpegParser_print_tree(cu.parser, input);
-            }
+    if (parse_result == 0) {
+        if (verbose & 1) {
+            fprintf(stderr, "chpeg_compile: Parse successful.\n");
         }
-        else {
-            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
-            }
-            else {
-                printf("Parse failed with result: %d\n", parse_result);
-            }
-            ChpegParser_print_error(cu.parser, input);
-            goto done;
+        if (verbose & 2) {
+            ChpegParser_print_tree(cu.parser, input, stderr);
         }
     }
     else {
-        if (parse_result != 0) {
-            goto done;
+        if ((verbose & (1<<15)) == 0) {
+            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
+                fprintf(stderr, "chpeg_compile: Extraneous input: "
+                    "parse consumed %lu bytes out of %lu\n", consumed, length);
+            }
+            else {
+                fprintf(stderr, "chpeg_compile: Parse failed with result: %d\n",
+                    parse_result);
+            }
+            ChpegParser_print_error(cu.parser, input);
         }
+        goto done;
     }
 
     cu.bc = ChpegByteCode_new();

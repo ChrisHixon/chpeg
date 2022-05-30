@@ -46,6 +46,7 @@ typedef struct _ChpegGNode
     int num_children;
     struct _ChpegGNode *head;
     struct _ChpegGNode *next;
+    struct _ChpegGNode *parent;
 } ChpegGNode;
 
 static ChpegGNode *ChpegGNode_new()
@@ -63,6 +64,8 @@ static ChpegGNode *ChpegGNode_new()
 
 static void ChpegGNode_free(ChpegGNode *self)
 {
+    if (self == NULL) return;
+
     ChpegGNode *tmp;
     for (ChpegGNode *p = self->head; p; p = tmp) {
         tmp = p->next;
@@ -74,6 +77,7 @@ static void ChpegGNode_free(ChpegGNode *self)
 
 static ChpegGNode *ChpegGNode_push_child(ChpegGNode *self, ChpegGNode *child)
 {
+    child->parent = self;
     child->next = self->head;
     self->head = child;
     ++(self->num_children);
@@ -118,6 +122,26 @@ typedef struct _ChpegCU
     ChpegGNode *root;
     int strings_allocated;
 } ChpegCU;
+
+#ifdef CHPEG_EXTENSIONS
+static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
+{
+    ChpegGNode *parent = gnode;
+
+    for (; parent && parent != cu->root; parent = parent->parent) {
+        if (parent->type == CHPEG_BC(DEFINITION)) {
+            if (def_return) {
+                *def_return = parent;
+            }
+            return 0;
+        }
+    }
+    if (def_return) {
+        *def_return = NULL;
+    }
+    return 1;
+}
+#endif
 
 #if DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
@@ -273,6 +297,14 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
+#ifdef CHPEG_EXTENSIONS
+        case CHPEG_BC(TRIM):
+            gp->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, gp->head);
+            gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
+            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            break;
+#endif
         case CHPEG_BC(REPEAT):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -309,6 +341,7 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
+    int def = 0;
     switch (gp->type) {
         case CHPEG_BC(GRAMMAR):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
@@ -319,9 +352,10 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             break;
         case CHPEG_BC(DEFINITION):
+            def = ChpegCU_find_def(cu, gp->head->node);
             ChpegCU_add_instructions(cu, gp->head->next);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, ChpegCU_find_def(cu, gp->head->node)));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, 0));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def));
             break;
         case CHPEG_BC(CHOICE):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
@@ -339,6 +373,21 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
+#ifdef CHPEG_EXTENSIONS
+        case CHPEG_BC(TRIM):
+            {
+                ChpegGNode *def_node;
+                def = -1;
+                if (0 == ChpegCU_find_def_node(cu, gp, &def_node)) {
+                    def = ChpegCU_find_def(cu, def_node->head->node);
+                }
+            }
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
+            ChpegCU_add_instructions(cu, gp->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
+            break;
+#endif
         case CHPEG_BC(REPEAT):
             {
                 unsigned char op = cu->input[gp->head->next->node->offset];
@@ -369,13 +418,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 unsigned char op = cu->input[gp->head->node->offset];
                 switch (op) {
                     case '&':
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
                         break;
                     case '!':
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PRED, 0));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
@@ -594,6 +643,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 
 // This is more of a convenience function, thus the lowercase chpeg_ prefix.
 // I plan to create a more OO-like API to the compiler to allow more flexibility.
+// verbose is a bit field: 1: info | 2: print parse tree | 1<<15: disable errors
 CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
@@ -608,28 +658,27 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
 
-    if (verbose) {
-        if (parse_result == 0) {
-            printf("Parse successful.\n");
-            if (verbose & 0x2) {
-                ChpegParser_print_tree(cu.parser, input);
-            }
+    if (parse_result == 0) {
+        if (verbose & 1) {
+            fprintf(stderr, "chpeg_compile: Parse successful.\n");
         }
-        else {
-            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
-            }
-            else {
-                printf("Parse failed with result: %d\n", parse_result);
-            }
-            ChpegParser_print_error(cu.parser, input);
-            goto done;
+        if (verbose & 2) {
+            ChpegParser_print_tree(cu.parser, input, stderr);
         }
     }
     else {
-        if (parse_result != 0) {
-            goto done;
+        if ((verbose & (1<<15)) == 0) {
+            if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
+                fprintf(stderr, "chpeg_compile: Extraneous input: "
+                    "parse consumed %lu bytes out of %lu\n", consumed, length);
+            }
+            else {
+                fprintf(stderr, "chpeg_compile: Parse failed with result: %d\n",
+                    parse_result);
+            }
+            ChpegParser_print_error(cu.parser, input);
         }
+        goto done;
     }
 
     cu.bc = ChpegByteCode_new();

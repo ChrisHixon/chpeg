@@ -21,20 +21,17 @@ Trim        {S} <- '<' S Choice '>' S
 # Lexical syntax
 Options     { } <- [ILS]*
 Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
-Literal     {S} <- ( ['] (!['] Char)* ['] /  ["] (!["] Char)* ["] ) NoCase?
+Literal     {S} <- ['] (!['] Char)* [']
+                 / ["] (!["] Char)* ["]
 CharClass   {S} <- '[' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
-Char        { } <- EscChar / HexChar / OctChar / PlainChar
-EscChar     {L} <- '\\' [abefnrtv'"\[\]\\]
+Char        { } <- EscChar / OctChar / PlainChar
+EscChar     {L} <- '\\' [nrt'"\[\]\\]
 OctChar     {L} <- '\\' [0-3][0-7][0-7]
                  / '\\' [0-7][0-7]?
-HexChar     {L} <- '\\x' [0-9a-fA-F][0-9a-fA-F]?
 PlainChar   {L} <- !'\\' .
 PredOp      {L} <- [&!]
 RepOp       {L} <- [*+?]
 Dot         {L} <- '.'
-NoCase      {L} <- 'i' !Identifier
-EndLine     {L} <- '\r\n' / '\n\r' / '\n' / '\r'
-Comment     {L} <- '#' (!EndLine .)* EndLine?
-Space       {L} <- [ \t\r\n\f\v]
-S           {I} <- (Space+ / Comment)*
+
+S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n]? )*

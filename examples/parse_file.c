@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
         if (consumed == length) {
             printf("Parse successful.\n");
         }
-        ChpegParser_print_tree(parser, input);
+        ChpegParser_print_tree(parser, input, stdout);
     }
     else {
         if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {

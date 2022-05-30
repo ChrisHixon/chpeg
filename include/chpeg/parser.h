@@ -10,6 +10,8 @@
 #include "chpeg/bytecode.h"
 #endif
 
+#include <stdio.h>
+
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
@@ -48,7 +50,7 @@ CHPEG_API void ChpegNode_free(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
 CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self);
-CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth);
+CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth, FILE *fp);
 
 //
 // ChpegParser
@@ -84,7 +86,7 @@ typedef struct _ChpegParser
 CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input);
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 

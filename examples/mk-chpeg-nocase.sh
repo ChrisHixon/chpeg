@@ -12,6 +12,7 @@ cat <<EOS > $out_bfn.c
 #define CHPEG_HAS_NOCASE
 #define CHPEG_BC(bc) CHPEG_NOCASE_BC_##bc
 #define CHPEG_DEFAULT_BYTECODE (&${out_bfn}_bc)
+#define CHPEG_EXTENSIONS
 
 EOS
 

@@ -25,7 +25,8 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "RSDONE",
     "RQDONE",
     "RQMAT",
-    "PRED",
+    "PREDA",
+    "PREDN",
     "PMATCHF",
     "PNOMATF",
     "PMATCHS",
@@ -35,7 +36,12 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "LIT_NC",
     "DOT",
     "SUCC",
-    "FAIL"
+    "FAIL",
+#ifdef CHPEG_EXTENSIONS
+    "TRIM",
+    "TRIMS",
+    "TRIMF",
+#endif
 };
 
 // } chpeg: opcodes.c

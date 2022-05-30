@@ -14,7 +14,9 @@ Predicate   { } <- (PredOp S)? Repeat
 Repeat      { } <- Primary (RepOp S)?
 Primary     { } <- Identifier S ![{<]
                  / '(' S Choice ')' S
+                 / Trim
                  / Literal S / CharClass S / Dot S
+Trim        {S} <- '<' S Choice '>' S
 
 # Lexical syntax
 Options     { } <- [ILS]*
@@ -32,4 +34,5 @@ PlainChar   {L} <- !'\\' .
 PredOp      {L} <- [&!]
 RepOp       {L} <- [*+?]
 Dot         {L} <- '.'
-S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n] )*
+
+S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n]? )*

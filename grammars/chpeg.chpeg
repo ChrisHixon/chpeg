@@ -23,7 +23,7 @@ Literal     {S} <- ['] (!['] Char)* [']
                  / ["] (!["] Char)* ["]
 CharClass   {S} <- '[' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
-Char        { } <- EscChar / OctChar / PlainChar 
+Char        { } <- EscChar / OctChar / PlainChar
 EscChar     {L} <- '\\' [nrt'"\[\]\\]
 OctChar     {L} <- '\\' [0-3][0-7][0-7]
                  / '\\' [0-7][0-7]?
@@ -31,4 +31,5 @@ PlainChar   {L} <- !'\\' .
 PredOp      {L} <- [&!]
 RepOp       {L} <- [*+?]
 Dot         {L} <- '.'
-S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n] )*
+
+S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n]? )*
