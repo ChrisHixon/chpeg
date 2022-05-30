@@ -72,10 +72,10 @@ typedef struct _ChpegParser
     int error_expected;
     int parse_result;
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     int vm_trace;
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     int vm_print_tree;
 #endif
 

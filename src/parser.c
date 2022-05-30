@@ -48,18 +48,18 @@
 
 #define ERROR_REPEAT_INHIBIT 0 // probably flawed idea or implementation, don't enable
 
-// VM_TRACE:
+// CHPEG_VM_TRACE:
 // Set to non-zero to compile in support for tracing parser VM instruction execution.
 // To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
-#ifndef VM_TRACE
-#define VM_TRACE 0
+#ifndef CHPEG_VM_TRACE
+#define CHPEG_VM_TRACE 0
 #endif
 
-// VM_PRINT_TREE:
+// CHPEG_VM_PRINT_TREE:
 // Set to non-zero to compile in support for printing the parse tree as it is being built.
 // To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
-#ifndef VM_PRINT_TREE
-#define VM_PRINT_TREE 0
+#ifndef CHPEG_VM_PRINT_TREE
+#define CHPEG_VM_PRINT_TREE 0
 #endif
 
 //
@@ -180,10 +180,10 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->error_inst = -1;
     self->error_expected = -1;
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     self->vm_trace = 0;
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     self->vm_print_tree = 0;
 #endif
 
@@ -338,7 +338,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     int err_locked = 0;
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     int tree_changed = 0;
 #endif
 
@@ -375,7 +375,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     self->tree_root = ChpegNode_new(0, 0, 0, 0);
     tree_stack[tree_top] = self->tree_root;
 
-#if SANITY_CHECKS || VM_TRACE
+#if SANITY_CHECKS || CHPEG_VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
     const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
@@ -410,7 +410,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
         if (self->vm_trace) {
             if (cnt == 0) {
                 fprintf(stderr, "=     CNT   OFFSET       PC           OP   ARG\n");
@@ -447,7 +447,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
         }
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
         tree_changed = 0;
 #endif
 
@@ -487,7 +487,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[++top] = offset; // top=s+2: offset
                 stack[++top] = pc; // top=s+3: pc
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 
@@ -529,7 +529,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     }
                 }
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 // pc is restored +2 (next instruction skipped)
@@ -567,7 +567,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 // pc is restored +1 (so resume execution at next instruction)
@@ -599,7 +599,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 ++pc; // next instruction
@@ -657,7 +657,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
@@ -706,7 +706,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 ++pc; // next instruction
@@ -851,7 +851,7 @@ pred_cleanup:
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (int i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
@@ -952,7 +952,7 @@ chrcls_done:
 
                 // clean up the parse tree, reversing the reverse node insertion in the process
                 self->tree_root = ChpegNode_unwrap(self->tree_root);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 
@@ -986,7 +986,7 @@ chrcls_done:
                 break;
         }
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
             ChpegParser_print_tree(self, input, stderr);
         }

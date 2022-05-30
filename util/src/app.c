@@ -72,21 +72,21 @@ void help(App *app, FILE *fp)
     fprintf(fp, "  -vN             set verbosity to N (use 0 to disable)\n");
     fprintf(fp, "\n");
 
-#if VM_TRACE || VM_PRINT_TREE
+#if CHPEG_VM_TRACE || CHPEG_VM_PRINT_TREE
     fprintf(fp, "Tracing options:\n");
 #endif
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     fprintf(fp, "  -t              increase VM trace level\n");
     fprintf(fp, "  -tN             set VM trace level to N (0=off,1=on)\n");
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     fprintf(fp, "  -tp             increase VM print tree level\n");
     fprintf(fp, "  -tpN            set VM print tree level to N (0=off,1=on)\n");
 #endif
 
-#if VM_TRACE || VM_PRINT_TREE
+#if CHPEG_VM_TRACE || CHPEG_VM_PRINT_TREE
     fprintf(fp, "\n");
 #endif
 
@@ -474,7 +474,7 @@ static int run(App *app)
                 app->help_printed = 1;
             }
         }
-#if VM_TRACE
+#if CHPEG_VM_TRACE
         // vm trace can be turned on (-t/-t1) and off (-t0) as necessary, mid-processing
 
         // vm trace (-t)
@@ -486,7 +486,7 @@ static int run(App *app)
             app->vm_trace = value;
         }
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
         // vm print tree can be turned on (-tp/-tp1) and off (-tp0) as necessary, mid-processing
 
         // this option shows the parse tree as being built

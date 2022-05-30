@@ -90,12 +90,12 @@ int Parse_parse(Parse *p, App *app)
     // Parse the data file using byte code
     p->parser = ChpegParser_new(bc ? bc : chpeg_default_bytecode());
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     // set to non-zero to enable VM instruction execution tracing
     p->parser->vm_trace = app->vm_trace;
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     // set to non-zero to print parse tree as it is being built
     p->parser->vm_print_tree = app->vm_print_tree;
 #endif

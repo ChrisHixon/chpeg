@@ -27,10 +27,10 @@ struct _App {
     int action_default;     // action is running as default action (bool)
     int help_printed;       // help has been printed during this action (bool)
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     int vm_trace;
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     int vm_print_tree;
 #endif
 
