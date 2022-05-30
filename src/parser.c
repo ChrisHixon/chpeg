@@ -224,16 +224,13 @@ void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
     }
     fprintf(fp, "%6s %8s %11d %6.2f\n", "OP=", "Total", self->prof_inst_cnt, 100.0);
 
-    int total_ident = 0, total_isucc = 0, total_ifail = 0;
-    for (int i = 0; i < self->bc->num_defs; ++i) {
-        total_ident += self->prof_ident_cnt[i];
-        total_isucc += self->prof_isucc_cnt[i];
-        total_ifail += self->prof_ifail_cnt[i];
-    }
+    int total_ident = self->prof_op_cnt[CHPEG_OP_IDENT];
+    int total_isucc = self->prof_op_cnt[CHPEG_OP_ISUCC];
+    int total_ifail = self->prof_op_cnt[CHPEG_OP_IFAIL];
 
     fprintf(fp, "\n");
     fprintf(stderr, "Definition identifier calls:\n");
-    fprintf(stderr, "  DEF-   id       IDENT      %%       ISUCC       IFAI   name\n");
+    fprintf(stderr, "  DEF-   id       IDENT      %%       ISUCC       IFAIL  name\n");
     for (int i = 0; i < self->bc->num_defs; ++i) {
         fprintf(fp, "%6s %4d %11d %6.2f %11d %11d  %s\n", "DEF ", i,
             self->prof_ident_cnt[i],
