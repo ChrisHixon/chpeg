@@ -1528,6 +1528,11 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
             ChpegNode_free(self->tree_root);
             self->tree_root = NULL;
         }
+#ifdef CHPEG_DEFINITION_TRACE
+        CHPEG_FREE(self->def_count);
+        CHPEG_FREE(self->def_succ_count);
+        CHPEG_FREE(self->def_fail_count);
+#endif
         CHPEG_FREE(self);
     }
 }
