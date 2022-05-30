@@ -100,6 +100,11 @@ int Parse_parse(Parse *p, App *app)
     p->parser->vm_print_tree = app->vm_print_tree;
 #endif
 
+#if CHPEG_VM_PROFILE
+    // set to non-zero to enable VM profiling
+    p->parser->vm_profile = app->vm_profile;
+#endif
+
     size_t consumed = 0;
     parse_result = ChpegParser_parse(p->parser, data, length, &consumed);
     if (parse_result == 0) {

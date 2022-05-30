@@ -10,7 +10,6 @@
 #include "chpeg/mem.h"
 #include "chpeg/util.h"
 #include "chpeg/parser.h"
-#include "chpeg/opcodes.h"
 #endif
 
 #ifndef CHPEG_MAX_TREE_DEPTH
@@ -47,20 +46,6 @@
 #endif
 
 #define ERROR_REPEAT_INHIBIT 0 // probably flawed idea or implementation, don't enable
-
-// CHPEG_VM_TRACE:
-// Set to non-zero to compile in support for tracing parser VM instruction execution.
-// To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
-#ifndef CHPEG_VM_TRACE
-#define CHPEG_VM_TRACE 0
-#endif
-
-// CHPEG_VM_PRINT_TREE:
-// Set to non-zero to compile in support for printing the parse tree as it is being built.
-// To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
-#ifndef CHPEG_VM_PRINT_TREE
-#define CHPEG_VM_PRINT_TREE 0
-#endif
 
 //
 // ChpegNode
@@ -168,7 +153,7 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 
 ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 {
-    ChpegParser *self = (ChpegParser *)CHPEG_MALLOC(sizeof(ChpegParser));
+    ChpegParser *self = (ChpegParser *)CHPEG_CALLOC(1, sizeof(ChpegParser));
 
     self->bc = bc;
     self->tree_root = NULL;
@@ -186,6 +171,13 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 #if CHPEG_VM_PRINT_TREE
     self->vm_print_tree = 0;
 #endif
+#if CHPEG_VM_PROFILE
+    self->vm_profile = 0;
+    self->prof_inst_cnt = 0;
+    self->prof_ident_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_isucc_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_ifail_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+#endif
 
     return self;
 }
@@ -197,6 +189,20 @@ void ChpegParser_free(ChpegParser *self)
             ChpegNode_free(self->tree_root);
             self->tree_root = NULL;
         }
+#if CHPEG_VM_PROFILE
+        if (self->prof_ident_cnt) {
+            CHPEG_FREE(self->prof_ident_cnt);
+            self->prof_ident_cnt = NULL;
+        }
+        if (self->prof_isucc_cnt) {
+            CHPEG_FREE(self->prof_isucc_cnt);
+            self->prof_isucc_cnt = NULL;
+        }
+        if (self->prof_ifail_cnt) {
+            CHPEG_FREE(self->prof_ifail_cnt);
+            self->prof_ifail_cnt = NULL;
+        }
+#endif
         CHPEG_FREE(self);
     }
 }
@@ -205,6 +211,41 @@ void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE 
 {
     ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
+
+#if CHPEG_VM_PROFILE
+void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
+{
+    fprintf(stderr, "Instructions executed:\n");
+    fprintf(fp, "%6s %8s %11s %6s\n", "OP-", "opcode", "count", "%");
+    for (int i = 0; i < CHPEG_NUM_OPS; ++i) {
+        fprintf(fp, "%6s %8s %11d %6.2f\n", "OP ",
+            Chpeg_op_name(i), self->prof_op_cnt[i],
+            100.0 * (float)self->prof_op_cnt[i] / (float)self->prof_inst_cnt);
+    }
+    fprintf(fp, "%6s %8s %11d %6.2f\n", "OP=", "Total", self->prof_inst_cnt, 100.0);
+
+    int total_ident = 0, total_isucc = 0, total_ifail = 0;
+    for (int i = 0; i < self->bc->num_defs; ++i) {
+        total_ident += self->prof_ident_cnt[i];
+        total_isucc += self->prof_isucc_cnt[i];
+        total_ifail += self->prof_ifail_cnt[i];
+    }
+
+    fprintf(fp, "\n");
+    fprintf(stderr, "Definition identifier calls:\n");
+    fprintf(stderr, "  DEF-   id       IDENT      %%       ISUCC       IFAI   name\n");
+    for (int i = 0; i < self->bc->num_defs; ++i) {
+        fprintf(fp, "%6s %4d %11d %6.2f %11d %11d  %s\n", "DEF ", i,
+            self->prof_ident_cnt[i],
+            100.0 * (float)self->prof_ident_cnt[i] / (float)total_ident,
+            self->prof_isucc_cnt[i],
+            self->prof_ifail_cnt[i],
+            ChpegByteCode_def_name(self->bc, i));
+    }
+    fprintf(fp, "%6s %4s %11d %6.2f %11d %11d  %s\n", "DEF=", "--",
+        total_ident, 100.0, total_isucc, total_ifail, "--");
+}
+#endif
 
 void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
@@ -322,8 +363,9 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 // compiler. If the user is creating their own bytecode, it's on them to
 // make sure it's correct.
 //
-// TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal with things this is meant to detect)
-//
+// TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal
+// with things this is meant to detect)
+
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
 
@@ -375,6 +417,14 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     self->tree_root = ChpegNode_new(0, 0, 0, 0);
     tree_stack[tree_top] = self->tree_root;
 
+#if CHPEG_VM_PROFILE
+    self->prof_inst_cnt = 0;
+    memset(self->prof_op_cnt, 0, CHPEG_NUM_OPS * sizeof(int));
+    memset(self->prof_ident_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_isucc_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_ifail_cnt, 0, self->bc->num_defs * sizeof(int));
+#endif
+
 #if SANITY_CHECKS || CHPEG_VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
     const int num_instructions = self->bc->num_instructions;
@@ -409,6 +459,13 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
+
+#if CHPEG_VM_PROFILE
+        if (self->vm_profile) {
+            self->prof_inst_cnt++;
+            self->prof_op_cnt[op]++;
+        }
+#endif
 
 #if CHPEG_VM_TRACE
         if (self->vm_trace) {
@@ -461,6 +518,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 // Identifier
             case CHPEG_OP_IDENT: // arg = def; Identifier "call"
                                  // on success, next instruction is skipped (See ISUCC, IFAIL)
+#if CHPEG_VM_PROFILE
+                ++self->prof_ident_cnt[arg];
+#endif
                 // top=s+0: stack at beginning of call
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
@@ -496,6 +556,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return"
                                  // pc restored to pc+2, skipping next instruction
+#if CHPEG_VM_PROFILE
+                ++self->prof_isucc_cnt[arg];
+#endif
 #if SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(3)) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
@@ -537,6 +600,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return"
                                  // pc restored +1 (next instruction not skipped)
+#if CHPEG_VM_PROFILE
+                ++self->prof_ifail_cnt[arg];
+#endif
 #if SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(3)) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;

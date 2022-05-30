@@ -14,9 +14,11 @@
 #include "actions/default.h"
 #include "actions/bytecode.h"
 #include "actions/bytecodec.h"
-#include "actions/help.h"
 #include "actions/test.h"
 #include "actions/test2.h"
+#if CHPEG_VM_PROFILE
+#include "actions/profile.h"
+#endif
 
 //
 // Actions and argument processing:
@@ -87,6 +89,13 @@ void help(App *app, FILE *fp)
 #endif
 
 #if CHPEG_VM_TRACE || CHPEG_VM_PRINT_TREE
+    fprintf(fp, "\n");
+#endif
+
+#if CHPEG_VM_PROFILE
+    fprintf(fp, "Profiling options:\n");
+    fprintf(fp, "  -prof           increase VM profiling level\n");
+    fprintf(fp, "  -profN          set VM profiling level to N (0=off,1=on)\n");
     fprintf(fp, "\n");
 #endif
 
@@ -336,6 +345,7 @@ static int init_action(App *app)
 
     assert(app->action);
 
+    // create from template...
     if (app->action->template) {
         assert(app->action->template_size);
         app->action_data = malloc(app->action->template_size);
@@ -344,16 +354,20 @@ static int init_action(App *app)
         }
         memcpy(app->action_data, app->action->template, app->action->template_size);
     }
+    // or create using create callback
+    else if (app->action->create) {
+        app->action_data = app->action->create();
+    }
     else {
-        if (app->action->create) {
-            app->action_data = app->action->create();
-        }
-        if (app->action->init) {
-            if ((err = app->action->init(app->action_data, app)) != 0) {
-                goto done;
-            }
+        app->action_data = NULL;
+    }
+
+    if (app->action->init) {
+        if ((err = app->action->init(app->action_data, app)) != 0) {
+            goto done;
         }
     }
+
 done:
     return err;
 }
@@ -497,6 +511,18 @@ static int run(App *app)
         // vm print tree (-tpN)
         else if (arg_int(app, "-tp", &value) == 0) {
             app->vm_print_tree = value;
+        }
+#endif
+#if CHPEG_VM_PROFILE
+        // vm profiling can be turned on (-prof/-prof1) and off (-prof0) as necessary, mid-processing
+
+        // vm profile (-prof)
+        else if (strcmp(app->argv[app->arg], "-prof") == 0) {
+            app->vm_profile++;
+        }
+        // vm profile (-profN)
+        else if (arg_int(app, "-prof", &value) == 0) {
+            app->vm_profile = value;
         }
 #endif
         // grammar, from file (-g FILE)
@@ -644,6 +670,9 @@ int main(int argc, const char *argv[])
         &default_action,
         &bytecode_action,
         &bytecodec_action,
+#if CHPEG_VM_PROFILE
+        &profile_action,
+#endif
         &test_action,
         &test2_action,
         &null_action,

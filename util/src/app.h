@@ -33,6 +33,9 @@ struct _App {
 #if CHPEG_VM_PRINT_TREE
     int vm_print_tree;
 #endif
+#if CHPEG_VM_PROFILE
+    int vm_profile;
+#endif
 
     // Grammar list/stack
     GrammarArray grammars;
