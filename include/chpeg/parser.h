@@ -69,6 +69,12 @@ typedef struct _ChpegParser
     int error_expected;
     int parse_result;
 
+#ifdef CHPEG_DEFINITION_TRACE
+    int *def_count;
+    int *def_succ_count;
+    int *def_fail_count;
+#endif
+
 #if VM_TRACE
     int vm_trace;
 #endif

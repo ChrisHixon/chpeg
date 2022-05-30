@@ -274,6 +274,12 @@ typedef struct _ChpegParser
     int error_expected;
     int parse_result;
 
+#ifdef CHPEG_DEFINITION_TRACE
+    int *def_count;
+    int *def_succ_count;
+    int *def_fail_count;
+#endif
+
 #if VM_TRACE
     int vm_trace;
 #endif
@@ -1499,6 +1505,12 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->error_inst = -1;
     self->error_expected = -1;
 
+#ifdef CHPEG_DEFINITION_TRACE
+    self->def_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
+    self->def_succ_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
+    self->def_fail_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
+#endif
+
 #if VM_TRACE
     self->vm_trace = 0;
 #endif
@@ -1522,6 +1534,12 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
 
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp)
 {
+#ifdef CHPEG_DEFINITION_TRACE
+    fprintf(fp, "%4s %10s %10s %10s %s\n", "id", "total", "success", "fail", "definition");
+    for(int i=0; i < self->bc->num_defs; ++i) {
+        fprintf(fp, "%4.d %10.d %10.d %10.d %s\n", i, self->def_count[i], self->def_succ_count[i], self->def_fail_count[i], self->bc->def_names[i]);
+    }
+#endif
     ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
 
@@ -1552,7 +1570,7 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
             switch (op) {
                 case CHPEG_OP_DOT:
                     snprintf(buf, sizeof(buf), "character `%c`", input[self->error_offset]);
-                    str = buf; 
+                    str = buf;
                     break;
                 case CHPEG_OP_IDENT:
                     str = ChpegByteCode_def_name(self->bc, arg); break;
@@ -1626,6 +1644,12 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
     const int max_stack_size = self->max_stack_size;
     const int max_tree_depth = self->max_tree_depth;
+
+#ifdef CHPEG_DEFINITION_TRACE
+    memset(self->def_count, 0, sizeof(int)*self->bc->num_defs);
+    memset(self->def_succ_count, 0, sizeof(int)*self->bc->num_defs);
+    memset(self->def_fail_count, 0, sizeof(int)*self->bc->num_defs);
+#endif
 
     size_t offset = 0;
     int op = 0, arg = 0, pc = 0;
@@ -1727,6 +1751,9 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #if VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+#ifdef CHPEG_DEFINITION_TRACE
+                ++self->def_count[arg];
+#endif
                 break;
 
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
@@ -1760,6 +1787,9 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 }
 #if VM_PRINT_TREE
                 tree_changed = 1;
+#endif
+#ifdef CHPEG_DEFINITION_TRACE
+                ++self->def_succ_count[arg];
 #endif
                 break;
 
@@ -1795,6 +1825,9 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
 #if VM_PRINT_TREE
                 tree_changed = 1;
+#endif
+#ifdef CHPEG_DEFINITION_TRACE
+                ++self->def_fail_count[arg];
 #endif
                 break;
 
