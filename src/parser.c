@@ -13,6 +13,14 @@
 #include "chpeg/opcodes.h"
 #endif
 
+#ifndef CHPEG_MAX_TREE_DEPTH
+#define CHPEG_MAX_TREE_DEPTH 512
+#endif
+
+#ifndef CHPEG_STACK_SIZE
+#define CHPEG_STACK_SIZE 4096
+#endif
+
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
 #endif
@@ -164,8 +172,8 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
     self->bc = bc;
     self->tree_root = NULL;
-    self->max_tree_depth = 256;
-    self->max_stack_size = 256 * 8;
+    self->max_tree_depth = CHPEG_MAX_TREE_DEPTH;
+    self->max_stack_size = CHPEG_STACK_SIZE;
     self->error_offset = 0;
     self->error_parent_def = -1;
     self->error_def = -1;
@@ -314,13 +322,15 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 // compiler. If the user is creating their own bytecode, it's on them to
 // make sure it's correct.
 //
+// TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal with things this is meant to detect)
+//
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
 
 #define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= max_stack_size)
-#define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < -1)
+#define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < 0)
 #define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
-#define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < -1)
+#define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
 
     int locked = 0, retval = 0;
 
@@ -345,26 +355,58 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     const int max_tree_depth = self->max_tree_depth;
 
     size_t offset = 0;
-    int op = 0, arg = 0, pc = 0;
+    int op = 0, arg = 0, pc = 0, top = 0, tree_top = 0;
 
-    size_t stack[max_stack_size]; int top = -1;
-    ChpegNode *tree_stack[max_tree_depth]; int tree_top = -1;
+    size_t stack[max_stack_size];
+    ChpegNode *tree_stack[max_tree_depth];
 
+    if (CHPEG_CHECK_STACK_OVERFLOW(1)) {
+        retval = self->parse_result = CHPEG_ERR_STACK_OVERFLOW;
+        return retval;
+    }
+    stack[top] = 0; // to make life easier, put a zero on the stack;
+                    // top is then always in range [0, max_stack_size)
+                    // top is incremented before push, so first real element is stack[1]
+
+    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) {
+        retval = self->parse_result = CHPEG_ERR_TREE_STACK_OVERFLOW;
+        return retval;
+    }
     self->tree_root = ChpegNode_new(0, 0, 0, 0);
-
-    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) return CHPEG_ERR_TREE_STACK_OVERFLOW;
-
-    tree_stack[++tree_top] = self->tree_root;
+    tree_stack[tree_top] = self->tree_root;
 
 #if SANITY_CHECKS || VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
     const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
-    for(cnt = 0; cnt < cnt_max && pc < num_instructions; ++cnt)
+    for(cnt = 0; cnt < cnt_max; ++cnt)
 #else
     for(;;)
 #endif
     {
+
+#if SANITY_CHECKS
+        if (pc < 0 || pc > num_instructions) {
+            retval = self->parse_result = CHPEG_ERR_INVALID_PC;
+            return retval;
+        }
+        if (top >= max_stack_size) {
+            retval = self->parse_result = CHPEG_ERR_STACK_RANGE;
+            return retval;
+        }
+        if (top < 0) {
+            retval = self->parse_result = CHPEG_ERR_STACK_RANGE;
+            return retval;
+        }
+        if (tree_top >= max_tree_depth) {
+            retval = self->parse_result = CHPEG_ERR_TREE_STACK_RANGE;
+            return retval;
+        }
+        if (tree_top < 0) {
+            retval = self->parse_result = CHPEG_ERR_TREE_STACK_RANGE;
+            return retval;
+        }
+#endif
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
 
@@ -897,11 +939,6 @@ chrcls_done:
 // End
             case CHPEG_OP_SUCC: // overall success
                 pc = -1; // we're done
-#if SANITY_CHECKS
-                if (CHPEG_CHECK_TSTACK_UNDERFLOW(1)) {
-                    retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
-                }
-#endif
 
 #ifdef CHPEG_EXTENSIONS
                 // if we haven't set length by trimming right, set length
@@ -912,7 +949,6 @@ chrcls_done:
 #ifdef CHPEG_EXTENSIONS
                 }
 #endif
-                --tree_top;
 
                 // clean up the parse tree, reversing the reverse node insertion in the process
                 self->tree_root = ChpegNode_unwrap(self->tree_root);
@@ -920,10 +956,10 @@ chrcls_done:
                 tree_changed = 1;
 #endif
 
-                if (top != -1) {
+                if (top != 0) {
                     retval = CHPEG_ERR_UNEXPECTED_STACK_DATA;
                 }
-                else if (tree_top != -1) {
+                else if (tree_top != 0) {
                     retval = CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA;
                 }
                 else {
@@ -946,7 +982,7 @@ chrcls_done:
 
             default:
                 pc = -1; // we're done
-                retval = CHPEG_ERR_UNKNOWN_INSTRUCTION;
+                retval = CHPEG_ERR_INVALID_INSTRUCTION;
                 break;
         }
 
