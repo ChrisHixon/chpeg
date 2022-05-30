@@ -1540,11 +1540,13 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp)
 {
 #ifdef CHPEG_DEFINITION_TRACE
+    int itotal_count = 0;
+    for(int i=0; i < self->bc->num_defs; ++i) itotal_count += self->def_count[i];
+    fprintf(fp, "Total definition count %d\n", itotal_count);
+    double dtotal_count = itotal_count;
     fprintf(fp, "%4s  %10s  %5s  %10s  %10s  %s\n", "id", "total", "%", "success", "fail", "definition");
-    double total_count = 0;
-    for(int i=0; i < self->bc->num_defs; ++i) total_count += self->def_count[i];
     for(int i=0; i < self->bc->num_defs; ++i) {
-        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  %s\n", i, self->def_count[i], (self->def_count[i]/total_count)*100.0, self->def_succ_count[i], self->def_fail_count[i], self->bc->def_names[i]);
+        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  %s\n", i, self->def_count[i], (self->def_count[i]/dtotal_count)*100.0, self->def_succ_count[i], self->def_fail_count[i], self->bc->def_names[i]);
     }
 #endif
     ChpegNode_print(self->tree_root, self, input, 0, fp);
