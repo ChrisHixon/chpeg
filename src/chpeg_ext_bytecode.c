@@ -7,8 +7,8 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   .def_names = (char*[21]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Trim", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
   .def_flags = (int[21]) {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_STOP, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE},
   .def_addrs = (int[21]) {3, 16, 43, 56, 63, 74, 85, 134, 146, 153, 162, 198, 214, 235, 251, 257, 282, 290, 294, 298, 302},
-  .num_instructions = 331,
-  .instructions = (int[331]) {
+  .num_instructions = 334,
+  .instructions = (int[334]) {
   /*     0 */ CHPEG_INST(CHPEG_OP_IDENT       ,        0), /* Grammar */
   /*     1 */ CHPEG_INST(CHPEG_OP_FAIL        ,        0),
   /*     2 */ CHPEG_INST(CHPEG_OP_SUCC        ,        0),
@@ -318,10 +318,10 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   306 */ CHPEG_INST(CHPEG_OP_GOTO        ,      308),
   /*   307 */ CHPEG_INST(CHPEG_OP_RPMAT       ,      305),
   /*   308 */ CHPEG_INST(CHPEG_OP_RPDONE      ,      310),
-  /*   309 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      327),
+  /*   309 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      330),
   /*   310 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
   /*   311 */ CHPEG_INST(CHPEG_OP_LIT         ,       25), /* "#" */
-  /*   312 */ CHPEG_INST(CHPEG_OP_GOTO        ,      325),
+  /*   312 */ CHPEG_INST(CHPEG_OP_GOTO        ,      328),
   /*   313 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
   /*   314 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
   /*   315 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       26), /* "\r\n" */
@@ -331,15 +331,18 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   319 */ CHPEG_INST(CHPEG_OP_DOT         ,      321),
   /*   320 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      314),
   /*   321 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
-  /*   322 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       26), /* "\r\n" */
-  /*   323 */ CHPEG_INST(CHPEG_OP_GOTO        ,      325),
-  /*   324 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      327),
-  /*   325 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
-  /*   326 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      328),
-  /*   327 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      303),
-  /*   328 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
-  /*   329 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       20), /* S */
-  /*   330 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       20), /* S */
+  /*   322 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*   323 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       26), /* "\r\n" */
+  /*   324 */ CHPEG_INST(CHPEG_OP_GOTO        ,      326),
+  /*   325 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*   326 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*   327 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      330),
+  /*   328 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   329 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      331),
+  /*   330 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      303),
+  /*   331 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   332 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       20), /* S */
+  /*   333 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       20), /* S */
   },
   .num_strings = 27,
   .strings = (unsigned char**)(char*[27]) {"{", "}", "<-", "/", "{<", "(", ")", "<", ">", "ILS", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
