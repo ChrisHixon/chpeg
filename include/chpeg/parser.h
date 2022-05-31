@@ -110,6 +110,9 @@ typedef struct _ChpegParser
     int *prof_ident_cnt;
     int *prof_isucc_cnt;
     int *prof_ifail_cnt;
+    int *prof_choice_cnt;
+    int *prof_cisucc_cnt;
+    int *prof_cifail_cnt;
 #endif
 
 } ChpegParser;
