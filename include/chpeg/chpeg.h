@@ -275,6 +275,7 @@ typedef struct _ChpegParser
     int parse_result;
 
 #ifdef CHPEG_DEFINITION_TRACE
+    int vm_count;
     int *def_count;
     int *def_succ_count;
     int *def_fail_count;
@@ -1553,6 +1554,7 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
     }
     fprintf(fp, "\n%4s  %10.d  %5s  %10.d  %10.d  Total counters\n", "", itotal_def_count, "", itotal_def_succ_count, itotal_def_fail_count);
     fprintf(fp, "\n%4s  %12s  %5s  %8.2f  %10.2f  %% success/fail\n\n", "", "", "", (itotal_def_succ_count/dtotal_count)*100.0, (itotal_def_fail_count/dtotal_count)*100.0);
+    fprintf(fp, "Total VM loops %d\n\n", self->vm_count);
 #endif
     ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
@@ -1686,6 +1688,10 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     {
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
+
+#ifdef CHPEG_DEFINITION_TRACE
+        ++self->vm_count;
+#endif
 
 #if VM_TRACE
         if (self->vm_trace) {

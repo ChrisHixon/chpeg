@@ -70,6 +70,7 @@ typedef struct _ChpegParser
     int parse_result;
 
 #ifdef CHPEG_DEFINITION_TRACE
+    int vm_count;
     int *def_count;
     int *def_succ_count;
     int *def_fail_count;
