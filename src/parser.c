@@ -607,7 +607,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
                 // top=s+3: pc
                 pc = stack[top--] + 1; // top=s+2: offset
-                offset = stack[top--]; // top=s+1: locked
+                offset = stack[top--]; // top=s+1: locked       // backtrack
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
@@ -706,6 +706,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
+                // backtrack to point where match failed
                 offset = stack[top-1];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-2]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
@@ -762,6 +763,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
+                // backtrack to point where match failed
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
@@ -789,7 +791,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIM: // TRIM start ('<')
                                 // arg: unused
 
-                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pushes 4 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 
@@ -911,6 +913,7 @@ pred_cleanup:
                 --top;
 #endif
 #endif
+                // backtrack
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (int i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
