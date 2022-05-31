@@ -411,6 +411,7 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
             case CHPEG_OP_RQDONE: fprintf(fp, ")? "); break;
 
             case CHPEG_OP_PREDN: fprintf(fp, "! "); break;
+            case CHPEG_OP_PREDA: fprintf(fp, "& "); break;
             case CHPEG_OP_DOT: fprintf(fp, ". "); break;
 
 
