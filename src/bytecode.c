@@ -381,8 +381,15 @@ CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode 
 
 CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_id, FILE *fp)
 {
-    fprintf(fp, "%s <- ", bc->def_names[def_id]);
-    for(int i = bc->def_addrs[def_id]+1; i < bc->num_instructions; ++i) {
+    int nested_choice = 0;
+    const char *def_flag = "";
+    switch(bc->def_flags[def_id]){
+        case CHPEG_FLAG_STOP: def_flag = "{S} "; break;
+        case CHPEG_FLAG_IGNORE: def_flag = "{I} "; break;
+        case CHPEG_FLAG_LEAF: def_flag = "{L} "; break;
+    }
+    fprintf(fp, "%s %s<- ", bc->def_names[def_id], def_flag);
+    for(int i = bc->def_addrs[def_id]+1, inst_count = 0; i < bc->num_instructions; ++i, ++inst_count) {
         int op = CHPEG_INST_OP(bc->instructions[i]);
         int arg = CHPEG_INST_ARG(bc->instructions[i]);
         switch(op) {
@@ -414,11 +421,20 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
             case CHPEG_OP_PREDA: fprintf(fp, "& "); break;
             case CHPEG_OP_DOT: fprintf(fp, ". "); break;
 
+            case CHPEG_OP_CHOICE:
+                    ++nested_choice;
+                    fprintf(fp, "( "); break;
+                break;
+
 
             //case CHPEG_OP_CHOICE: fprintf(fp, "/ "); break;
             case CHPEG_OP_CISUCC:
                 if(CHPEG_INST_OP(bc->instructions[i+2]) != CHPEG_OP_CFAIL) //Not at the end of choice
                     fprintf(fp, "/ ");
+                else {
+                    --nested_choice;
+                    fprintf(fp, ") "); break;
+                }
             break;
             case CHPEG_OP_ISUCC: i = bc->num_instructions; //stop processing
         }
