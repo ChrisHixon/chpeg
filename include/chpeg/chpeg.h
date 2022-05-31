@@ -469,8 +469,8 @@ CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
     char *tmp = NULL;
     int op, arg;
     for (int i = 0; i < self->num_instructions; ++i) {
-        op = self->instructions[i] & 0xff;
-        arg = self->instructions[i] >> 8;
+        op = CHPEG_INST_OP(self->instructions[i]);
+        arg = CHPEG_INST_ARG(self->instructions[i]);
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
@@ -648,8 +648,8 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *arg_str = NULL;
     int op, arg;
     for (int i = 0; i < self->num_instructions; i++) {
-        op = self->instructions[i] & 0xff;
-        arg = self->instructions[i] >> 8;
+        op = CHPEG_INST_OP(self->instructions[i]);
+        arg = CHPEG_INST_ARG(self->instructions[i]);
         switch (op) {
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
@@ -736,9 +736,9 @@ CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode 
     for (i = 0; i < a->num_instructions; ++i) {
         if (a->instructions[i] != b->instructions[i]) {
             printf("a->instructions[%d] = %s %d\n", i,
-                    Chpeg_op_name(a->instructions[i] & 0xff), a->instructions[i] >> 8);
+                    Chpeg_op_name(CHPEG_INST_OP(a->instructions[i])), CHPEG_INST_ARG(a->instructions[i]));
             printf("b->instructions[%d] = %s %d\n", i,
-                    Chpeg_op_name(b->instructions[i] & 0xff), b->instructions[i] >> 8);
+                    Chpeg_op_name(CHPEG_INST_OP(b->instructions[i])), CHPEG_INST_ARG(b->instructions[i]));
             return 6;
         }
     }
@@ -1629,8 +1629,8 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
 
     if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
-            int op = self->error_inst & 0xff;
-            int arg = self->error_inst >> 8;
+            int op = CHPEG_INST_OP(self->error_inst);
+            int arg = CHPEG_INST_ARG(self->error_inst);
             char *esc = NULL;
             const char *str = NULL;
             char buf[1024];
@@ -1737,8 +1737,8 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     for(;; ++pc)
 #endif
     {
-        op = instructions[pc] & 0xff;
-        arg = instructions[pc] >> 8;
+        op = CHPEG_INST_OP(instructions[pc]);
+        arg = CHPEG_INST_ARG(instructions[pc]);
 
 #ifdef CHPEG_DEFINITION_TRACE
         ++self->vm_count;

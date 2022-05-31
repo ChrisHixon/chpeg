@@ -245,8 +245,8 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
 
     if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
-            int op = self->error_inst & 0xff;
-            int arg = self->error_inst >> 8;
+            int op = CHPEG_INST_OP(self->error_inst);
+            int arg = CHPEG_INST_ARG(self->error_inst);
             char *esc = NULL;
             const char *str = NULL;
             char buf[1024];
@@ -353,8 +353,8 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     for(;; ++pc)
 #endif
     {
-        op = instructions[pc] & 0xff;
-        arg = instructions[pc] >> 8;
+        op = CHPEG_INST_OP(instructions[pc]);
+        arg = CHPEG_INST_ARG(instructions[pc]);
 
 #ifdef CHPEG_DEFINITION_TRACE
         ++self->vm_count;
