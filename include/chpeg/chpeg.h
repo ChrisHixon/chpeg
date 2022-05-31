@@ -109,6 +109,8 @@ static inline const char *Chpeg_op_name(int op)
 #include <stdio.h>
 
 #define CHPEG_INST(op, arg) (((arg) << 8) | (op))
+#define CHPEG_INST_OP(inst) (inst & 0xff)
+#define CHPEG_INST_ARG(inst) (inst >> 8)
 
 //
 // Byte Code
@@ -139,6 +141,8 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
 CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
+
+CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *self, int def_id, FILE *fp);
 
 // node flags
 enum ChpegFlags {
@@ -762,6 +766,51 @@ CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode 
     }
 
     return 0;
+}
+
+CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_id, FILE *fp)
+{
+    fprintf(fp, "%s <- ", bc->def_names[def_id]);
+    for(int i = bc->def_addrs[def_id]+1; i < bc->num_instructions; ++i) {
+        int op = CHPEG_INST_OP(bc->instructions[i]);
+        int arg = CHPEG_INST_ARG(bc->instructions[i]);
+        switch(op) {
+            case CHPEG_OP_IDENT: fprintf(fp, "%s ", bc->def_names[arg]); break;
+            case CHPEG_OP_LIT:
+            case CHPEG_OP_LIT_NC: {
+                char *str = chpeg_esc_bytes(bc->strings[arg], bc->str_len[arg], 0);
+                fprintf(fp, "\"%s\"%s ", str, (op == CHPEG_OP_LIT_NC) ? "i" : "");
+                if (str) CHPEG_FREE(str);
+            }
+            break;
+            case CHPEG_OP_CHRCLS: {
+                char *str = chpeg_esc_bytes(bc->strings[arg], bc->str_len[arg], 0);
+                fprintf(fp, "[%s] ", str);
+                if (str) CHPEG_FREE(str);
+            }
+            break;
+
+            case CHPEG_OP_RPBEG:
+            case CHPEG_OP_RQBEG:
+            case CHPEG_OP_RSBEG:
+                fprintf(fp, "( "); break;
+
+            case CHPEG_OP_RPDONE: fprintf(fp, ")+ "); break;
+            case CHPEG_OP_RSDONE: fprintf(fp, ")* "); break;
+            case CHPEG_OP_RQDONE: fprintf(fp, ")? "); break;
+
+            case CHPEG_OP_PREDN: fprintf(fp, "! "); break;
+            case CHPEG_OP_DOT: fprintf(fp, ". "); break;
+
+
+            //case CHPEG_OP_CHOICE: fprintf(fp, "/ "); break;
+            case CHPEG_OP_CISUCC:
+                if(CHPEG_INST_OP(bc->instructions[i+2]) != CHPEG_OP_CFAIL) //Not at the end of choice
+                    fprintf(fp, "/ ");
+            break;
+            case CHPEG_OP_ISUCC: i = bc->num_instructions; //stop processing
+        }
+    }
 }
 
 // } chpeg: bytecode.c
@@ -1550,7 +1599,9 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
     double dtotal_count = itotal_def_count;
     fprintf(fp, "%4s  %10s  %5s  %10s  %10s  %s\n", "id", "total", "%", "success", "fail", "definition");
     for(int i=0; i < self->bc->num_defs; ++i) {
-        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  %s\n", i, self->def_count[i], (self->def_count[i]/dtotal_count)*100.0, self->def_succ_count[i], self->def_fail_count[i], self->bc->def_names[i]);
+        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  ", i, self->def_count[i], (self->def_count[i]/dtotal_count)*100.0, self->def_succ_count[i], self->def_fail_count[i]);
+        ChpegByteCode_output_definition(self->bc, i, fp);
+        fprintf(fp, "\n");
     }
     fprintf(fp, "\n%4s  %10.d  %5s  %10.d  %10.d  Total counters\n", "", itotal_def_count, "", itotal_def_succ_count, itotal_def_fail_count);
     fprintf(fp, "\n%4s  %12s  %5s  %8.2f  %10.2f  %% success/fail\n\n", "", "", "", (itotal_def_succ_count/dtotal_count)*100.0, (itotal_def_fail_count/dtotal_count)*100.0);

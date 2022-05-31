@@ -379,4 +379,49 @@ CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode 
     return 0;
 }
 
+CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_id, FILE *fp)
+{
+    fprintf(fp, "%s <- ", bc->def_names[def_id]);
+    for(int i = bc->def_addrs[def_id]+1; i < bc->num_instructions; ++i) {
+        int op = CHPEG_INST_OP(bc->instructions[i]);
+        int arg = CHPEG_INST_ARG(bc->instructions[i]);
+        switch(op) {
+            case CHPEG_OP_IDENT: fprintf(fp, "%s ", bc->def_names[arg]); break;
+            case CHPEG_OP_LIT:
+            case CHPEG_OP_LIT_NC: {
+                char *str = chpeg_esc_bytes(bc->strings[arg], bc->str_len[arg], 0);
+                fprintf(fp, "\"%s\"%s ", str, (op == CHPEG_OP_LIT_NC) ? "i" : "");
+                if (str) CHPEG_FREE(str);
+            }
+            break;
+            case CHPEG_OP_CHRCLS: {
+                char *str = chpeg_esc_bytes(bc->strings[arg], bc->str_len[arg], 0);
+                fprintf(fp, "[%s] ", str);
+                if (str) CHPEG_FREE(str);
+            }
+            break;
+
+            case CHPEG_OP_RPBEG:
+            case CHPEG_OP_RQBEG:
+            case CHPEG_OP_RSBEG:
+                fprintf(fp, "( "); break;
+
+            case CHPEG_OP_RPDONE: fprintf(fp, ")+ "); break;
+            case CHPEG_OP_RSDONE: fprintf(fp, ")* "); break;
+            case CHPEG_OP_RQDONE: fprintf(fp, ")? "); break;
+
+            case CHPEG_OP_PREDN: fprintf(fp, "! "); break;
+            case CHPEG_OP_DOT: fprintf(fp, ". "); break;
+
+
+            //case CHPEG_OP_CHOICE: fprintf(fp, "/ "); break;
+            case CHPEG_OP_CISUCC:
+                if(CHPEG_INST_OP(bc->instructions[i+2]) != CHPEG_OP_CFAIL) //Not at the end of choice
+                    fprintf(fp, "/ ");
+            break;
+            case CHPEG_OP_ISUCC: i = bc->num_instructions; //stop processing
+        }
+    }
+}
+
 // } chpeg: bytecode.c

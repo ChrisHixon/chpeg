@@ -215,7 +215,9 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
     double dtotal_count = itotal_def_count;
     fprintf(fp, "%4s  %10s  %5s  %10s  %10s  %s\n", "id", "total", "%", "success", "fail", "definition");
     for(int i=0; i < self->bc->num_defs; ++i) {
-        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  %s\n", i, self->def_count[i], (self->def_count[i]/dtotal_count)*100.0, self->def_succ_count[i], self->def_fail_count[i], self->bc->def_names[i]);
+        fprintf(fp, "%4.d  %10.d  %5.2f  %10.d  %10.d  ", i, self->def_count[i], (self->def_count[i]/dtotal_count)*100.0, self->def_succ_count[i], self->def_fail_count[i]);
+        ChpegByteCode_output_definition(self->bc, i, fp);
+        fprintf(fp, "\n");
     }
     fprintf(fp, "\n%4s  %10.d  %5s  %10.d  %10.d  Total counters\n", "", itotal_def_count, "", itotal_def_succ_count, itotal_def_fail_count);
     fprintf(fp, "\n%4s  %12s  %5s  %8.2f  %10.2f  %% success/fail\n\n", "", "", "", (itotal_def_succ_count/dtotal_count)*100.0, (itotal_def_fail_count/dtotal_count)*100.0);

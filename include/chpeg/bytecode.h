@@ -12,6 +12,8 @@
 #include <stdio.h>
 
 #define CHPEG_INST(op, arg) (((arg) << 8) | (op))
+#define CHPEG_INST_OP(inst) (inst & 0xff)
+#define CHPEG_INST_ARG(inst) (inst >> 8)
 
 //
 // Byte Code
@@ -42,6 +44,8 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
 CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname);
+
+CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *self, int def_id, FILE *fp);
 
 // node flags
 enum ChpegFlags {
