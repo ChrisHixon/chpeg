@@ -1,9 +1,0 @@
-#!/bin/sh
-
-export MALLOC_TRACE=tmp/cbyte_malloc.trace
-
-../bootstrap/generate_peg_cbyte_parser -b cbyte -p test_cbyte -d tmp "$1" 
-
-gcc -o tmp/cbyte -std=c99 -g -Wall -I./tmp tmp/cbyte.c ./cbyte_main.c && tmp/cbyte "$2"
-
-mtrace tmp/cbyte "$MALLOC_TRACE"

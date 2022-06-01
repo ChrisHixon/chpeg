@@ -1,50 +1,24 @@
 SHELL=/bin/sh
-.SUFFIXES:
-.SUFFIXES: .c .o
 
 CC=gcc
 CFLAGS=-Wall -std=c99 -O3
-INCLUDES=-I$(CHPEG_SRC)
+INCLUDES=-I$(INCLUDE)
 LDFLAGS=
 
-# chpeg pseudo-lib
-CHPEG_OBJDIR=chpeg
-CHPEG_SRC=../src
-CHPEG_SOURCES=$(CHPEG_SRC)/peg_cbyte_parser.c $(CHPEG_SRC)/peg_cbyte_compiler.c
-CHPEG_OBJECTS=$(patsubst $(CHPEG_SRC)/%.c,$(CHPEG_OBJDIR)/%.o,$(CHPEG_SOURCES))
-CHPEG_HEADERS=$(CHPEG_SRC)/peg_cbyte_parser.h $(CHPEG_SRC)/peg_cbyte_compiler.h
+INCLUDE=../include
 
-# examples
-EXAMPLES_OBJDIR=obj
-EXAMPLES=peg_parse_file
-EXAMPLES_SOURCES=$(patsubst %,%.c,$(EXAMPLES))
-EXAMPLES_OBJECTS=$(patsubst %.c,$(EXAMPLES_OBJDIR)/%.o,$(EXAMPLES_SOURCES))
+EXAMPLES=parse_file
 
 # rules
 all: $(EXAMPLES)
 
-$(EXAMPLES): $(EXAMPLES_OBJECTS)
-$(EXAMPLES_OBJECTS): $(CHPEG_OBJECTS)
-
-$(EXAMPLES): %: $(EXAMPLES_OBJDIR)/%.o $(CHPEG_OBJECTS)
-	$(CC) $(LDFLAGS) $^ -o $@
-
-$(EXAMPLES_OBJDIR)/%.o: %.c | $(EXAMPLES_OBJDIR)
-	$(CC) -c $(CFLAGS) $(INCLUDES) $< -o $@
-
-$(EXAMPLES_OBJDIR):
-	mkdir $(EXAMPLES_OBJDIR)
-
-$(CHPEG_OBJECTS): $(CHPEG_HEADERS)
-
-$(CHPEG_OBJDIR)/%.o: $(CHPEG_SRC)/%.c | $(CHPEG_OBJDIR)
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(CHPEG_OBJDIR):
-	mkdir $(CHPEG_OBJDIR)
+parse_file:
+	$(CC) $(LDFLAGS) $(CFLAGS) $(INCLUDES) parse_file.c -o parse_file
 
 .PHONY: clean
 clean:
-	-rm -rf $(EXAMPLES_OBJDIR)
-	-rm -rf $(CHPEG_OBJDIR)
-	-rm $(EXAMPLES)
+	-rm -f $(EXAMPLES)
+	-rm chpeg chpeg.c chpeg_bc.[ch]
+	-rm chpeg_chpeg chpeg_chpeg.c chpeg_chpeg_bc.[ch]
+	-rm chpeg_hex chpeg_hex.c chpeg_hex_bc.[ch]
+	-rm chpeg_nocase chpeg_nocase.c chpeg_nocase_bc.[ch]
