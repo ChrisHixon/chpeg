@@ -34,6 +34,18 @@
 #define CHPEG_VM_PRINT_TREE 0
 #endif
 
+// CHPEG_PACKRAT:
+#ifndef CHPEG_PACKRAT
+#define CHPEG_PACKRAT 0
+#endif
+
+#ifndef CHPEG_PACKRAT_NODE_LIMIT
+#define CHPEG_PACKRAT_NODE_LIMIT 8
+#endif
+
+#if CHPEG_PACKRAT
+#define CHPEG_NODE_REF_COUNT 1
+#endif
 
 enum ChpegErrorCodes
 {
@@ -62,9 +74,15 @@ struct _ChpegParser;
 
 typedef struct _ChpegNode
 {
+    size_t offset; // token offset (may be adjusted by trim '<')
+    size_t length; // token length (may be adjusted by trim '>')
+#ifdef CHPEG_PACKRAT
+    size_t match_length; // full match length
+#endif
+#ifdef CHPEG_NODE_REF_COUNT
+    int refs;
+#endif
     int def;
-    size_t offset;
-    size_t length;
     int flags;
     int num_children;
     struct _ChpegNode *head;
@@ -73,7 +91,7 @@ typedef struct _ChpegNode
 
 CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
 CHPEG_API void ChpegNode_free(ChpegNode *self);
-CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, int def, size_t offset, size_t length, int flags);
+CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, ChpegNode *other);
 CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self);
 CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth, FILE *fp);
@@ -113,6 +131,10 @@ typedef struct _ChpegParser
     int *prof_choice_cnt;
     int *prof_cisucc_cnt;
     int *prof_cifail_cnt;
+#endif
+
+#if CHPEG_PACKRAT
+    int packrat;
 #endif
 
 } ChpegParser;

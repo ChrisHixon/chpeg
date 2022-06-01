@@ -36,6 +36,9 @@ struct _App {
 #if CHPEG_VM_PROFILE
     int vm_profile;
 #endif
+#if CHPEG_PACKRAT
+    int packrat;
+#endif
 
     // Grammar list/stack
     GrammarArray grammars;

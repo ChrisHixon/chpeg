@@ -3,11 +3,15 @@
 #include <string.h>
 #include <limits.h>
 
-
+#ifdef CHPEG_USE_AMALG
 #ifdef CHPEG_EXTENSIONS
 #include "chpeg_ext.h" // chpeg ext amalgamation
 #else
 #include "chpeg.h" // chpeg amalgamation
+#endif
+#else
+#include "chpeg/mem.h"
+#include "chpeg/util.h"
 #endif
 
 #include "app.h"
@@ -96,6 +100,13 @@ void help(App *app, FILE *fp)
     fprintf(fp, "Profiling options:\n");
     fprintf(fp, "  -prof           increase VM profiling level\n");
     fprintf(fp, "  -profN          set VM profiling level to N (0=off,1=on)\n");
+    fprintf(fp, "\n");
+#endif
+
+#if CHPEG_PACKRAT
+    fprintf(fp, "Packrat options:\n");
+    fprintf(fp, "  -packrat        enable packrat\n");
+    fprintf(fp, "  -packratN       set packrat to N (0=off,1=on)\n");
     fprintf(fp, "\n");
 #endif
 
@@ -488,6 +499,7 @@ static int run(App *app)
                 app->help_printed = 1;
             }
         }
+
 #if CHPEG_VM_TRACE
         // vm trace can be turned on (-t/-t1) and off (-t0) as necessary, mid-processing
 
@@ -500,6 +512,7 @@ static int run(App *app)
             app->vm_trace = value;
         }
 #endif
+
 #if CHPEG_VM_PRINT_TREE
         // vm print tree can be turned on (-tp/-tp1) and off (-tp0) as necessary, mid-processing
 
@@ -513,6 +526,7 @@ static int run(App *app)
             app->vm_print_tree = value;
         }
 #endif
+
 #if CHPEG_VM_PROFILE
         // vm profiling can be turned on (-prof/-prof1) and off (-prof0) as necessary, mid-processing
 
@@ -525,6 +539,20 @@ static int run(App *app)
             app->vm_profile = value;
         }
 #endif
+
+#if CHPEG_PACKRAT
+        // turn packrat on (-packrat/-packrat1) and off (-packrat0) as necessary, mid-processing
+
+        // packrat (-packrat)
+        else if (strcmp(app->argv[app->arg], "-packrat") == 0) {
+            app->packrat++;
+        }
+        // packrat (-packratN)
+        else if (arg_int(app, "-packrat", &value) == 0) {
+            app->packrat = value;
+        }
+#endif
+
         // grammar, from file (-g FILE)
         else if (strcmp(app->argv[app->arg], "-g") == 0) {
             if ((err = have_arg(app)) != 0) {

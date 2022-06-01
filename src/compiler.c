@@ -11,7 +11,11 @@
 #include "chpeg/parser.h"
 #include "chpeg/compiler.h"
 #include "chpeg/opcodes.h"
+#ifdef CHPEG_EXTENSIONS
+#include "chpeg/chpeg_ext_bytecode.h"
+#else
 #include "chpeg/chpeg_bytecode.h"
+#endif
 #endif
 
 #ifndef DEBUG_COMPILER

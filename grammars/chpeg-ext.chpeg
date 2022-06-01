@@ -12,10 +12,12 @@ Choice      { } <- Sequence ('/' S Sequence)*
 Sequence    { } <- Predicate+
 Predicate   { } <- (PredOp S)? Repeat
 Repeat      { } <- Primary (RepOp S)?
-Primary     { } <- Identifier S ![{<]
+Primary     { } <- Identifier S !'{' !'<-'
                  / '(' S Choice ')' S
                  / Trim
-                 / Literal S / CharClass S / Dot S
+                 / Literal S
+                 / CharClass S
+                 / Dot S
 Trim        {S} <- '<' S Choice '>' S
 
 # Lexical syntax
