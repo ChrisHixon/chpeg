@@ -1639,12 +1639,28 @@ CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, 
     }
 }
 
+static void getLineColum(const unsigned char *input, int offset, int *line_out, int *col_out) {
+    int i, line = 1;
+    for(i=0; i <= offset; ++i) {
+        if(input[i] == '\n')
+            ++line;
+    }
+    for(i=offset; i >= 0; --i) {
+        if(input[i] == '\n')
+            break;
+    }
+    *line_out = line;
+    *col_out = offset - i;
+}
+
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 {
 #if ERRORS
     const char *parent_def_name = ChpegByteCode_def_name(self->bc, self->error_parent_def);
     const char *def_name = ChpegByteCode_def_name(self->bc, self->error_def);
 
+    int line, col;
+    getLineColum(input, self->error_offset, &line, &col);
     if (self->error_expected >= 0) {
         if (self->error_inst >= 0) {
             int op = CHPEG_INST_OP(self->error_inst);
@@ -1671,11 +1687,11 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
                     str = buf;
                     break;
             }
-            fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
+            fprintf(stderr, "%s \"%s\" in %s at:%d:%d offset %lu\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? str : (esc ? esc : "<NULL>"),
                     def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    line, col, self->error_offset);
             if (esc) {
                 CHPEG_FREE(esc);
                 esc = NULL;
@@ -1683,17 +1699,17 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
         }
         else {
             if (parent_def_name) {
-                fprintf(stderr, "%s %s in %s at offset %lu\n",
+                fprintf(stderr, "%s %s in %s at:%d:%d offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
-                        self->error_offset);
+                        line, col, self->error_offset);
             }
             else {
-                fprintf(stderr, "%s %s at offset %lu\n",
+                fprintf(stderr, "%s %s at:%d:%d offset %lu\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
-                        self->error_offset);
+                        line, col, self->error_offset);
             }
         }
     }
