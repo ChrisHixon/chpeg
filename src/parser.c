@@ -230,7 +230,7 @@ void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE 
 #if CHPEG_VM_PROFILE
 void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
 {
-    fprintf(stderr, "Instructions executed:\n");
+    fprintf(fp, "Instructions executed:\n");
     fprintf(fp, "%6s %8s %11s %6s\n", "OP-", "opcode", "count", "%");
     for (int i = 0; i < CHPEG_NUM_OPS; ++i) {
         fprintf(fp, "%6s %8s %11d %6.2f\n", "OP ",
@@ -244,8 +244,8 @@ void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
     int total_ifail = self->prof_op_cnt[CHPEG_OP_IFAIL];
 
     fprintf(fp, "\n");
-    fprintf(stderr, "Definition identifier calls:\n");
-    fprintf(stderr, "  DEF-   id       IDENT      %%       ISUCC       IFAIL  name\n");
+    fprintf(fp, "Definition identifier calls:\n");
+    fprintf(fp, "  DEF-   id       IDENT      %%       ISUCC       IFAIL  name\n");
     for (int i = 0; i < self->bc->num_defs; ++i) {
         fprintf(fp, "%6s %4d %11d %6.2f %11d %11d  %s\n", "DEF ", i,
             self->prof_ident_cnt[i],
@@ -262,8 +262,8 @@ void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
     int total_cifail = self->prof_op_cnt[CHPEG_OP_CIFAIL];
 
     fprintf(fp, "\n");
-    fprintf(stderr, "Choice calls per definition:\n");
-    fprintf(stderr, "  CHOICE-  def      CHOICE      %%      CISUCC      CIFAIL  def_name\n");
+    fprintf(fp, "Choice calls per definition:\n");
+    fprintf(fp, "  CHOICE-  def      CHOICE      %%      CISUCC      CIFAIL  def_name\n");
     for (int i = 0; i < self->bc->num_defs; ++i) {
         fprintf(fp, "%9s %4d %11d %6.2f %11d %11d  %s\n", "CHOICE ", i,
             self->prof_choice_cnt[i],
