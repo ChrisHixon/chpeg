@@ -1573,6 +1573,7 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->error_expected = -1;
 
 #ifdef CHPEG_DEFINITION_TRACE
+    self->vm_count = 0;
     self->def_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
     self->def_succ_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
     self->def_fail_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
