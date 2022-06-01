@@ -329,6 +329,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     const int max_tree_depth = self->max_tree_depth;
 
 #ifdef CHPEG_DEFINITION_TRACE
+    self->vm_count = 0;
     memset(self->def_count, 0, sizeof(int)*self->bc->num_defs);
     memset(self->def_succ_count, 0, sizeof(int)*self->bc->num_defs);
     memset(self->def_fail_count, 0, sizeof(int)*self->bc->num_defs);
