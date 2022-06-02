@@ -6,7 +6,7 @@
 #define CHPEG_OPCODES_H
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_util.h"
+#include "chpeg/util.h"
 #endif
 
 enum ChpegOp

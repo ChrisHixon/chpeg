@@ -221,20 +221,45 @@ CHPEG_API const ChpegByteCode chpeg_bytecode;
 
 #include <stdio.h>
 
+// CHPEG_VM_TRACE:
+// Set to non-zero to compile in support for tracing parser VM instruction execution.
+// To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_TRACE
+#define CHPEG_VM_TRACE 0
+#endif
+
+// CHPEG_VM_PROFILE:
+// Set to non-zero to compile in support for profiling parser VM instruction execution.
+// To use, set parser->vm_profile to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_PROFILE
+#define CHPEG_VM_PROFILE 0
+#endif
+
+// CHPEG_VM_PRINT_TREE:
+// Set to non-zero to compile in support for printing the parse tree as it is being built.
+// To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_PRINT_TREE
+#define CHPEG_VM_PRINT_TREE 0
+#endif
+
+
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
     CHPEG_ERR_PARSE_FAILED = 1,
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
-    CHPEG_ERR_UNKNOWN_INSTRUCTION = 3,
-    CHPEG_ERR_RUNAWAY = 4,
-    CHPEG_ERR_STACK_OVERFLOW = 5,
-    CHPEG_ERR_TREE_STACK_OVERFLOW = 6,
-    CHPEG_ERR_STACK_UNDERFLOW = 7,
+    CHPEG_ERR_STACK_RANGE = 3,
+    CHPEG_ERR_STACK_OVERFLOW = 4,
+    CHPEG_ERR_STACK_UNDERFLOW = 5,
+    CHPEG_ERR_TREE_STACK_RANGE = 6,
+    CHPEG_ERR_TREE_STACK_OVERFLOW = 7,
     CHPEG_ERR_TREE_STACK_UNDERFLOW = 8,
     CHPEG_ERR_UNEXPECTED_STACK_DATA = 9,
     CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA = 10,
     CHPEG_ERR_INVALID_IDENTIFIER = 11,
+    CHPEG_ERR_INVALID_PC = 12,
+    CHPEG_ERR_INVALID_INSTRUCTION = 13,
+    CHPEG_ERR_RUNAWAY = 14,
 };
 
 struct _ChpegParser;
@@ -285,11 +310,24 @@ typedef struct _ChpegParser
     int *def_fail_count;
 #endif
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     int vm_trace;
 #endif
-#if VM_PRINT_TREE
+
+#if CHPEG_VM_PRINT_TREE
     int vm_print_tree;
+#endif
+
+#if CHPEG_VM_PROFILE
+    int vm_profile;
+    int prof_inst_cnt;
+    int prof_op_cnt[CHPEG_NUM_OPS];
+    int *prof_ident_cnt;
+    int *prof_isucc_cnt;
+    int *prof_ifail_cnt;
+    int *prof_choice_cnt;
+    int *prof_cisucc_cnt;
+    int *prof_cifail_cnt;
 #endif
 
 } ChpegParser;
@@ -305,6 +343,9 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
+#if CHPEG_VM_PROFILE
+CHPEG_API void ChpegParser_print_profile(ChpegParser *self, FILE *fp);
+#endif
 
 #endif // #ifndef CHPEG_PARSER_H
 
@@ -479,20 +520,19 @@ CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
             case CHPEG_OP_TRIM:
 #endif
                 arg_str = ChpegByteCode_def_name(self, arg);
-                printf("CHPEG_INST %8d %12s %8d %s\n",
+                printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
                 tmp = chpeg_esc_bytes(
                     self->strings[arg], self->str_len[arg], 256);
-                printf("CHPEG_INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
+                printf("INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
                 if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
                 break;
             default:
-                arg_str = "";
-                printf("CHPEG_INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
+                printf("INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
         }
     }
 }
@@ -640,7 +680,7 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     for (i = 0; i < self->num_defs; i++) {
         fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
     }
-    fprintf(fp, "}, // presubtracted by 1\n");
+    fprintf(fp, "},\n");
 
     fprintf(fp, "  .num_instructions = %d,\n", self->num_instructions);
 
@@ -778,7 +818,7 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
         case CHPEG_FLAG_LEAF: def_flag = "{L} "; break;
     }
     fprintf(fp, "%s %s<- ", bc->def_names[def_id], def_flag);
-    for(int i = bc->def_addrs[def_id]+1, inst_count = 0; i < bc->num_instructions; ++i, ++inst_count) {
+    for(int i = bc->def_addrs[def_id], inst_count = 0; i < bc->num_instructions; ++i, ++inst_count) {
         int op = CHPEG_INST_OP(bc->instructions[i]);
         int arg = CHPEG_INST_ARG(bc->instructions[i]);
         switch(op) {
@@ -831,340 +871,335 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
 }
 
 // } chpeg: bytecode.c
-//
-// chpeg: chpeg_bytecode.c (
-//
-
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_bytecode.h"
 #endif
-
-// This is the default bytecode used by the chpeg compiler.
-//
-// This file is currently manually maintained. It was originally based on output from the Ruby bootstrap process. It serves a secondary purpose as a reference for the code generated by ChpegByteCode_output_c(). The output from that function should be identical to this file except for the formatting and comments in the instructions output, if given ByteCode compiled from `grammars/chpeg.chpeg` as input, and basename="chpeg_bytecode".
 
 CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   .num_defs = 20,
   .def_names = (char*[20]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
   .def_flags = (int[20]) {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE},
-  .def_addrs = (int[20]) {2, 15, 42, 55, 62, 73, 84, 129, 136, 145, 181, 197, 218, 234, 240, 265, 273, 277, 281, 285}, // presubtracted by 1
-  .num_instructions = 315,
-  .instructions = (int[315]) {
-  /*     0 <:Grammar 0 (Grammar) []>                */ CHPEG_INST(CHPEG_OP_IDENT, 0),
-  /*     1 <:Grammar 0 (Grammar) []>                */ CHPEG_INST(CHPEG_OP_FAIL, 0),
-  /*     2 <:Grammar 0 (Grammar) []>                */ CHPEG_INST(CHPEG_OP_SUCC, 0),
-  /*     3 <---:Identifier 4 (Grammar[0]) "S">      */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*     4 <---:Identifier 4 (Grammar[0]) "S">      */ CHPEG_INST(CHPEG_OP_GOTO, 14),
-  /*     5 <---:Repeat 5 (Grammar[1]) []>           */ CHPEG_INST(CHPEG_OP_RPBEG, 0),
-  /*     6 <----:Identifier 6 (Grammar[1][0]) "Definition"> */ CHPEG_INST(CHPEG_OP_IDENT, 1),
-  /*     7 <----:Identifier 6 (Grammar[1][0]) "Definition"> */ CHPEG_INST(CHPEG_OP_GOTO, 8),
-  /*     8 <---:Repeat 5 (Grammar[1]) []>           */ CHPEG_INST(CHPEG_OP_RPMAT, 5),
-  /*     9 <---:Repeat 5 (Grammar[1]) []>           */ CHPEG_INST(CHPEG_OP_RPDONE, 14),
-  /*    10 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*    11 <----:Dot 8 (Grammar[2][0]) ".">         */ CHPEG_INST(CHPEG_OP_DOT, 12),
-  /*    12 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PMATCHF, 14),
-  /*    13 <---:Predicate 7 (Grammar[2]) []>        */ CHPEG_INST(CHPEG_OP_PNOMATS, 14),
-  /*    14 <-:Definition 1 (def:Grammar) []> {S}    */ CHPEG_INST(CHPEG_OP_ISUCC, 0),
-  /*    15 <-:Definition 1 (def:Grammar) []> {S}    */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    16 <---:Identifier 12 (Definition[0]) "Identifier"> */ CHPEG_INST(CHPEG_OP_IDENT, 8),
-  /*    17 <---:Identifier 12 (Definition[0]) "Identifier"> */ CHPEG_INST(CHPEG_OP_GOTO, 41),
-  /*    18 <---:Identifier 13 (Definition[1]) "S">  */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    19 <---:Identifier 13 (Definition[1]) "S">  */ CHPEG_INST(CHPEG_OP_GOTO, 41),
-  /*    20 <---:Repeat 14 (Definition[2]) []>       */ CHPEG_INST(CHPEG_OP_RQBEG, 0),
-  /*    21 <-----:Literal  (Definition[2][0][0]) "{"> */ CHPEG_INST(CHPEG_OP_LIT, 0),
-  /*    22 <-----:Literal  (Definition[2][0][0]) "{"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    23 <-----:Identifier 16 (Definition[2][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    24 <-----:Identifier 16 (Definition[2][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    25 <-----:Identifier 17 (Definition[2][0][2]) "Options"> */ CHPEG_INST(CHPEG_OP_IDENT, 7),
-  /*    26 <-----:Identifier 17 (Definition[2][0][2]) "Options"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    27 <-----:Identifier 18 (Definition[2][0][3]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    28 <-----:Identifier 18 (Definition[2][0][3]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    29 <-----:Literal  (Definition[2][0][4]) "}"> */ CHPEG_INST(CHPEG_OP_LIT, 1),
-  /*    30 <-----:Literal  (Definition[2][0][4]) "}"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    31 <-----:Identifier 19 (Definition[2][0][5]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    32 <-----:Identifier 19 (Definition[2][0][5]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 33),
-  /*    33 <---:Repeat 14 (Definition[2]) []>       */ CHPEG_INST(CHPEG_OP_RQMAT, 0),
-  /*    34 <---:Repeat 14 (Definition[2]) []>       */ CHPEG_INST(CHPEG_OP_RQDONE, 0),
-  /*    35 <---:Literal  (Definition[3]) "<-">      */ CHPEG_INST(CHPEG_OP_LIT, 2),
-  /*    36 <---:Literal  (Definition[3]) "<-">      */ CHPEG_INST(CHPEG_OP_GOTO, 41),
-  /*    37 <---:Identifier 20 (Definition[4]) "S">  */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    38 <---:Identifier 20 (Definition[4]) "S">  */ CHPEG_INST(CHPEG_OP_GOTO, 41),
-  /*    39 <---:Identifier 21 (Definition[5]) "Choice"> */ CHPEG_INST(CHPEG_OP_IDENT, 2),
-  /*    40 <---:Identifier 21 (Definition[5]) "Choice"> */ CHPEG_INST(CHPEG_OP_GOTO, 41),
-  /*    41 <-:Definition 9 (def:Definition) []> {}  */ CHPEG_INST(CHPEG_OP_ISUCC, 1),
-  /*    42 <-:Definition 9 (def:Definition) []> {}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    43 <---:Identifier 25 (Choice[0]) "Sequence"> */ CHPEG_INST(CHPEG_OP_IDENT, 3),
-  /*    44 <---:Identifier 25 (Choice[0]) "Sequence"> */ CHPEG_INST(CHPEG_OP_GOTO, 54),
-  /*    45 <---:Repeat 26 (Choice[1]) []>           */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*    46 <-----:Literal  (Choice[1][0][0]) "/">   */ CHPEG_INST(CHPEG_OP_LIT, 3),
-  /*    47 <-----:Literal  (Choice[1][0][0]) "/">   */ CHPEG_INST(CHPEG_OP_GOTO, 52),
-  /*    48 <-----:Identifier 28 (Choice[1][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    49 <-----:Identifier 28 (Choice[1][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 52),
-  /*    50 <-----:Identifier 29 (Choice[1][0][2]) "Sequence"> */ CHPEG_INST(CHPEG_OP_IDENT, 3),
-  /*    51 <-----:Identifier 29 (Choice[1][0][2]) "Sequence"> */ CHPEG_INST(CHPEG_OP_GOTO, 52),
-  /*    52 <---:Repeat 26 (Choice[1]) []>           */ CHPEG_INST(CHPEG_OP_RSMAT, 45),
-  /*    53 <---:Repeat 26 (Choice[1]) []>           */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*    54 <-:Definition 22 (def:Choice) []> {}     */ CHPEG_INST(CHPEG_OP_ISUCC, 2),
-  /*    55 <-:Definition 22 (def:Choice) []> {}     */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    56 <--:Repeat 32 (Sequence) []>             */ CHPEG_INST(CHPEG_OP_RPBEG, 0),
-  /*    57 <---:Identifier 33 (Sequence[0]) "Predicate"> */ CHPEG_INST(CHPEG_OP_IDENT, 4),
-  /*    58 <---:Identifier 33 (Sequence[0]) "Predicate"> */ CHPEG_INST(CHPEG_OP_GOTO, 59),
-  /*    59 <--:Repeat 32 (Sequence) []>             */ CHPEG_INST(CHPEG_OP_RPMAT, 56),
-  /*    60 <--:Repeat 32 (Sequence) []>             */ CHPEG_INST(CHPEG_OP_RPDONE, 61),
-  /*    61 <-:Definition 30 (def:Sequence) []> {}   */ CHPEG_INST(CHPEG_OP_ISUCC, 3),
-  /*    62 <-:Definition 30 (def:Sequence) []> {}   */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    63 <---:Repeat 37 (Predicate[0]) []>        */ CHPEG_INST(CHPEG_OP_RQBEG, 0),
-  /*    64 <-----:Identifier 39 (Predicate[0][0][0]) "PredOp"> */ CHPEG_INST(CHPEG_OP_IDENT, 16),
-  /*    65 <-----:Identifier 39 (Predicate[0][0][0]) "PredOp"> */ CHPEG_INST(CHPEG_OP_GOTO, 68),
-  /*    66 <-----:Identifier 40 (Predicate[0][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    67 <-----:Identifier 40 (Predicate[0][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 68),
-  /*    68 <---:Repeat 37 (Predicate[0]) []>        */ CHPEG_INST(CHPEG_OP_RQMAT, 0),
-  /*    69 <---:Repeat 37 (Predicate[0]) []>        */ CHPEG_INST(CHPEG_OP_RQDONE, 0),
-  /*    70 <---:Identifier 41 (Predicate[1]) "Repeat"> */ CHPEG_INST(CHPEG_OP_IDENT, 5),
-  /*    71 <---:Identifier 41 (Predicate[1]) "Repeat"> */ CHPEG_INST(CHPEG_OP_GOTO, 72),
-  /*    72 <-:Definition 34 (def:Predicate) []> {}  */ CHPEG_INST(CHPEG_OP_ISUCC, 4),
-  /*    73 <-:Definition 34 (def:Predicate) []> {}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    74 <---:Identifier 45 (Repeat[0]) "Primary"> */ CHPEG_INST(CHPEG_OP_IDENT, 6),
-  /*    75 <---:Identifier 45 (Repeat[0]) "Primary"> */ CHPEG_INST(CHPEG_OP_GOTO, 83),
-  /*    76 <---:Repeat 46 (Repeat[1]) []>           */ CHPEG_INST(CHPEG_OP_RQBEG, 0),
-  /*    77 <-----:Identifier 48 (Repeat[1][0][0]) "RepOp"> */ CHPEG_INST(CHPEG_OP_IDENT, 17),
-  /*    78 <-----:Identifier 48 (Repeat[1][0][0]) "RepOp"> */ CHPEG_INST(CHPEG_OP_GOTO, 81),
-  /*    79 <-----:Identifier 49 (Repeat[1][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    80 <-----:Identifier 49 (Repeat[1][0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 81),
-  /*    81 <---:Repeat 46 (Repeat[1]) []>           */ CHPEG_INST(CHPEG_OP_RQMAT, 0),
-  /*    82 <---:Repeat 46 (Repeat[1]) []>           */ CHPEG_INST(CHPEG_OP_RQDONE, 0),
-  /*    83 <-:Definition 42 (def:Repeat) []> {}     */ CHPEG_INST(CHPEG_OP_ISUCC, 5),
-  /*    84 <-:Definition 42 (def:Repeat) []> {}     */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*    85 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*    86 <----:Identifier 54 (Primary[0][0]) "Identifier"> */ CHPEG_INST(CHPEG_OP_IDENT, 8),
-  /*    87 <----:Identifier 54 (Primary[0][0]) "Identifier"> */ CHPEG_INST(CHPEG_OP_GOTO, 95),
-  /*    88 <----:Identifier 55 (Primary[0][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*    89 <----:Identifier 55 (Primary[0][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 95),
-  /*    90 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*    91 <-----:CharClass  (Primary[0][2][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 4),
-  /*    92 <-----:CharClass  (Primary[0][2][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 93),
-  /*    93 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PMATCHF, 95),
-  /*    94 <----:Predicate 56 (Primary[0][2]) []>   */ CHPEG_INST(CHPEG_OP_PNOMATS, 95),
-  /*    95 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 127),
-  /*    96 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*    97 <----:Literal  (Primary[1][0]) "(">      */ CHPEG_INST(CHPEG_OP_LIT, 5),
-  /*    98 <----:Literal  (Primary[1][0]) "(">      */ CHPEG_INST(CHPEG_OP_GOTO, 107),
-  /*    99 <----:Identifier 58 (Primary[1][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*   100 <----:Identifier 58 (Primary[1][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 107),
-  /*   101 <----:Identifier 59 (Primary[1][2]) "Choice"> */ CHPEG_INST(CHPEG_OP_IDENT, 2),
-  /*   102 <----:Identifier 59 (Primary[1][2]) "Choice"> */ CHPEG_INST(CHPEG_OP_GOTO, 107),
-  /*   103 <----:Literal  (Primary[1][3]) ")">      */ CHPEG_INST(CHPEG_OP_LIT, 6),
-  /*   104 <----:Literal  (Primary[1][3]) ")">      */ CHPEG_INST(CHPEG_OP_GOTO, 107),
-  /*   105 <----:Identifier 60 (Primary[1][4]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*   106 <----:Identifier 60 (Primary[1][4]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 107),
-  /*   107 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 127),
-  /*   108 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   109 <----:Identifier 62 (Primary[2][0]) "Literal"> */ CHPEG_INST(CHPEG_OP_IDENT, 9),
-  /*   110 <----:Identifier 62 (Primary[2][0]) "Literal"> */ CHPEG_INST(CHPEG_OP_GOTO, 113),
-  /*   111 <----:Identifier 63 (Primary[2][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*   112 <----:Identifier 63 (Primary[2][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 113),
-  /*   113 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 127),
-  /*   114 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   115 <----:Identifier 65 (Primary[3][0]) "CharClass"> */ CHPEG_INST(CHPEG_OP_IDENT, 10),
-  /*   116 <----:Identifier 65 (Primary[3][0]) "CharClass"> */ CHPEG_INST(CHPEG_OP_GOTO, 119),
-  /*   117 <----:Identifier 66 (Primary[3][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*   118 <----:Identifier 66 (Primary[3][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 119),
-  /*   119 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 127),
-  /*   120 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   121 <----:Identifier 68 (Primary[4][0]) "Dot"> */ CHPEG_INST(CHPEG_OP_IDENT, 18),
-  /*   122 <----:Identifier 68 (Primary[4][0]) "Dot"> */ CHPEG_INST(CHPEG_OP_GOTO, 125),
-  /*   123 <----:Identifier 69 (Primary[4][1]) "S"> */ CHPEG_INST(CHPEG_OP_IDENT, 19),
-  /*   124 <----:Identifier 69 (Primary[4][1]) "S"> */ CHPEG_INST(CHPEG_OP_GOTO, 125),
-  /*   125 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 127),
-  /*   126 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   127 <--:Choice 52 (Primary) []>              */ CHPEG_INST(CHPEG_OP_CFAIL, 128),
-  /*   128 <-:Definition 50 (def:Primary) []> {}    */ CHPEG_INST(CHPEG_OP_ISUCC, 6),
-  /*   129 <-:Definition 50 (def:Primary) []> {}    */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   130 <--:Repeat 72 (Options) []>              */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   131 <---:CharClass  (Options[0]) []>         */ CHPEG_INST(CHPEG_OP_CHRCLS, 7),
-  /*   132 <---:CharClass  (Options[0]) []>         */ CHPEG_INST(CHPEG_OP_GOTO, 133),
-  /*   133 <--:Repeat 72 (Options) []>              */ CHPEG_INST(CHPEG_OP_RSMAT, 130),
-  /*   134 <--:Repeat 72 (Options) []>              */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   135 <-:Definition 70 (def:Options) []> {}    */ CHPEG_INST(CHPEG_OP_ISUCC, 7),
-  /*   136 <-:Definition 70 (def:Options) []> {}    */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   137 <---:CharClass  (Identifier[0]) []>      */ CHPEG_INST(CHPEG_OP_CHRCLS, 8),
-  /*   138 <---:CharClass  (Identifier[0]) []>      */ CHPEG_INST(CHPEG_OP_GOTO, 144),
-  /*   139 <---:Repeat 76 (Identifier[1]) []>       */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   140 <----:CharClass  (Identifier[1][0]) []>  */ CHPEG_INST(CHPEG_OP_CHRCLS, 9),
-  /*   141 <----:CharClass  (Identifier[1][0]) []>  */ CHPEG_INST(CHPEG_OP_GOTO, 142),
-  /*   142 <---:Repeat 76 (Identifier[1]) []>       */ CHPEG_INST(CHPEG_OP_RSMAT, 139),
-  /*   143 <---:Repeat 76 (Identifier[1]) []>       */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   144 <-:Definition 73 (def:Identifier) []> {L} */ CHPEG_INST(CHPEG_OP_ISUCC, 8),
-  /*   145 <-:Definition 73 (def:Identifier) []> {L} */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   146 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*   147 <----:CharClass  (Literal[0][0]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 10),
-  /*   148 <----:CharClass  (Literal[0][0]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 161),
-  /*   149 <----:Repeat 81 (Literal[0][1]) []>      */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   150 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   151 <-------:CharClass  (Literal[0][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 10),
-  /*   152 <-------:CharClass  (Literal[0][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 153),
-  /*   153 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 157),
-  /*   154 <------:Predicate 83 (Literal[0][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PNOMATS, 157),
-  /*   155 <------:Identifier 84 (Literal[0][1][0][1]) "Char"> */ CHPEG_INST(CHPEG_OP_IDENT, 12),
-  /*   156 <------:Identifier 84 (Literal[0][1][0][1]) "Char"> */ CHPEG_INST(CHPEG_OP_GOTO, 157),
-  /*   157 <----:Repeat 81 (Literal[0][1]) []>      */ CHPEG_INST(CHPEG_OP_RSMAT, 149),
-  /*   158 <----:Repeat 81 (Literal[0][1]) []>      */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   159 <----:CharClass  (Literal[0][2]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 10),
-  /*   160 <----:CharClass  (Literal[0][2]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 161),
-  /*   161 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 179),
-  /*   162 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   163 <----:CharClass  (Literal[1][0]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 11),
-  /*   164 <----:CharClass  (Literal[1][0]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 177),
-  /*   165 <----:Repeat 86 (Literal[1][1]) []>      */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   166 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   167 <-------:CharClass  (Literal[1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 11),
-  /*   168 <-------:CharClass  (Literal[1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 169),
-  /*   169 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 173),
-  /*   170 <------:Predicate 88 (Literal[1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PNOMATS, 173),
-  /*   171 <------:Identifier 89 (Literal[1][1][0][1]) "Char"> */ CHPEG_INST(CHPEG_OP_IDENT, 12),
-  /*   172 <------:Identifier 89 (Literal[1][1][0][1]) "Char"> */ CHPEG_INST(CHPEG_OP_GOTO, 173),
-  /*   173 <----:Repeat 86 (Literal[1][1]) []>      */ CHPEG_INST(CHPEG_OP_RSMAT, 165),
-  /*   174 <----:Repeat 86 (Literal[1][1]) []>      */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   175 <----:CharClass  (Literal[1][2]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 11),
-  /*   176 <----:CharClass  (Literal[1][2]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 177),
-  /*   177 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CISUCC, 179),
-  /*   178 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   179 <--:Choice 79 (Literal) []>              */ CHPEG_INST(CHPEG_OP_CFAIL, 180),
-  /*   180 <-:Definition 77 (def:Literal) []> {S}   */ CHPEG_INST(CHPEG_OP_ISUCC, 9),
-  /*   181 <-:Definition 77 (def:Literal) []> {S}   */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   182 <---:Literal  (CharClass[0]) "[">        */ CHPEG_INST(CHPEG_OP_LIT, 12),
-  /*   183 <---:Literal  (CharClass[0]) "[">        */ CHPEG_INST(CHPEG_OP_GOTO, 196),
-  /*   184 <---:Repeat 93 (CharClass[1]) []>        */ CHPEG_INST(CHPEG_OP_RPBEG, 0),
-  /*   185 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   186 <------:Literal  (CharClass[1][0][0][0]) "]"> */ CHPEG_INST(CHPEG_OP_LIT, 13),
-  /*   187 <------:Literal  (CharClass[1][0][0][0]) "]"> */ CHPEG_INST(CHPEG_OP_GOTO, 188),
-  /*   188 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 192),
-  /*   189 <-----:Predicate 95 (CharClass[1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PNOMATS, 192),
-  /*   190 <-----:Identifier 96 (CharClass[1][0][1]) "CharRange"> */ CHPEG_INST(CHPEG_OP_IDENT, 11),
-  /*   191 <-----:Identifier 96 (CharClass[1][0][1]) "CharRange"> */ CHPEG_INST(CHPEG_OP_GOTO, 192),
-  /*   192 <---:Repeat 93 (CharClass[1]) []>        */ CHPEG_INST(CHPEG_OP_RPMAT, 184),
-  /*   193 <---:Repeat 93 (CharClass[1]) []>        */ CHPEG_INST(CHPEG_OP_RPDONE, 196),
-  /*   194 <---:Literal  (CharClass[2]) "]">        */ CHPEG_INST(CHPEG_OP_LIT, 13),
-  /*   195 <---:Literal  (CharClass[2]) "]">        */ CHPEG_INST(CHPEG_OP_GOTO, 196),
-  /*   196 <-:Definition 90 (def:CharClass) []> {S} */ CHPEG_INST(CHPEG_OP_ISUCC, 10),
-  /*   197 <-:Definition 90 (def:CharClass) []> {S} */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   198 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*   199 <----:Identifier 101 (CharRange[0][0]) "Char"> */ CHPEG_INST(CHPEG_OP_IDENT, 12),
-  /*   200 <----:Identifier 101 (CharRange[0][0]) "Char"> */ CHPEG_INST(CHPEG_OP_GOTO, 210),
-  /*   201 <----:Literal  (CharRange[0][1]) "-">    */ CHPEG_INST(CHPEG_OP_LIT, 14),
-  /*   202 <----:Literal  (CharRange[0][1]) "-">    */ CHPEG_INST(CHPEG_OP_GOTO, 210),
-  /*   203 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   204 <-----:Literal  (CharRange[0][2][0]) "]"> */ CHPEG_INST(CHPEG_OP_LIT, 13),
-  /*   205 <-----:Literal  (CharRange[0][2][0]) "]"> */ CHPEG_INST(CHPEG_OP_GOTO, 206),
-  /*   206 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 210),
-  /*   207 <----:Predicate 102 (CharRange[0][2]) []> */ CHPEG_INST(CHPEG_OP_PNOMATS, 210),
-  /*   208 <----:Identifier 103 (CharRange[0][3]) "Char"> */ CHPEG_INST(CHPEG_OP_IDENT, 12),
-  /*   209 <----:Identifier 103 (CharRange[0][3]) "Char"> */ CHPEG_INST(CHPEG_OP_GOTO, 210),
-  /*   210 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CISUCC, 216),
-  /*   211 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   212 <---:Identifier 104 (CharRange[1]) "Char"> {E} */ CHPEG_INST(CHPEG_OP_IDENT, 12),
-  /*   213 <---:Identifier 104 (CharRange[1]) "Char"> {E} */ CHPEG_INST(CHPEG_OP_GOTO, 214),
-  /*   214 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CISUCC, 216),
-  /*   215 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   216 <--:Choice 99 (CharRange) []>            */ CHPEG_INST(CHPEG_OP_CFAIL, 217),
-  /*   217 <-:Definition 97 (def:CharRange) []> {}  */ CHPEG_INST(CHPEG_OP_ISUCC, 11),
-  /*   218 <-:Definition 97 (def:CharRange) []> {}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   219 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*   220 <---:Identifier 108 (Char[0]) "EscChar"> {E} */ CHPEG_INST(CHPEG_OP_IDENT, 13),
-  /*   221 <---:Identifier 108 (Char[0]) "EscChar"> {E} */ CHPEG_INST(CHPEG_OP_GOTO, 222),
-  /*   222 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CISUCC, 232),
-  /*   223 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   224 <---:Identifier 109 (Char[1]) "OctChar"> {E} */ CHPEG_INST(CHPEG_OP_IDENT, 14),
-  /*   225 <---:Identifier 109 (Char[1]) "OctChar"> {E} */ CHPEG_INST(CHPEG_OP_GOTO, 226),
-  /*   226 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CISUCC, 232),
-  /*   227 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   228 <---:Identifier 110 (Char[2]) "PlainChar"> {E} */ CHPEG_INST(CHPEG_OP_IDENT, 15),
-  /*   229 <---:Identifier 110 (Char[2]) "PlainChar"> {E} */ CHPEG_INST(CHPEG_OP_GOTO, 230),
-  /*   230 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CISUCC, 232),
-  /*   231 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   232 <--:Choice 107 (Char) []>                */ CHPEG_INST(CHPEG_OP_CFAIL, 233),
-  /*   233 <-:Definition 105 (def:Char) []> {}      */ CHPEG_INST(CHPEG_OP_ISUCC, 12),
-  /*   234 <-:Definition 105 (def:Char) []> {}      */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   235 <---:Literal  (EscChar[0]) "\\">         */ CHPEG_INST(CHPEG_OP_LIT, 15),
-  /*   236 <---:Literal  (EscChar[0]) "\\">         */ CHPEG_INST(CHPEG_OP_GOTO, 239),
-  /*   237 <---:CharClass  (EscChar[1]) []>         */ CHPEG_INST(CHPEG_OP_CHRCLS, 16),
-  /*   238 <---:CharClass  (EscChar[1]) []>         */ CHPEG_INST(CHPEG_OP_GOTO, 239),
-  /*   239 <-:Definition 111 (def:EscChar) []> {L}  */ CHPEG_INST(CHPEG_OP_ISUCC, 13),
-  /*   240 <-:Definition 111 (def:EscChar) []> {L}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   241 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*   242 <----:Literal  (OctChar[0][0]) "\\">     */ CHPEG_INST(CHPEG_OP_LIT, 15),
-  /*   243 <----:Literal  (OctChar[0][0]) "\\">     */ CHPEG_INST(CHPEG_OP_GOTO, 250),
-  /*   244 <----:CharClass  (OctChar[0][1]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 17),
-  /*   245 <----:CharClass  (OctChar[0][1]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 250),
-  /*   246 <----:CharClass  (OctChar[0][2]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 18),
-  /*   247 <----:CharClass  (OctChar[0][2]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 250),
-  /*   248 <----:CharClass  (OctChar[0][3]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 18),
-  /*   249 <----:CharClass  (OctChar[0][3]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 250),
-  /*   250 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CISUCC, 263),
-  /*   251 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   252 <----:Literal  (OctChar[1][0]) "\\">     */ CHPEG_INST(CHPEG_OP_LIT, 15),
-  /*   253 <----:Literal  (OctChar[1][0]) "\\">     */ CHPEG_INST(CHPEG_OP_GOTO, 261),
-  /*   254 <----:CharClass  (OctChar[1][1]) []>     */ CHPEG_INST(CHPEG_OP_CHRCLS, 18),
-  /*   255 <----:CharClass  (OctChar[1][1]) []>     */ CHPEG_INST(CHPEG_OP_GOTO, 261),
-  /*   256 <----:Repeat 119 (OctChar[1][2]) []>     */ CHPEG_INST(CHPEG_OP_RQBEG, 0),
-  /*   257 <-----:CharClass  (OctChar[1][2][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 18),
-  /*   258 <-----:CharClass  (OctChar[1][2][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 259),
-  /*   259 <----:Repeat 119 (OctChar[1][2]) []>     */ CHPEG_INST(CHPEG_OP_RQMAT, 0),
-  /*   260 <----:Repeat 119 (OctChar[1][2]) []>     */ CHPEG_INST(CHPEG_OP_RQDONE, 0),
-  /*   261 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CISUCC, 263),
-  /*   262 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   263 <--:Choice 116 (OctChar) []>             */ CHPEG_INST(CHPEG_OP_CFAIL, 264),
-  /*   264 <-:Definition 114 (def:OctChar) []> {L}  */ CHPEG_INST(CHPEG_OP_ISUCC, 14),
-  /*   265 <-:Definition 114 (def:OctChar) []> {L}  */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   266 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   267 <----:Literal  (PlainChar[0][0]) "\\">   */ CHPEG_INST(CHPEG_OP_LIT, 15),
-  /*   268 <----:Literal  (PlainChar[0][0]) "\\">   */ CHPEG_INST(CHPEG_OP_GOTO, 269),
-  /*   269 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PMATCHF, 272),
-  /*   270 <---:Predicate 123 (PlainChar[0]) []>    */ CHPEG_INST(CHPEG_OP_PNOMATS, 272),
-  /*   271 <---:Dot 124 (PlainChar[1]) ".">         */ CHPEG_INST(CHPEG_OP_DOT, 272),
-  /*   272 <-:Definition 120 (def:PlainChar) []> {L} */ CHPEG_INST(CHPEG_OP_ISUCC, 15),
-  /*   273 <-:Definition 120 (def:PlainChar) []> {L} */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   274 <--:CharClass  (PredOp) []>              */ CHPEG_INST(CHPEG_OP_CHRCLS, 19),
-  /*   275 <--:CharClass  (PredOp) []>              */ CHPEG_INST(CHPEG_OP_GOTO, 276),
-  /*   276 <-:Definition 125 (def:PredOp) []> {L}   */ CHPEG_INST(CHPEG_OP_ISUCC, 16),
-  /*   277 <-:Definition 125 (def:PredOp) []> {L}   */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   278 <--:CharClass  (RepOp) []>               */ CHPEG_INST(CHPEG_OP_CHRCLS, 20),
-  /*   279 <--:CharClass  (RepOp) []>               */ CHPEG_INST(CHPEG_OP_GOTO, 280),
-  /*   280 <-:Definition 127 (def:RepOp) []> {L}    */ CHPEG_INST(CHPEG_OP_ISUCC, 17),
-  /*   281 <-:Definition 127 (def:RepOp) []> {L}    */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   282 <--:Literal  (Dot) ".">                  */ CHPEG_INST(CHPEG_OP_LIT, 21),
-  /*   283 <--:Literal  (Dot) ".">                  */ CHPEG_INST(CHPEG_OP_GOTO, 284),
-  /*   284 <-:Definition 129 (def:Dot) []> {L}      */ CHPEG_INST(CHPEG_OP_ISUCC, 18),
-  /*   285 <-:Definition 129 (def:Dot) []> {L}      */ CHPEG_INST(CHPEG_OP_IFAIL, 0),
-  /*   286 <--:Repeat 133 (S) []>                   */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   287 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CHOICE, 0),
-  /*   288 <----:Repeat 135 (S[0][0]) []> {E}       */ CHPEG_INST(CHPEG_OP_RPBEG, 0),
-  /*   289 <-----:CharClass  (S[0][0][0]) []>       */ CHPEG_INST(CHPEG_OP_CHRCLS, 22),
-  /*   290 <-----:CharClass  (S[0][0][0]) []>       */ CHPEG_INST(CHPEG_OP_GOTO, 291),
-  /*   291 <----:Repeat 135 (S[0][0]) []> {E}       */ CHPEG_INST(CHPEG_OP_RPMAT, 288),
-  /*   292 <----:Repeat 135 (S[0][0]) []> {E}       */ CHPEG_INST(CHPEG_OP_RPDONE, 293),
-  /*   293 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CISUCC, 310),
-  /*   294 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   295 <-----:Literal  (S[0][1][0]) "#">        */ CHPEG_INST(CHPEG_OP_LIT, 23),
-  /*   296 <-----:Literal  (S[0][1][0]) "#">        */ CHPEG_INST(CHPEG_OP_GOTO, 308),
-  /*   297 <-----:Repeat 137 (S[0][1][1]) []>       */ CHPEG_INST(CHPEG_OP_RSBEG, 0),
-  /*   298 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PREDN, 0),
-  /*   299 <--------:CharClass  (S[0][1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_CHRCLS, 24),
-  /*   300 <--------:CharClass  (S[0][1][1][0][0][0]) []> */ CHPEG_INST(CHPEG_OP_GOTO, 301),
-  /*   301 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PMATCHF, 304),
-  /*   302 <-------:Predicate 139 (S[0][1][1][0][0]) []> */ CHPEG_INST(CHPEG_OP_PNOMATS, 304),
-  /*   303 <-------:Dot 140 (S[0][1][1][0][1]) "."> */ CHPEG_INST(CHPEG_OP_DOT, 304),
-  /*   304 <-----:Repeat 137 (S[0][1][1]) []>       */ CHPEG_INST(CHPEG_OP_RSMAT, 297),
-  /*   305 <-----:Repeat 137 (S[0][1][1]) []>       */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   306 <-----:CharClass  (S[0][1][2]) []>       */ CHPEG_INST(CHPEG_OP_CHRCLS, 24),
-  /*   307 <-----:CharClass  (S[0][1][2]) []>       */ CHPEG_INST(CHPEG_OP_GOTO, 308),
-  /*   308 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CISUCC, 310),
-  /*   309 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CIFAIL, 0),
-  /*   310 <---:Choice 134 (S[0]) []>               */ CHPEG_INST(CHPEG_OP_CFAIL, 311),
-  /*   311 <--:Repeat 133 (S) []>                   */ CHPEG_INST(CHPEG_OP_RSMAT, 286),
-  /*   312 <--:Repeat 133 (S) []>                   */ CHPEG_INST(CHPEG_OP_RSDONE, 0),
-  /*   313 <-:Definition 131 (def:S) []> {I}        */ CHPEG_INST(CHPEG_OP_ISUCC, 19),
-  /*   314 <-:Definition 131 (def:S) []> {I}        */ CHPEG_INST(CHPEG_OP_IFAIL, 0)
+  .def_addrs = (int[20]) {3, 16, 43, 56, 63, 74, 85, 130, 137, 146, 182, 198, 219, 235, 241, 266, 274, 278, 282, 286},
+  .num_instructions = 318,
+  .instructions = (int[318]) {
+  /*     0 */ CHPEG_INST(CHPEG_OP_IDENT       ,        0), /* Grammar */
+  /*     1 */ CHPEG_INST(CHPEG_OP_FAIL        ,        0),
+  /*     2 */ CHPEG_INST(CHPEG_OP_SUCC        ,        0),
+  /*     3 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*     4 */ CHPEG_INST(CHPEG_OP_GOTO        ,       15),
+  /*     5 */ CHPEG_INST(CHPEG_OP_RPBEG       ,        0),
+  /*     6 */ CHPEG_INST(CHPEG_OP_IDENT       ,        1), /* Definition */
+  /*     7 */ CHPEG_INST(CHPEG_OP_GOTO        ,        9),
+  /*     8 */ CHPEG_INST(CHPEG_OP_RPMAT       ,        6),
+  /*     9 */ CHPEG_INST(CHPEG_OP_RPDONE      ,       15),
+  /*    10 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*    11 */ CHPEG_INST(CHPEG_OP_DOT         ,       13),
+  /*    12 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,       15),
+  /*    13 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,       15),
+  /*    14 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        0), /* Grammar */
+  /*    15 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        0), /* Grammar */
+  /*    16 */ CHPEG_INST(CHPEG_OP_IDENT       ,        8), /* Identifier */
+  /*    17 */ CHPEG_INST(CHPEG_OP_GOTO        ,       42),
+  /*    18 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    19 */ CHPEG_INST(CHPEG_OP_GOTO        ,       42),
+  /*    20 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*    21 */ CHPEG_INST(CHPEG_OP_LIT         ,        0), /* "{" */
+  /*    22 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    23 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    24 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    25 */ CHPEG_INST(CHPEG_OP_IDENT       ,        7), /* Options */
+  /*    26 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    27 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    28 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    29 */ CHPEG_INST(CHPEG_OP_LIT         ,        1), /* "}" */
+  /*    30 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    31 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    32 */ CHPEG_INST(CHPEG_OP_GOTO        ,       34),
+  /*    33 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*    34 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*    35 */ CHPEG_INST(CHPEG_OP_LIT         ,        2), /* "<-" */
+  /*    36 */ CHPEG_INST(CHPEG_OP_GOTO        ,       42),
+  /*    37 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    38 */ CHPEG_INST(CHPEG_OP_GOTO        ,       42),
+  /*    39 */ CHPEG_INST(CHPEG_OP_IDENT       ,        2), /* Choice */
+  /*    40 */ CHPEG_INST(CHPEG_OP_GOTO        ,       42),
+  /*    41 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        1), /* Definition */
+  /*    42 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        1), /* Definition */
+  /*    43 */ CHPEG_INST(CHPEG_OP_IDENT       ,        3), /* Sequence */
+  /*    44 */ CHPEG_INST(CHPEG_OP_GOTO        ,       55),
+  /*    45 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*    46 */ CHPEG_INST(CHPEG_OP_LIT         ,        3), /* "/" */
+  /*    47 */ CHPEG_INST(CHPEG_OP_GOTO        ,       53),
+  /*    48 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    49 */ CHPEG_INST(CHPEG_OP_GOTO        ,       53),
+  /*    50 */ CHPEG_INST(CHPEG_OP_IDENT       ,        3), /* Sequence */
+  /*    51 */ CHPEG_INST(CHPEG_OP_GOTO        ,       53),
+  /*    52 */ CHPEG_INST(CHPEG_OP_RSMAT       ,       46),
+  /*    53 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*    54 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        2), /* Choice */
+  /*    55 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        2), /* Choice */
+  /*    56 */ CHPEG_INST(CHPEG_OP_RPBEG       ,        0),
+  /*    57 */ CHPEG_INST(CHPEG_OP_IDENT       ,        4), /* Predicate */
+  /*    58 */ CHPEG_INST(CHPEG_OP_GOTO        ,       60),
+  /*    59 */ CHPEG_INST(CHPEG_OP_RPMAT       ,       57),
+  /*    60 */ CHPEG_INST(CHPEG_OP_RPDONE      ,       62),
+  /*    61 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        3), /* Sequence */
+  /*    62 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        3), /* Sequence */
+  /*    63 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*    64 */ CHPEG_INST(CHPEG_OP_IDENT       ,       16), /* PredOp */
+  /*    65 */ CHPEG_INST(CHPEG_OP_GOTO        ,       69),
+  /*    66 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    67 */ CHPEG_INST(CHPEG_OP_GOTO        ,       69),
+  /*    68 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*    69 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*    70 */ CHPEG_INST(CHPEG_OP_IDENT       ,        5), /* Repeat */
+  /*    71 */ CHPEG_INST(CHPEG_OP_GOTO        ,       73),
+  /*    72 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        4), /* Predicate */
+  /*    73 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        4), /* Predicate */
+  /*    74 */ CHPEG_INST(CHPEG_OP_IDENT       ,        6), /* Primary */
+  /*    75 */ CHPEG_INST(CHPEG_OP_GOTO        ,       84),
+  /*    76 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*    77 */ CHPEG_INST(CHPEG_OP_IDENT       ,       17), /* RepOp */
+  /*    78 */ CHPEG_INST(CHPEG_OP_GOTO        ,       82),
+  /*    79 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    80 */ CHPEG_INST(CHPEG_OP_GOTO        ,       82),
+  /*    81 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*    82 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*    83 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        5), /* Repeat */
+  /*    84 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        5), /* Repeat */
+  /*    85 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*    86 */ CHPEG_INST(CHPEG_OP_IDENT       ,        8), /* Identifier */
+  /*    87 */ CHPEG_INST(CHPEG_OP_GOTO        ,       96),
+  /*    88 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*    89 */ CHPEG_INST(CHPEG_OP_GOTO        ,       96),
+  /*    90 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*    91 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        4), /* "{<" */
+  /*    92 */ CHPEG_INST(CHPEG_OP_GOTO        ,       94),
+  /*    93 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,       96),
+  /*    94 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,       96),
+  /*    95 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      128),
+  /*    96 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*    97 */ CHPEG_INST(CHPEG_OP_LIT         ,        5), /* "(" */
+  /*    98 */ CHPEG_INST(CHPEG_OP_GOTO        ,      108),
+  /*    99 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*   100 */ CHPEG_INST(CHPEG_OP_GOTO        ,      108),
+  /*   101 */ CHPEG_INST(CHPEG_OP_IDENT       ,        2), /* Choice */
+  /*   102 */ CHPEG_INST(CHPEG_OP_GOTO        ,      108),
+  /*   103 */ CHPEG_INST(CHPEG_OP_LIT         ,        6), /* ")" */
+  /*   104 */ CHPEG_INST(CHPEG_OP_GOTO        ,      108),
+  /*   105 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*   106 */ CHPEG_INST(CHPEG_OP_GOTO        ,      108),
+  /*   107 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      128),
+  /*   108 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   109 */ CHPEG_INST(CHPEG_OP_IDENT       ,        9), /* Literal */
+  /*   110 */ CHPEG_INST(CHPEG_OP_GOTO        ,      114),
+  /*   111 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*   112 */ CHPEG_INST(CHPEG_OP_GOTO        ,      114),
+  /*   113 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      128),
+  /*   114 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   115 */ CHPEG_INST(CHPEG_OP_IDENT       ,       10), /* CharClass */
+  /*   116 */ CHPEG_INST(CHPEG_OP_GOTO        ,      120),
+  /*   117 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*   118 */ CHPEG_INST(CHPEG_OP_GOTO        ,      120),
+  /*   119 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      128),
+  /*   120 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   121 */ CHPEG_INST(CHPEG_OP_IDENT       ,       18), /* Dot */
+  /*   122 */ CHPEG_INST(CHPEG_OP_GOTO        ,      126),
+  /*   123 */ CHPEG_INST(CHPEG_OP_IDENT       ,       19), /* S */
+  /*   124 */ CHPEG_INST(CHPEG_OP_GOTO        ,      126),
+  /*   125 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      128),
+  /*   126 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   127 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      129),
+  /*   128 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        6), /* Primary */
+  /*   129 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        6), /* Primary */
+  /*   130 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   131 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        7), /* "ILS" */
+  /*   132 */ CHPEG_INST(CHPEG_OP_GOTO        ,      134),
+  /*   133 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      131),
+  /*   134 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   135 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        7), /* Options */
+  /*   136 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        7), /* Options */
+  /*   137 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        8), /* "a-zA-Z_" */
+  /*   138 */ CHPEG_INST(CHPEG_OP_GOTO        ,      145),
+  /*   139 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   140 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        9), /* "a-zA-Z_0-9" */
+  /*   141 */ CHPEG_INST(CHPEG_OP_GOTO        ,      143),
+  /*   142 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      140),
+  /*   143 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   144 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        8), /* Identifier */
+  /*   145 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        8), /* Identifier */
+  /*   146 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*   147 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       10), /* "'" */
+  /*   148 */ CHPEG_INST(CHPEG_OP_GOTO        ,      162),
+  /*   149 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   150 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   151 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       10), /* "'" */
+  /*   152 */ CHPEG_INST(CHPEG_OP_GOTO        ,      154),
+  /*   153 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      158),
+  /*   154 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      158),
+  /*   155 */ CHPEG_INST(CHPEG_OP_IDENT       ,       12), /* Char */
+  /*   156 */ CHPEG_INST(CHPEG_OP_GOTO        ,      158),
+  /*   157 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      150),
+  /*   158 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   159 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       10), /* "'" */
+  /*   160 */ CHPEG_INST(CHPEG_OP_GOTO        ,      162),
+  /*   161 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      180),
+  /*   162 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   163 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       11), /* "\"" */
+  /*   164 */ CHPEG_INST(CHPEG_OP_GOTO        ,      178),
+  /*   165 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   166 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   167 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       11), /* "\"" */
+  /*   168 */ CHPEG_INST(CHPEG_OP_GOTO        ,      170),
+  /*   169 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      174),
+  /*   170 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      174),
+  /*   171 */ CHPEG_INST(CHPEG_OP_IDENT       ,       12), /* Char */
+  /*   172 */ CHPEG_INST(CHPEG_OP_GOTO        ,      174),
+  /*   173 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      166),
+  /*   174 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   175 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       11), /* "\"" */
+  /*   176 */ CHPEG_INST(CHPEG_OP_GOTO        ,      178),
+  /*   177 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      180),
+  /*   178 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   179 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      181),
+  /*   180 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        9), /* Literal */
+  /*   181 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        9), /* Literal */
+  /*   182 */ CHPEG_INST(CHPEG_OP_LIT         ,       12), /* "[" */
+  /*   183 */ CHPEG_INST(CHPEG_OP_GOTO        ,      197),
+  /*   184 */ CHPEG_INST(CHPEG_OP_RPBEG       ,        0),
+  /*   185 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   186 */ CHPEG_INST(CHPEG_OP_LIT         ,       13), /* "]" */
+  /*   187 */ CHPEG_INST(CHPEG_OP_GOTO        ,      189),
+  /*   188 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      193),
+  /*   189 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      193),
+  /*   190 */ CHPEG_INST(CHPEG_OP_IDENT       ,       11), /* CharRange */
+  /*   191 */ CHPEG_INST(CHPEG_OP_GOTO        ,      193),
+  /*   192 */ CHPEG_INST(CHPEG_OP_RPMAT       ,      185),
+  /*   193 */ CHPEG_INST(CHPEG_OP_RPDONE      ,      197),
+  /*   194 */ CHPEG_INST(CHPEG_OP_LIT         ,       13), /* "]" */
+  /*   195 */ CHPEG_INST(CHPEG_OP_GOTO        ,      197),
+  /*   196 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       10), /* CharClass */
+  /*   197 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       10), /* CharClass */
+  /*   198 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*   199 */ CHPEG_INST(CHPEG_OP_IDENT       ,       12), /* Char */
+  /*   200 */ CHPEG_INST(CHPEG_OP_GOTO        ,      211),
+  /*   201 */ CHPEG_INST(CHPEG_OP_LIT         ,       14), /* "-" */
+  /*   202 */ CHPEG_INST(CHPEG_OP_GOTO        ,      211),
+  /*   203 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   204 */ CHPEG_INST(CHPEG_OP_LIT         ,       13), /* "]" */
+  /*   205 */ CHPEG_INST(CHPEG_OP_GOTO        ,      207),
+  /*   206 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      211),
+  /*   207 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      211),
+  /*   208 */ CHPEG_INST(CHPEG_OP_IDENT       ,       12), /* Char */
+  /*   209 */ CHPEG_INST(CHPEG_OP_GOTO        ,      211),
+  /*   210 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      217),
+  /*   211 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   212 */ CHPEG_INST(CHPEG_OP_IDENT       ,       12), /* Char */
+  /*   213 */ CHPEG_INST(CHPEG_OP_GOTO        ,      215),
+  /*   214 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      217),
+  /*   215 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   216 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      218),
+  /*   217 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       11), /* CharRange */
+  /*   218 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       11), /* CharRange */
+  /*   219 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*   220 */ CHPEG_INST(CHPEG_OP_IDENT       ,       13), /* EscChar */
+  /*   221 */ CHPEG_INST(CHPEG_OP_GOTO        ,      223),
+  /*   222 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      233),
+  /*   223 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   224 */ CHPEG_INST(CHPEG_OP_IDENT       ,       14), /* OctChar */
+  /*   225 */ CHPEG_INST(CHPEG_OP_GOTO        ,      227),
+  /*   226 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      233),
+  /*   227 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   228 */ CHPEG_INST(CHPEG_OP_IDENT       ,       15), /* PlainChar */
+  /*   229 */ CHPEG_INST(CHPEG_OP_GOTO        ,      231),
+  /*   230 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      233),
+  /*   231 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   232 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      234),
+  /*   233 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       12), /* Char */
+  /*   234 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       12), /* Char */
+  /*   235 */ CHPEG_INST(CHPEG_OP_LIT         ,       15), /* "\\" */
+  /*   236 */ CHPEG_INST(CHPEG_OP_GOTO        ,      240),
+  /*   237 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       16), /* "nrt'\"[]\\" */
+  /*   238 */ CHPEG_INST(CHPEG_OP_GOTO        ,      240),
+  /*   239 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       13), /* EscChar */
+  /*   240 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       13), /* EscChar */
+  /*   241 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*   242 */ CHPEG_INST(CHPEG_OP_LIT         ,       15), /* "\\" */
+  /*   243 */ CHPEG_INST(CHPEG_OP_GOTO        ,      251),
+  /*   244 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       17), /* "0-3" */
+  /*   245 */ CHPEG_INST(CHPEG_OP_GOTO        ,      251),
+  /*   246 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       18), /* "0-7" */
+  /*   247 */ CHPEG_INST(CHPEG_OP_GOTO        ,      251),
+  /*   248 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       18), /* "0-7" */
+  /*   249 */ CHPEG_INST(CHPEG_OP_GOTO        ,      251),
+  /*   250 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      264),
+  /*   251 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   252 */ CHPEG_INST(CHPEG_OP_LIT         ,       15), /* "\\" */
+  /*   253 */ CHPEG_INST(CHPEG_OP_GOTO        ,      262),
+  /*   254 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       18), /* "0-7" */
+  /*   255 */ CHPEG_INST(CHPEG_OP_GOTO        ,      262),
+  /*   256 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*   257 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       18), /* "0-7" */
+  /*   258 */ CHPEG_INST(CHPEG_OP_GOTO        ,      260),
+  /*   259 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*   260 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*   261 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      264),
+  /*   262 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   263 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      265),
+  /*   264 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       14), /* OctChar */
+  /*   265 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       14), /* OctChar */
+  /*   266 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   267 */ CHPEG_INST(CHPEG_OP_LIT         ,       15), /* "\\" */
+  /*   268 */ CHPEG_INST(CHPEG_OP_GOTO        ,      270),
+  /*   269 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      273),
+  /*   270 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      273),
+  /*   271 */ CHPEG_INST(CHPEG_OP_DOT         ,      273),
+  /*   272 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       15), /* PlainChar */
+  /*   273 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       15), /* PlainChar */
+  /*   274 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       19), /* "&!" */
+  /*   275 */ CHPEG_INST(CHPEG_OP_GOTO        ,      277),
+  /*   276 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       16), /* PredOp */
+  /*   277 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       16), /* PredOp */
+  /*   278 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       20), /* "*+?" */
+  /*   279 */ CHPEG_INST(CHPEG_OP_GOTO        ,      281),
+  /*   280 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       17), /* RepOp */
+  /*   281 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       17), /* RepOp */
+  /*   282 */ CHPEG_INST(CHPEG_OP_LIT         ,       21), /* "." */
+  /*   283 */ CHPEG_INST(CHPEG_OP_GOTO        ,      285),
+  /*   284 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       18), /* Dot */
+  /*   285 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       18), /* Dot */
+  /*   286 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   287 */ CHPEG_INST(CHPEG_OP_CHOICE      ,        0),
+  /*   288 */ CHPEG_INST(CHPEG_OP_RPBEG       ,        0),
+  /*   289 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       22), /* " \t\r\n" */
+  /*   290 */ CHPEG_INST(CHPEG_OP_GOTO        ,      292),
+  /*   291 */ CHPEG_INST(CHPEG_OP_RPMAT       ,      289),
+  /*   292 */ CHPEG_INST(CHPEG_OP_RPDONE      ,      294),
+  /*   293 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      314),
+  /*   294 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   295 */ CHPEG_INST(CHPEG_OP_LIT         ,       23), /* "#" */
+  /*   296 */ CHPEG_INST(CHPEG_OP_GOTO        ,      312),
+  /*   297 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
+  /*   298 */ CHPEG_INST(CHPEG_OP_PREDN       ,        0),
+  /*   299 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       24), /* "\r\n" */
+  /*   300 */ CHPEG_INST(CHPEG_OP_GOTO        ,      302),
+  /*   301 */ CHPEG_INST(CHPEG_OP_PMATCHF     ,      305),
+  /*   302 */ CHPEG_INST(CHPEG_OP_PNOMATS     ,      305),
+  /*   303 */ CHPEG_INST(CHPEG_OP_DOT         ,      305),
+  /*   304 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      298),
+  /*   305 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   306 */ CHPEG_INST(CHPEG_OP_RQBEG       ,        0),
+  /*   307 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,       24), /* "\r\n" */
+  /*   308 */ CHPEG_INST(CHPEG_OP_GOTO        ,      310),
+  /*   309 */ CHPEG_INST(CHPEG_OP_RQMAT       ,        0),
+  /*   310 */ CHPEG_INST(CHPEG_OP_RQDONE      ,        0),
+  /*   311 */ CHPEG_INST(CHPEG_OP_CISUCC      ,      314),
+  /*   312 */ CHPEG_INST(CHPEG_OP_CIFAIL      ,        0),
+  /*   313 */ CHPEG_INST(CHPEG_OP_CFAIL       ,      315),
+  /*   314 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      287),
+  /*   315 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
+  /*   316 */ CHPEG_INST(CHPEG_OP_ISUCC       ,       19), /* S */
+  /*   317 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       19), /* S */
   },
   .num_strings = 25,
   .strings = (unsigned char**)(char*[25]) {"{", "}", "<-", "/", "{<", "(", ")", "ILS", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
@@ -1440,20 +1475,6 @@ CHPEG_API void chpeg_free(void *ptr) {
 
 #define ERROR_REPEAT_INHIBIT 0 // probably flawed idea or implementation, don't enable
 
-// VM_TRACE:
-// Set to non-zero to compile in support for tracing parser VM instruction execution.
-// To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
-#ifndef VM_TRACE
-#define VM_TRACE 0
-#endif
-
-// VM_PRINT_TREE:
-// Set to non-zero to compile in support for printing the parse tree as it is being built.
-// To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
-#ifndef VM_PRINT_TREE
-#define VM_PRINT_TREE 0
-#endif
-
 //
 // ChpegNode
 //
@@ -1579,11 +1600,21 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->def_fail_count = CHPEG_CALLOC(bc->num_defs, sizeof(int));
 #endif
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     self->vm_trace = 0;
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     self->vm_print_tree = 0;
+#endif
+#if CHPEG_VM_PROFILE
+    self->vm_profile = 0;
+    self->prof_inst_cnt = 0;
+    self->prof_ident_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_isucc_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_ifail_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_choice_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_cisucc_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_cifail_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
 #endif
 
     return self;
@@ -1600,6 +1631,32 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
         CHPEG_FREE(self->def_count);
         CHPEG_FREE(self->def_succ_count);
         CHPEG_FREE(self->def_fail_count);
+#endif
+#if CHPEG_VM_PROFILE
+        if (self->prof_ident_cnt) {
+            CHPEG_FREE(self->prof_ident_cnt);
+            self->prof_ident_cnt = NULL;
+        }
+        if (self->prof_isucc_cnt) {
+            CHPEG_FREE(self->prof_isucc_cnt);
+            self->prof_isucc_cnt = NULL;
+        }
+        if (self->prof_ifail_cnt) {
+            CHPEG_FREE(self->prof_ifail_cnt);
+            self->prof_ifail_cnt = NULL;
+        }
+        if (self->prof_choice_cnt) {
+            CHPEG_FREE(self->prof_choice_cnt);
+            self->prof_choice_cnt = NULL;
+        }
+        if (self->prof_cisucc_cnt) {
+            CHPEG_FREE(self->prof_cisucc_cnt);
+            self->prof_cisucc_cnt = NULL;
+        }
+        if (self->prof_cifail_cnt) {
+            CHPEG_FREE(self->prof_cifail_cnt);
+            self->prof_cifail_cnt = NULL;
+        }
 #endif
         CHPEG_FREE(self);
     }
@@ -1627,6 +1684,56 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
 #endif
     ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
+
+#if CHPEG_VM_PROFILE
+CHPEG_API void ChpegParser_print_profile(ChpegParser *self, FILE *fp)
+{
+    fprintf(fp, "Instructions executed:\n");
+    fprintf(fp, "%6s %8s %11s %6s\n", "OP-", "opcode", "count", "%");
+    for (int i = 0; i < CHPEG_NUM_OPS; ++i) {
+        fprintf(fp, "%6s %8s %11d %6.2f\n", "OP ",
+            Chpeg_op_name(i), self->prof_op_cnt[i],
+            100.0 * (float)self->prof_op_cnt[i] / (float)self->prof_inst_cnt);
+    }
+    fprintf(fp, "%6s %8s %11d %6.2f\n", "OP=", "Total", self->prof_inst_cnt, 100.0);
+
+    int total_ident = self->prof_op_cnt[CHPEG_OP_IDENT];
+    int total_isucc = self->prof_op_cnt[CHPEG_OP_ISUCC];
+    int total_ifail = self->prof_op_cnt[CHPEG_OP_IFAIL];
+
+    fprintf(fp, "\n");
+    fprintf(fp, "Definition identifier calls:\n");
+    fprintf(fp, "  DEF-   id       IDENT      %%       ISUCC       IFAIL  name\n");
+    for (int i = 0; i < self->bc->num_defs; ++i) {
+        fprintf(fp, "%6s %4d %11d %6.2f %11d %11d  %s\n", "DEF ", i,
+            self->prof_ident_cnt[i],
+            100.0 * (float)self->prof_ident_cnt[i] / (float)total_ident,
+            self->prof_isucc_cnt[i],
+            self->prof_ifail_cnt[i],
+            ChpegByteCode_def_name(self->bc, i));
+    }
+    fprintf(fp, "%6s %4s %11d %6.2f %11d %11d  %s\n", "DEF=", "--",
+        total_ident, 100.0, total_isucc, total_ifail, "--");
+
+    int total_choice = self->prof_op_cnt[CHPEG_OP_CHOICE];
+    int total_cisucc = self->prof_op_cnt[CHPEG_OP_CISUCC];
+    int total_cifail = self->prof_op_cnt[CHPEG_OP_CIFAIL];
+
+    fprintf(fp, "\n");
+    fprintf(fp, "Choice calls per definition:\n");
+    fprintf(fp, "  CHOICE-  def      CHOICE      %%      CISUCC      CIFAIL  def_name\n");
+    for (int i = 0; i < self->bc->num_defs; ++i) {
+        fprintf(fp, "%9s %4d %11d %6.2f %11d %11d  %s\n", "CHOICE ", i,
+            self->prof_choice_cnt[i],
+            100.0 * (float)self->prof_choice_cnt[i] / (float)total_choice,
+            self->prof_cisucc_cnt[i],
+            self->prof_cifail_cnt[i],
+            ChpegByteCode_def_name(self->bc, i));
+    }
+    fprintf(fp, "%9s %4s %11d %6.2f %11d %11d  %s\n", "CHOICE=", "--",
+        total_choice, 100.0, total_cisucc, total_cifail, "--");
+}
+#endif
 
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
 {
@@ -1721,16 +1828,47 @@ CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *i
 #endif
 }
 
-// TODO: check sanity checks and overflow checks, make macros to make it easier
+
+// TODO: work on check sanity checks and underflow/overflow/range checks, make macros to make it easier
+//
+// SANITY_CHECKS should only contain checks for conditions that should never
+// occur, and if they do occur, it's a bug/programming error. It shouldn't
+// cover any cases that can be triggered by user input (grammar or input data)
+// Same idea for any assert() in the code.
+//
+// SANITY_CHECKS and assert() are enabled by default, but this may change
+// later. Stack overflow (either stack) can happen due to user input (grammar
+// and/or input), so checks for that should never be removed (don't include
+// within SANITY_CHECKS)
+//
+// Things that should be checked for in SANITY_CHECKS:
+// - Stack underflow
+// - Accessing anything out of range (stack, arrays)
+//
+// These are things that should not happen, and if they do it is a
+// programming/bytecode error. We kind of have to trust the bytecode is
+// correct. If there are errors in bytecode, then there are bugs in the
+// compiler. If the user is creating their own bytecode, it's on them to
+// make sure it's correct.
+//
+// TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal
+// with things this is meant to detect)
+
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
-    int locked = 0, retval = 0;
+
+#define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= max_stack_size)
+#define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < 0)
+#define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
+#define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
+
+    int locked = 0, cur_def = -1, retval = 0;
 
 #if ERRORS
     int err_locked = 0;
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     int tree_changed = 0;
 #endif
 
@@ -1754,24 +1892,69 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #endif
 
     size_t offset = 0;
-    int op = 0, arg = 0, pc = 0;
+    int op = 0, arg = 0, pc = 0, top = 0, tree_top = 0;
 
-    size_t stack[max_stack_size]; int top = -1;
-    ChpegNode *tree_stack[max_tree_depth]; int tree_top = -1;
+    size_t stack[max_stack_size];
+    ChpegNode *tree_stack[max_tree_depth];
 
+    if (CHPEG_CHECK_STACK_OVERFLOW(1)) {
+        retval = self->parse_result = CHPEG_ERR_STACK_OVERFLOW;
+        return retval;
+    }
+    stack[top] = 0; // to make life easier, put a zero on the stack;
+                    // top is then always in range [0, max_stack_size)
+                    // top is incremented before push, so first real element is stack[1]
+
+    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) {
+        retval = self->parse_result = CHPEG_ERR_TREE_STACK_OVERFLOW;
+        return retval;
+    }
     self->tree_root = ChpegNode_new(0, 0, 0, 0);
-    if (tree_top >= max_tree_depth - 2) return CHPEG_ERR_TREE_STACK_OVERFLOW;
-    tree_stack[++tree_top] = self->tree_root;
+    tree_stack[tree_top] = self->tree_root;
 
-#if SANITY_CHECKS || VM_TRACE
+#if CHPEG_VM_PROFILE
+    self->prof_inst_cnt = 0;
+    memset(self->prof_op_cnt, 0, CHPEG_NUM_OPS * sizeof(int));
+    memset(self->prof_ident_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_isucc_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_ifail_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_choice_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_cisucc_cnt, 0, self->bc->num_defs * sizeof(int));
+    memset(self->prof_cifail_cnt, 0, self->bc->num_defs * sizeof(int));
+#endif
+
+#if SANITY_CHECKS || CHPEG_VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
     const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
-    for(cnt = 0; cnt < cnt_max && pc < num_instructions; ++cnt, ++pc)
+    for(cnt = 0; cnt < cnt_max; ++cnt)
 #else
-    for(;; ++pc)
+    for(;;)
 #endif
     {
+
+#if SANITY_CHECKS
+        if (pc < 0 || pc > num_instructions) {
+            retval = self->parse_result = CHPEG_ERR_INVALID_PC;
+            return retval;
+        }
+        if (top >= max_stack_size) {
+            retval = self->parse_result = CHPEG_ERR_STACK_RANGE;
+            return retval;
+        }
+        if (top < 0) {
+            retval = self->parse_result = CHPEG_ERR_STACK_RANGE;
+            return retval;
+        }
+        if (tree_top >= max_tree_depth) {
+            retval = self->parse_result = CHPEG_ERR_TREE_STACK_RANGE;
+            return retval;
+        }
+        if (tree_top < 0) {
+            retval = self->parse_result = CHPEG_ERR_TREE_STACK_RANGE;
+            return retval;
+        }
+#endif
         op = CHPEG_INST_OP(instructions[pc]);
         arg = CHPEG_INST_ARG(instructions[pc]);
 
@@ -1779,7 +1962,14 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
         ++self->vm_count;
 #endif
 
-#if VM_TRACE
+#if CHPEG_VM_PROFILE
+        if (self->vm_profile) {
+            self->prof_inst_cnt++;
+            self->prof_op_cnt[op]++;
+        }
+#endif
+
+#if CHPEG_VM_TRACE
         if (self->vm_trace) {
             if (cnt == 0) {
                 fprintf(stderr, "=     CNT   OFFSET       PC           OP   ARG\n");
@@ -1816,7 +2006,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
         }
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
         tree_changed = 0;
 #endif
 
@@ -1828,50 +2018,75 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 pc = arg; break;
 
 // Identifier
-            case CHPEG_OP_IDENT: // arg = def; Identifier "call"; on success, next instruction skipped (See ISUCC, IFAIL)
+            case CHPEG_OP_IDENT: // arg = def; Identifier "call"
+                                 // on success, next instruction is skipped (See ISUCC, IFAIL)
+                // top=s+0: stack at beginning of call
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
-                if (top >= max_stack_size - 4) { // pushes 3 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
+#if CHPEG_VM_PROFILE
+                ++self->prof_ident_cnt[arg];
+#endif
                 if (!locked) {
-                    if (tree_top >= max_tree_depth - 2) {
+                    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_OVERFLOW; break;
                     }
                     if (def_flags[arg] & (CHPEG_FLAG_LEAF | CHPEG_FLAG_IGNORE)) {
-                        stack[++top] = 1; locked = 1; // s+1: locked
+                        stack[++top] = 1; locked = 1; // top=s+1: locked
                     }
                     else {
-                        stack[++top] = 0; // s+1: locked
+                        stack[++top] = 0; // top=s+1: locked
                     }
                     tree_stack[tree_top+1] = ChpegNode_push_child(tree_stack[tree_top], arg, offset, 0, def_flags[arg]);
                     ++tree_top;
                 }
                 else {
-                    stack[++top] = 0; // s+1: locked
+                    stack[++top] = 0; // top=s+1: locked
                 }
-                stack[++top] = offset; // s+2: offset
-                stack[++top] = pc; // s+3: pc
-                pc = def_addrs[arg];
-#if VM_PRINT_TREE
+
+                stack[++top] = cur_def; // top=s+2: def
+                cur_def = arg;
+
+                stack[++top] = offset; // top=s+3: offset
+                stack[++top] = pc; // top=s+4: pc
+
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 #ifdef CHPEG_DEFINITION_TRACE
                 ++self->def_count[arg];
 #endif
+                pc = def_addrs[arg];
                 break;
 
-            case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return", pc restored to pc+1, skipping next instruction
+            case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return"
+                                 // pc restored to pc+2, skipping next instruction
 #if SANITY_CHECKS
-                if (top < 2) { // pops 3 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--] + 1; // s+2: offset
-                --top; // s+1: locked
-                if (stack[top--] == 1) { locked = 0; } // s+0: done popping stack
+#if CHPEG_VM_PROFILE
+                ++self->prof_isucc_cnt[arg];
+#endif
+                // top=s+4: pc
+                pc = stack[top] + 2;
+
+                top -= 2; // top=s+2: def
+                cur_def = stack[top--]; // top=s+1: locked
+
+                if (stack[top--] == 1) { locked = 0; } // top=s+0: done popping stack
                 if (!locked) {
+
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_TSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
+                    }
+#endif
+
 #ifdef CHPEG_EXTENSIONS
                     // if we haven't set length by trimming right, set length
                     if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
@@ -1883,30 +2098,33 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #endif
                     --tree_top;
                     if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
-#if SANITY_CHECKS
-                        if (tree_top < 0) {
-                            pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
-                        }
-#endif
                         ChpegNode_pop_child(tree_stack[tree_top]);
                     }
                 }
-#if VM_PRINT_TREE
+
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 #ifdef CHPEG_DEFINITION_TRACE
                 ++self->def_succ_count[arg];
 #endif
+                // pc is restored +2 (next instruction skipped)
                 break;
 
-            case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return", pc restored (next instruction not skipped)
+            case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return"
+                                 // pc restored +1 (next instruction not skipped)
 #if SANITY_CHECKS
-                if (top < 2) { // pops 3 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                pc = stack[top--]; // top=s+2: offset
-                offset = stack[top--]; // top=s+1: locked
+#if CHPEG_VM_PROFILE
+                ++self->prof_ifail_cnt[arg];
+#endif
+                // top=s+4: pc
+                pc = stack[top--] + 1; // top=s+3: offset
+                offset = stack[top--]; // top=s+2: def       // backtrack
+                cur_def = stack[top--]; // top=s+1: locked
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
@@ -1922,34 +2140,43 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 if (stack[top--] == 1) { locked = 0; } // top=s+0 (done popping)
                 if (!locked) {
 #if SANITY_CHECKS
-                    if (tree_top < 0) {
+                    if (CHPEG_CHECK_TSTACK_UNDERFLOW(1)) {
                         pc = -1; retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
                     }
 #endif
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 #ifdef CHPEG_DEFINITION_TRACE
                 ++self->def_fail_count[arg];
 #endif
+                // pc is restored +1 (so resume execution at next instruction)
                 break;
 
 // Choice
             case CHPEG_OP_CHOICE:
-                if (top >= max_stack_size - 3) { // pushes 2 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
+#if CHPEG_VM_PROFILE
+                ++self->prof_choice_cnt[cur_def];
+#endif
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_CISUCC: // arg = success/fail pc addr
+#if CHPEG_VM_PROFILE
+                ++self->prof_cisucc_cnt[cur_def];
+#endif
+                // fallthrough
             case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
-                if (top < 1) { // pops 2 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1958,19 +2185,23 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 break;
 
             case CHPEG_OP_CIFAIL:
+#if CHPEG_VM_PROFILE
+                ++self->prof_cifail_cnt[cur_def];
+#endif
                 // backtrack
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                ++pc; // next instruction
                 break;
 
 
 // Repeat +
             case CHPEG_OP_RPBEG:
-                if (top >= max_stack_size - 5) { // pushes 4 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -1979,6 +2210,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // offset - backtrack point
                 stack[++top] = 0; // cnt (match count)
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_RPMAT: // arg = loop pc addr
@@ -1993,19 +2225,24 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                     }
 #endif
                 }
+                else {
+                    ++pc; // next instruction
+                }
                 break;
 
             case CHPEG_OP_RPDONE: // arg = match fail pc addr
 #if SANITY_CHECKS
-                if (top < 3) { // pops 4 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
+                // backtrack to point where match failed
                 offset = stack[top-1];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-2]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
                 if (stack[top] > 0) { // op+ SUCCESS
                     top -= 3;
+                    ++pc; // next instruction
                 }
                 else { // op+ FAIL
                     top -= 3;
@@ -2014,7 +2251,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
@@ -2022,7 +2259,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 // Repeat *|?
             case CHPEG_OP_RSBEG:
             case CHPEG_OP_RQBEG:
-                if (top >= max_stack_size - 4) { // pushes 3 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(3)) { // pushes 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 #if ERRORS && ERROR_REPEAT_INHIBIT
@@ -2035,6 +2272,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #endif
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_RSMAT: // arg = loop pc addr
@@ -2043,15 +2281,19 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                     stack[top] = offset; // update backtrack point
                     pc = arg; // continue looping
                 } // else next instruction, which is a R*DONE
+                else {
+                    ++pc; // next instruction
+                }
                 break;
 
             case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
             case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
-                if (top < 2) { // pops 3 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(3)) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
+                // backtrack to point where match failed
                 offset = stack[top];
                 for (int i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
@@ -2059,15 +2301,17 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #if ERRORS && ERROR_REPEAT_INHIBIT
                 if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
 #endif
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
+                ++pc; // next instruction
                 break;
 
 // Repeat ?
             case CHPEG_OP_RQMAT: // no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
+                ++pc; // next instruction
                 break;
 
 #ifdef CHPEG_EXTENSIONS
@@ -2077,7 +2321,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_TRIM: // TRIM start ('<')
                                 // arg: unused
 
-                if (top >= max_stack_size - 5) { // pushes 4 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 
@@ -2093,14 +2337,17 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 stack[++top] = tree_stack[tree_top]->offset;
                 stack[++top] = tree_stack[tree_top]->flags;
 
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
                                  // arg = next pc
 
-                if (top < 3) { // pops 4 items
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
+#endif
 
                 // Restore the changed flags and offset values from the stack
                 tree_stack[tree_top]->flags = stack[top--];
@@ -2119,9 +2366,11 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_TRIMF: // TRIM Failed ('>'): the contents inside ('<' ... '>') did not match
                                  // arg = next pc
 
-                if (top < 3) { // pops 4 items
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
+#endif
 
                 // Discard the changed flags and offset values saved on stack
                 top -= 2;
@@ -2139,7 +2388,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             case CHPEG_OP_PREDN:
                 // Predicate begin, should be followed with child instructions,
                 // then PMATCH{S,F}, then PNOMAT{S,F}, depending on op (&,!)
-                if (top >= max_stack_size - 5) { // pushes 4 items
+                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
@@ -2155,6 +2404,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                     stack[++top] = 0;
                 }
 #endif
+                ++pc; // next instruction
                 break;
 
             case CHPEG_OP_PMATCHF: // Predicate matched, match is considered failure, arg = failure address
@@ -2174,13 +2424,16 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 goto pred_cleanup;
 
             case CHPEG_OP_PMATCHS: // Predicate matched, match is considered success; next instruction skipped
-                ++pc;
-                // passthrough to pred_cleanup
+                pc += 2;
+                goto pred_cleanup;
 
             case CHPEG_OP_PNOMATS: // Predicate not matched, not match is considered success
+                ++pc; // next instruction
+
+                // pc is expected to be set when hitting pred_cleanup (and thus should not change)
 pred_cleanup:
 #if SANITY_CHECKS
-                if (top < 3) { // pops 4 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -2190,10 +2443,11 @@ pred_cleanup:
                 --top;
 #endif
 #endif
+                // backtrack
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (int i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
@@ -2207,19 +2461,18 @@ pred_cleanup:
                         for (i = 0; i < mlen; ++i) {
                             if (mstr[i] == input[offset]) {
                                 ++offset;
-                                ++pc;
-                                break;
+                                pc += 2;
+                                goto chrcls_done; // need to break two levels
                             }
                             if ((i < mlen - 2) && (mstr[i+1] == '-')) {
                                 if ((input[offset] >= mstr[i]) && (input[offset] <= mstr[i+2])) {
                                     ++offset;
-                                    ++pc;
-                                    break;
+                                    pc += 2;
+                                    goto chrcls_done; // need to break two levels
                                 }
                                 i+=2;
                             }
                         }
-                        if (i < mlen) break;
                     }
 #if ERRORS && ERRORS_TERMINALS
                     if (!err_locked) {
@@ -2231,7 +2484,9 @@ pred_cleanup:
 #endif
                     }
 #endif
+                    ++pc; // next instruction (upon failure)
                 }
+chrcls_done:
                 break;
 
 // Literal
@@ -2247,7 +2502,7 @@ pred_cleanup:
 #endif /*CHPEG_OP(NOCASE)*/
 					memcmp(&input[offset], strings[arg], len))) {
                         offset += len;
-                        ++pc;
+                        pc += 2;
                         break;
                     }
                 }
@@ -2261,11 +2516,16 @@ pred_cleanup:
 #endif
                 }
 #endif
+                ++pc; // next instruction
                 break;
 
 // Dot
             case CHPEG_OP_DOT: // arg = fail addr; match any char; goto addr on failure
-                if (offset < length) { offset++; break; }
+                if (offset < length) {
+                    offset++;
+                    ++pc; // next instruction
+                    break;
+                }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
                     ChpegParser_expected(self,
@@ -2282,24 +2542,27 @@ pred_cleanup:
 // End
             case CHPEG_OP_SUCC: // overall success
                 pc = -1; // we're done
-#if SANITY_CHECKS
-                if (tree_top < 0) {
-                    retval = CHPEG_ERR_TREE_STACK_UNDERFLOW; break;
+
+#ifdef CHPEG_EXTENSIONS
+                // if we haven't set length by trimming right, set length
+                if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
+                {
+#endif
+                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+#ifdef CHPEG_EXTENSIONS
                 }
 #endif
-                tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-                --tree_top;
 
                 // clean up the parse tree, reversing the reverse node insertion in the process
                 self->tree_root = ChpegNode_unwrap(self->tree_root);
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
 
-                if (top != -1) {
+                if (top != 0) {
                     retval = CHPEG_ERR_UNEXPECTED_STACK_DATA;
                 }
-                else if (tree_top != -1) {
+                else if (tree_top != 0) {
                     retval = CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA;
                 }
                 else {
@@ -2322,11 +2585,11 @@ pred_cleanup:
 
             default:
                 pc = -1; // we're done
-                retval = CHPEG_ERR_UNKNOWN_INSTRUCTION;
+                retval = CHPEG_ERR_INVALID_INSTRUCTION;
                 break;
         }
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
             ChpegParser_print_tree(self, input, stderr);
         }
@@ -2340,6 +2603,12 @@ pred_cleanup:
     retval = CHPEG_ERR_RUNAWAY;
     self->parse_result = retval;
     return retval;
+
+#undef CHPEG_CHECK_STACK_OVERFLOW
+#undef CHPEG_CHECK_STACK_UNDERFLOW
+#undef CHPEG_CHECK_TSTACK_OVERFLOW
+#undef CHPEG_CHECK_TSTACK_UNDERFLOW
+
 }
 
 // } chpeg: parser.c
@@ -2577,7 +2846,7 @@ static void ChpegCU_setup_def_addrs(ChpegCU *cu)
     int i = 0;
     ChpegGNode *p = NULL;
     for (i = 0, p = cu->root->head; p; p = p->next, ++i) {
-        cu->bc->def_addrs[i] = p->head->next->parse_state - 1;
+        cu->bc->def_addrs[i] = p->head->next->parse_state;
     }
 }
 
@@ -2707,10 +2976,10 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state - 1));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state));
                 ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CIFAIL, 0));
             }
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state));
             break;
         case CHPEG_BC(SEQUENCE):
             for (ChpegGNode *p = gp->head; p; p = p->next) {
@@ -2730,8 +2999,8 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
             ChpegCU_add_instructions(cu, gp->head);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
             break;
 #endif
         case CHPEG_BC(REPEAT):
@@ -2741,13 +3010,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                     case '+':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPBEG, 0));
                         ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state));
                         break;
                     case '*':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSBEG, 0));
                         ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSDONE, 0));
                         break;
                     case '?':
@@ -2766,28 +3035,28 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                     case '&':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state));
                         break;
                     case '!':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state));
                         break;
                 }
             }
             break;
         case CHPEG_BC(DOT):
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state));
             break;
         case CHPEG_BC(IDENTIFIER):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, gp->node)));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
         case CHPEG_BC(CHARCLASS):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
         case CHPEG_BC(LITERAL):
             {
@@ -2801,7 +3070,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
 #endif /*CHPEG_HAS_NOCASE*/
                 ChpegCU_add_inst(cu, CHPEG_INST(literal_op, gp->val.ival));
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             }
             break;
     }

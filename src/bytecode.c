@@ -90,20 +90,19 @@ CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self)
             case CHPEG_OP_TRIM:
 #endif
                 arg_str = ChpegByteCode_def_name(self, arg);
-                printf("CHPEG_INST %8d %12s %8d %s\n",
+                printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
             case CHPEG_OP_CHRCLS:
                 tmp = chpeg_esc_bytes(
                     self->strings[arg], self->str_len[arg], 256);
-                printf("CHPEG_INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
+                printf("INST %8d %12s %8d \"%s\"\n", i, Chpeg_op_name(op), arg,
                     tmp ? tmp : "<NULL>");
                 if (tmp) { CHPEG_FREE(tmp); tmp = NULL; }
                 break;
             default:
-                arg_str = "";
-                printf("CHPEG_INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
+                printf("INST %8d %12s %8d\n", i, Chpeg_op_name(op), arg);
         }
     }
 }
@@ -163,7 +162,7 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
 
     fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
-    fprintf(fp, "#include \"chpeg/chpeg_util.h\"\n");
+    fprintf(fp, "#include \"chpeg/util.h\"\n");
     fprintf(fp, "#include \"chpeg/bytecode.h\"\n");
     fprintf(fp, "#include \"%s\"\n", opcodes ? opcodes : "chpeg/opcodes.h");
     fprintf(fp, "#endif\n\n");
@@ -251,7 +250,7 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     for (i = 0; i < self->num_defs; i++) {
         fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
     }
-    fprintf(fp, "}, // presubtracted by 1\n");
+    fprintf(fp, "},\n");
 
     fprintf(fp, "  .num_instructions = %d,\n", self->num_instructions);
 
@@ -389,7 +388,7 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
         case CHPEG_FLAG_LEAF: def_flag = "{L} "; break;
     }
     fprintf(fp, "%s %s<- ", bc->def_names[def_id], def_flag);
-    for(int i = bc->def_addrs[def_id]+1, inst_count = 0; i < bc->num_instructions; ++i, ++inst_count) {
+    for(int i = bc->def_addrs[def_id], inst_count = 0; i < bc->num_instructions; ++i, ++inst_count) {
         int op = CHPEG_INST_OP(bc->instructions[i]);
         int arg = CHPEG_INST_ARG(bc->instructions[i]);
         switch(op) {

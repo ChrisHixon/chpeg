@@ -6,26 +6,52 @@
 #define CHPEG_PARSER_H
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg_util.h"
+#include "chpeg/util.h"
 #include "chpeg/bytecode.h"
+#include "chpeg/opcodes.h"
 #endif
 
 #include <stdio.h>
+
+// CHPEG_VM_TRACE:
+// Set to non-zero to compile in support for tracing parser VM instruction execution.
+// To use, set parser->vm_trace to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_TRACE
+#define CHPEG_VM_TRACE 0
+#endif
+
+// CHPEG_VM_PROFILE:
+// Set to non-zero to compile in support for profiling parser VM instruction execution.
+// To use, set parser->vm_profile to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_PROFILE
+#define CHPEG_VM_PROFILE 0
+#endif
+
+// CHPEG_VM_PRINT_TREE:
+// Set to non-zero to compile in support for printing the parse tree as it is being built.
+// To use, set parser->vm_print_tree to non-zero before calling ChpegParser_parse()
+#ifndef CHPEG_VM_PRINT_TREE
+#define CHPEG_VM_PRINT_TREE 0
+#endif
+
 
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
     CHPEG_ERR_PARSE_FAILED = 1,
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
-    CHPEG_ERR_UNKNOWN_INSTRUCTION = 3,
-    CHPEG_ERR_RUNAWAY = 4,
-    CHPEG_ERR_STACK_OVERFLOW = 5,
-    CHPEG_ERR_TREE_STACK_OVERFLOW = 6,
-    CHPEG_ERR_STACK_UNDERFLOW = 7,
+    CHPEG_ERR_STACK_RANGE = 3,
+    CHPEG_ERR_STACK_OVERFLOW = 4,
+    CHPEG_ERR_STACK_UNDERFLOW = 5,
+    CHPEG_ERR_TREE_STACK_RANGE = 6,
+    CHPEG_ERR_TREE_STACK_OVERFLOW = 7,
     CHPEG_ERR_TREE_STACK_UNDERFLOW = 8,
     CHPEG_ERR_UNEXPECTED_STACK_DATA = 9,
     CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA = 10,
     CHPEG_ERR_INVALID_IDENTIFIER = 11,
+    CHPEG_ERR_INVALID_PC = 12,
+    CHPEG_ERR_INVALID_INSTRUCTION = 13,
+    CHPEG_ERR_RUNAWAY = 14,
 };
 
 struct _ChpegParser;
@@ -76,11 +102,24 @@ typedef struct _ChpegParser
     int *def_fail_count;
 #endif
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     int vm_trace;
 #endif
-#if VM_PRINT_TREE
+
+#if CHPEG_VM_PRINT_TREE
     int vm_print_tree;
+#endif
+
+#if CHPEG_VM_PROFILE
+    int vm_profile;
+    int prof_inst_cnt;
+    int prof_op_cnt[CHPEG_NUM_OPS];
+    int *prof_ident_cnt;
+    int *prof_isucc_cnt;
+    int *prof_ifail_cnt;
+    int *prof_choice_cnt;
+    int *prof_cisucc_cnt;
+    int *prof_cifail_cnt;
 #endif
 
 } ChpegParser;
@@ -96,6 +135,9 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
+#if CHPEG_VM_PROFILE
+CHPEG_API void ChpegParser_print_profile(ChpegParser *self, FILE *fp);
+#endif
 
 #endif // #ifndef CHPEG_PARSER_H
 

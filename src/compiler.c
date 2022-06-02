@@ -231,7 +231,7 @@ static void ChpegCU_setup_def_addrs(ChpegCU *cu)
     int i = 0;
     ChpegGNode *p = NULL;
     for (i = 0, p = cu->root->head; p; p = p->next, ++i) {
-        cu->bc->def_addrs[i] = p->head->next->parse_state - 1;
+        cu->bc->def_addrs[i] = p->head->next->parse_state;
     }
 }
 
@@ -361,10 +361,10 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (ChpegGNode *p = gp->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state - 1));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state));
                 ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CIFAIL, 0));
             }
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state));
             break;
         case CHPEG_BC(SEQUENCE):
             for (ChpegGNode *p = gp->head; p; p = p->next) {
@@ -384,8 +384,8 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
             ChpegCU_add_instructions(cu, gp->head);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state - 1));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
             break;
 #endif
         case CHPEG_BC(REPEAT):
@@ -395,13 +395,13 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                     case '+':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPBEG, 0));
                         ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state));
                         break;
                     case '*':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSBEG, 0));
                         ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSDONE, 0));
                         break;
                     case '?':
@@ -420,28 +420,28 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                     case '&':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state));
                         break;
                     case '!':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
                         ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state - 1));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state - 1));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state));
                         break;
                 }
             }
             break;
         case CHPEG_BC(DOT):
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state));
             break;
         case CHPEG_BC(IDENTIFIER):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, gp->node)));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
         case CHPEG_BC(CHARCLASS):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
         case CHPEG_BC(LITERAL):
             {
@@ -455,7 +455,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 }
 #endif /*CHPEG_HAS_NOCASE*/
                 ChpegCU_add_inst(cu, CHPEG_INST(literal_op, gp->val.ival));
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state - 1));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             }
             break;
     }
