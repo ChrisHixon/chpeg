@@ -21,7 +21,7 @@ Primary     { } <- Identifier S !'{' !'<-'
 Trim        {S} <- '<' S Choice '>' S
 
 # Lexical syntax
-Options     { } <- [ILS]*
+Options     { } <- [A-Za-z]*
 Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
 Literal     {S} <- ['] (!['] Char)* [']
                  / ["] (!["] Char)* ["]

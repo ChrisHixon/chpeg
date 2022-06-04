@@ -35,8 +35,8 @@ int ProfileAction_run(void *_, App *app)
     {
         // if profiling was on during parse...
         if (app->parses.data[app->parses.size -1].parser->vm_profile) {
-            ChpegParser_print_profile(app->parses.data[app->parses.size - 1].parser,
-                stdout);
+            Parse *parse = &app->parses.data[app->parses.size - 1];
+            ChpegParser_print_profile(parse->parser, parse->data, parse->length, stdout);
             err = 0;
         }
         else {
@@ -63,7 +63,7 @@ int ProfileAction_run(void *_, App *app)
             Parse_init_file(&input, app->files.data[0]);
             err = Parse_parse(&input, app);
             if (err == 0) {
-                ChpegParser_print_profile(input.parser, stdout);
+                ChpegParser_print_profile(input.parser, input.data, input.length, stdout);
             }
             Parse_cleanup(&input);
         }
@@ -83,7 +83,7 @@ int ProfileAction_run(void *_, App *app)
                 Parse_init_file(&input, app->files.data[1]);
                 err = Parse_parse(&input, app);
                 if (err == 0) {
-                    ChpegParser_print_profile(input.parser, stdout);
+                    ChpegParser_print_profile(input.parser, input.data, input.length, stdout);
                 }
                 Parse_cleanup(&input);
             }

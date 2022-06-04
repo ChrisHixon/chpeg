@@ -161,7 +161,7 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   149 */ CHPEG_INST(CHPEG_OP_ISUCC       ,        7), /* Trim */
   /*   150 */ CHPEG_INST(CHPEG_OP_IFAIL       ,        7), /* Trim */
   /*   151 */ CHPEG_INST(CHPEG_OP_RSBEG       ,        0),
-  /*   152 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        8), /* "ILS" */
+  /*   152 */ CHPEG_INST(CHPEG_OP_CHRCLS      ,        8), /* "A-Za-z" */
   /*   153 */ CHPEG_INST(CHPEG_OP_GOTO        ,      155),
   /*   154 */ CHPEG_INST(CHPEG_OP_RSMAT       ,      152),
   /*   155 */ CHPEG_INST(CHPEG_OP_RSDONE      ,        0),
@@ -350,6 +350,6 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*   338 */ CHPEG_INST(CHPEG_OP_IFAIL       ,       20), /* S */
   },
   .num_strings = 26,
-  .strings = (unsigned char**)(char*[26]) {"{", "}", "<-", "/", "(", ")", "<", ">", "ILS", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
-  .str_len = (int[26]) {1, 1, 2, 1, 1, 1, 1, 1, 3, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2}
+  .strings = (unsigned char**)(char*[26]) {"{", "}", "<-", "/", "(", ")", "<", ">", "A-Za-z", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
+  .str_len = (int[26]) {1, 1, 2, 1, 1, 1, 1, 1, 6, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2}
 };

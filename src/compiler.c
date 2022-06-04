@@ -168,16 +168,17 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         printf(" Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
         printf("---------------------------------------------------------------------------------\n");
     }
-    printf("%6zu %6zu %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
+    printf("%6zu %6zu %6d | %6d %6d %6d | %s%s%s%s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
         gnode->type,
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & CHPEG_FLAG_STOP ? "S" : " ",
-        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
-        flags & CHPEG_FLAG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : "-",
+        flags & CHPEG_FLAG_IGNORE ? "I" : "-",
+        flags & CHPEG_FLAG_LEAF ? "L" : "-",
+        flags & CHPEG_FLAG_PACKRAT ? "P" : "-",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -218,9 +219,16 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
         if (NULL != tmp && CHPEG_DEF_OPTIONS == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= CHPEG_FLAG_STOP; break;
-                    case 'I': flags |= CHPEG_FLAG_IGNORE; break;
-                    case 'L': flags |= CHPEG_FLAG_LEAF; break;
+                    case 'C':
+                    case 'S':
+                        flags |= CHPEG_FLAG_STOP; break;
+                    case 'I':
+                        flags |= CHPEG_FLAG_IGNORE; break;
+                    case 'L':
+                    case 'T':
+                        flags |= CHPEG_FLAG_LEAF; break;
+                    case 'P':
+                        flags |= CHPEG_FLAG_PACKRAT; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node

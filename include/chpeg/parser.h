@@ -150,7 +150,8 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
 CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE
-CHPEG_API void ChpegParser_print_profile(ChpegParser *self, FILE *fp);
+CHPEG_API void ChpegParser_print_profile(ChpegParser *self,
+    const unsigned char *input, size_t length, FILE *fp);
 #endif
 
 #endif // #ifndef CHPEG_PARSER_H
