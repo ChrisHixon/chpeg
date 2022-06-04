@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #ifndef CHPEG_AMALGAMATION
-#include "chpeg/chpeg.h"
+#include "chpeg.h"
 #endif
 
 void usage(const char *prog) {
@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
         if (consumed == length) {
             printf("Parse successful.\n");
         }
-        ChpegParser_print_tree(parser, input, stdout);
+        ChpegParser_print_tree(parser, input, length, stdout);
     }
     else {
         if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {

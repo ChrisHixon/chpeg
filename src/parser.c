@@ -226,7 +226,7 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
     }
 }
 
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp)
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, size_t input_length, FILE *fp)
 {
 #ifdef CHPEG_DEFINITION_TRACE
     int itotal_def_count = 0, itotal_def_succ_count = 0, itotal_def_fail_count = 0;
@@ -244,7 +244,7 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
     }
     fprintf(fp, "\n%4s  %10.d  %5s  %10.d  %10.d  Total counters\n", "", itotal_def_count, "", itotal_def_succ_count, itotal_def_fail_count);
     fprintf(fp, "\n%4s  %12s  %5s  %8.2f  %10.2f  %% success/fail\n\n", "", "", "", (itotal_def_succ_count/dtotal_count)*100.0, (itotal_def_fail_count/dtotal_count)*100.0);
-    fprintf(fp, "Total VM loops %d\n\n", self->vm_count);
+    fprintf(fp, "Total VM loops %d,  instructions per input byte %.2f\n\n", self->vm_count, (self->vm_count/(input_length*1.0)));
 #endif
     ChpegNode_print(self->tree_root, self, input, 0, fp);
 }
@@ -1155,7 +1155,7 @@ chrcls_done:
 
 #if CHPEG_VM_PRINT_TREE
         if (self->vm_print_tree && tree_changed) {
-            ChpegParser_print_tree(self, input, stderr);
+            ChpegParser_print_tree(self, input, length, stderr);
         }
 #endif
         if (pc < 0) {

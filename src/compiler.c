@@ -663,7 +663,7 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
             fprintf(stderr, "chpeg_compile: Parse successful.\n");
         }
         if (verbose & 2) {
-            ChpegParser_print_tree(cu.parser, input, stderr);
+            ChpegParser_print_tree(cu.parser, input, length, stderr);
         }
     }
     else {
