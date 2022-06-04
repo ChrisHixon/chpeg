@@ -34,11 +34,12 @@
 #define CHPEG_VM_PRINT_TREE 0
 #endif
 
-// CHPEG_PACKRAT:
+// Packrat
 #ifndef CHPEG_PACKRAT
 #define CHPEG_PACKRAT 0
 #endif
 
+// limit on sub-tree nodes per packrat entry (sub-trees with more nodes than this amount will not be cached)
 #ifndef CHPEG_PACKRAT_NODE_LIMIT
 #define CHPEG_PACKRAT_NODE_LIMIT 8
 #endif
@@ -63,7 +64,8 @@ enum ChpegErrorCodes
     CHPEG_ERR_INVALID_IDENTIFIER = 11,
     CHPEG_ERR_INVALID_PC = 12,
     CHPEG_ERR_INVALID_INSTRUCTION = 13,
-    CHPEG_ERR_RUNAWAY = 14,
+    CHPEG_ERR_INVALID_OFFSET = 14,
+    CHPEG_ERR_RUNAWAY = 15,
 };
 
 struct _ChpegParser;
@@ -131,10 +133,12 @@ typedef struct _ChpegParser
     int *prof_choice_cnt;
     int *prof_cisucc_cnt;
     int *prof_cifail_cnt;
+    size_t farthest_backtrack;
 #endif
 
 #if CHPEG_PACKRAT
     int packrat;
+    int packrat_window_size;
 #endif
 
 } ChpegParser;

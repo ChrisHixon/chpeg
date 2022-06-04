@@ -38,6 +38,7 @@ struct _App {
 #endif
 #if CHPEG_PACKRAT
     int packrat;
+    int packrat_window_size;
 #endif
 
     // Grammar list/stack

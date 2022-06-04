@@ -108,6 +108,7 @@ int Parse_parse(Parse *p, App *app)
 #if CHPEG_PACKRAT
     // enable packrat
     p->parser->packrat = app->packrat;
+    p->parser->packrat_window_size = app->packrat_window_size;
 #endif
 
     size_t consumed = 0;

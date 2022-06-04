@@ -107,6 +107,7 @@ void help(App *app, FILE *fp)
     fprintf(fp, "Packrat options:\n");
     fprintf(fp, "  -packrat        enable packrat\n");
     fprintf(fp, "  -packratN       set packrat to N (0=off,1=on)\n");
+    fprintf(fp, "  -window=N       set packrat window size to N (default is input size)\n");
     fprintf(fp, "\n");
 #endif
 
@@ -550,6 +551,10 @@ static int run(App *app)
         // packrat (-packratN)
         else if (arg_int(app, "-packrat", &value) == 0) {
             app->packrat = value;
+        }
+        // packrat (-window=N)
+        else if (arg_int(app, "-window=", &value) == 0) {
+            app->packrat_window_size = value;
         }
 #endif
 
