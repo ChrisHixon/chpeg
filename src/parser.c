@@ -46,8 +46,6 @@
 #define ERRORS_TERMINALS 1
 #endif
 
-#define ERROR_REPEAT_INHIBIT 0 // probably flawed idea or implementation, don't enable
-
 //
 // ChpegNode
 //
@@ -1169,40 +1167,34 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 
 
+//
 // Repeat +
-            case CHPEG_OP_RPBEG:
-                if (CHPEG_CHECK_STACK_OVERFLOW(4)) { // pushes 4 items
+//
+            case CHPEG_OP_RPBEG: // Repeat Plus BEGin (+)
+                if (CHPEG_CHECK_STACK_OVERFLOW(3)) { // pushes 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
-#if ERRORS && ERROR_REPEAT_INHIBIT
-                stack[++top] = 0; // used to inhibit error tracking after 1st rep
-#endif
-                stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
-                stack[++top] = offset; // offset - backtrack point
+                stack[++top] = tree_stack[tree_top]->num_children; // num_children: backtrack point
+                stack[++top] = offset; // offset: backtrack point
                 stack[++top] = 0; // cnt (match count)
                 ++pc; // next instruction
                 break;
 
-            case CHPEG_OP_RPMAT: // arg = loop pc addr
+            case CHPEG_OP_RPMAT: // Repeat Plus MATch; arg = loop pc addr
                 ++stack[top]; // incr match count
                 if (offset != stack[top-1]) { // only loop if consuming
                     stack[top-2] = tree_stack[tree_top]->num_children; // update backtrack point
                     stack[top-1] = offset; // update backtrack point
                     pc = arg; // continue looping
-#if ERRORS && ERROR_REPEAT_INHIBIT
-                    if (!err_locked) { // inhibit error tracking after 1st rep
-                        stack[top-3] = 1; err_locked = 1;
-                    }
-#endif
                 }
                 else {
                     ++pc; // next instruction
                 }
                 break;
 
-            case CHPEG_OP_RPDONE: // arg = match fail pc addr
+            case CHPEG_OP_RPDONE: // Repeat Plus DONE; arg = match fail pc addr
 #if SANITY_CHECKS
-                if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(3)) { // pops 3 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1218,48 +1210,38 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     top -= 3;
                     pc = arg;
                 }
-#if ERRORS && ERROR_REPEAT_INHIBIT
-                if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
-#endif
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 break;
 
 // Repeat *|?
-            case CHPEG_OP_RSBEG:
-            case CHPEG_OP_RQBEG:
-                if (CHPEG_CHECK_STACK_OVERFLOW(3)) { // pushes 3 items
+            case CHPEG_OP_RSBEG: // Repeat Star BEGin (*); arg=unused
+            case CHPEG_OP_RQBEG: // Repeat Question BEGin (?); arg=unused
+                if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
-#if ERRORS && ERROR_REPEAT_INHIBIT
-                if (!err_locked) { // inhibit error tracking
-                    stack[++top] = 1; err_locked = 1;
-                }
-                else {
-                    stack[++top] = 0;
-                }
-#endif
-                stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
+                stack[++top] = tree_stack[tree_top]->num_children; // num_children: backtrack point
                 stack[++top] = offset; // save offset for backtrack
                 ++pc; // next instruction
                 break;
 
-            case CHPEG_OP_RSMAT: // arg = loop pc addr
+            case CHPEG_OP_RSMAT: // Repeat Star MATch; arg = loop pc addr
                 if (offset != stack[top]) { // only loop if consuming
-                    stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
-                    stack[top] = offset; // update backtrack point
+                    stack[top-1] = tree_stack[tree_top]->num_children; // update num_children backtrack point
+                    stack[top] = offset; // update offset backtrack point
                     pc = arg; // continue looping
-                } // else next instruction, which is a R*DONE
+                }
                 else {
                     ++pc; // next instruction
                 }
                 break;
 
-            case CHPEG_OP_RSDONE: // * always succeeds, proceeds to next instr.
-            case CHPEG_OP_RQDONE: // ? always succeeds, proceeds to next instr.
+            case CHPEG_OP_RSDONE: // Repeat Star DONE (*): always succeeds, proceeds to next instr.
+            case CHPEG_OP_RQDONE: // Repeat Question DONE (?): always succeeds, proceeds to next instr.
 #if SANITY_CHECKS
-                if (CHPEG_CHECK_STACK_UNDERFLOW(3)) { // pops 3 items
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
@@ -1268,9 +1250,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 for (i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
                 top -= 2;
-#if ERRORS && ERROR_REPEAT_INHIBIT
-                if (stack[top--]) { err_locked = 0; } // reenable error tracking (if we disabled it)
-#endif
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -1278,7 +1258,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 
 // Repeat ?
-            case CHPEG_OP_RQMAT: // no looping for ?
+            case CHPEG_OP_RQMAT: // Repeat Question MATch (?); no looping for ?
                 stack[top-1] = tree_stack[tree_top]->num_children; // update backtrack point
                 stack[top] = offset; // update backtrack point
                 ++pc; // next instruction
@@ -1407,7 +1387,9 @@ pred_cleanup:
                 }
 #endif
 #if ERRORS
-                if (stack[top--]) { err_locked = 0; }
+                if (stack[top--]) {
+                    err_locked = 0;
+                }
 #if ERRORS_PRED
                 --top;
 #endif
