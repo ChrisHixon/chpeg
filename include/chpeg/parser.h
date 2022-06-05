@@ -98,6 +98,13 @@ CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_unwrap(ChpegNode *self);
 CHPEG_API void ChpegNode_print(ChpegNode *self, struct _ChpegParser *parser, const unsigned char *input, int depth, FILE *fp);
 
+typedef struct _ChpegErrorInfo
+{
+    int depth;
+    int def;
+    int pc;
+} ChpegErrorInfo;
+
 //
 // ChpegParser
 //
@@ -108,12 +115,20 @@ typedef struct _ChpegParser
     ChpegNode *tree_root;
     int max_tree_depth;
     int max_stack_size;
+    int parse_result;
+
+    /*
     size_t error_offset;
     int error_def;
     int error_parent_def;
     int error_inst;
     int error_expected;
-    int parse_result;
+    */
+
+    size_t error_offset;
+    ChpegErrorInfo *errors;
+    int errors_capacity;
+    int errors_size;
 
 #if CHPEG_VM_TRACE
     int vm_trace;
@@ -147,7 +162,8 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
-CHPEG_API void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected);
+CHPEG_API void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc);
+CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE
 CHPEG_API void ChpegParser_print_profile(ChpegParser *self,

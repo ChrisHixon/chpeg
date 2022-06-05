@@ -131,7 +131,7 @@ int Parse_parse(Parse *p, App *app)
         else {
             fprintf(stderr, "Parse failed with result: %d\n", parse_result);
         }
-        ChpegParser_print_error(p->parser, data);
+        ChpegParser_print_errors(p->parser, data, 1);
         err = 2;
         goto done;
     }

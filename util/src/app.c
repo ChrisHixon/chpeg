@@ -233,6 +233,7 @@ int push_grammar_file(App *app, const char *filename)
     Grammar_init_file(&g, filename);
 
     if (Grammar_compile(&g, app) != 0) {
+        Grammar_cleanup(&g);
         return 1;
     }
 
@@ -248,6 +249,7 @@ int push_grammar_str(App *app, const char *str)
     Grammar_init_str(&g, str);
 
     if (Grammar_compile(&g, app) != 0) {
+        Grammar_cleanup(&g);
         return 1;
     }
 
@@ -263,6 +265,7 @@ int push_parse_file(App *app, const char *filename)
     Parse_init_file(&p, filename);
 
     if (Parse_parse(&p, app) != 0) {
+        Parse_cleanup(&p);
         return 1;
     }
 
@@ -278,6 +281,7 @@ int push_parse_str(App *app, const char *str)
     Parse_init_str(&p, str);
 
     if (Parse_parse(&p, app) != 0) {
+        Parse_cleanup(&p);
         return 1;
     }
 

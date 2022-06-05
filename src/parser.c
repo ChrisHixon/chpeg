@@ -353,10 +353,9 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->max_tree_depth = CHPEG_MAX_TREE_DEPTH;
     self->max_stack_size = CHPEG_STACK_SIZE;
     self->error_offset = 0;
-    self->error_parent_def = -1;
-    self->error_def = -1;
-    self->error_inst = -1;
-    self->error_expected = -1;
+    self->errors = NULL;
+    self->errors_size = 0;
+    self->errors_capacity = 0;
 
 #if CHPEG_VM_TRACE
     self->vm_trace = 0;
@@ -390,6 +389,14 @@ void ChpegParser_free(ChpegParser *self)
             ChpegNode_free(self->tree_root);
             self->tree_root = NULL;
         }
+#if ERRORS
+        if (self->errors) {
+            CHPEG_FREE(self->errors);
+            self->errors = NULL;
+            self->errors_capacity = 0;
+            self->errors_size = 0;
+        }
+#endif
 #if CHPEG_VM_PROFILE
         if (self->prof_ident_cnt) {
             CHPEG_FREE(self->prof_ident_cnt);
@@ -481,99 +488,130 @@ void ChpegParser_print_profile(ChpegParser *self,
 }
 #endif
 
-void ChpegParser_expected(ChpegParser *self, int parent_def, int def, int inst, size_t offset, int expected)
+void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc)
 {
-    if (offset >= self->error_offset && !(def == 0 && inst == -1)) {
-        self->error_offset = offset;
-        self->error_parent_def = parent_def;
-        self->error_def = def;
-        self->error_inst = inst;
-        self->error_expected = expected;
+    if (offset >= self->error_offset) {
+        if (offset > self->error_offset) {
+            self->error_offset = offset;
+            self->errors_size = 0;
+        }
+        if (self->errors_size + 1 > self->errors_capacity) {
+            if (!self->errors) {
+                self->errors_capacity = 1;
+                self->errors = CHPEG_MALLOC(self->errors_capacity * sizeof(ChpegErrorInfo));
+            }
+            else {
+                self->errors_capacity *= 2;
+            }
+            self->errors = CHPEG_REALLOC(self->errors, self->errors_capacity * sizeof(ChpegErrorInfo));
+        }
+        self->errors[self->errors_size++] = (ChpegErrorInfo)
+        {
+            .depth = depth,
+            .def = def,
+            .pc = pc,
+        };
     }
 }
 
-void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
+void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all)
 {
 #if ERRORS
-    const char *parent_def_name = ChpegByteCode_def_name(self->bc, self->error_parent_def);
-    const char *def_name = ChpegByteCode_def_name(self->bc, self->error_def);
-
-    if (self->error_expected >= 0) {
-        if (self->error_inst >= 0) {
-            int op = self->error_inst & 0xff;
-            int arg = self->error_inst >> 8;
-            char *esc = NULL;
-            const char *str = NULL;
-            switch (op) {
-                case CHPEG_OP_DOT:
-                    fprintf(stderr, "%s character in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-                    break;
-                case CHPEG_OP_IDENT:
-                    str = ChpegByteCode_def_name(self->bc, arg); break;
-                    fprintf(stderr, "%s %s in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        str ? str : "<N/A>>",
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-                    break;
-                case CHPEG_OP_CHRCLS:
-                    esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
-                        self->bc->str_len[arg], 20);
-                    fprintf(stderr, "%s [%s] in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        esc ? esc : "<NULL>",
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-                    break;
-                case CHPEG_OP_LIT:
-                    esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
-                        self->bc->str_len[arg], 20);
-                    fprintf(stderr, "%s \"%s\" in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        esc ? esc : "<NULL>",
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-                    break;
-                default: // unhandled op, show instruction in <> for debugging
-                    fprintf(stderr, "%s <%s,%d> in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        Chpeg_op_name(op), arg,
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-                    break;
-            }
-            if (esc) {
-                CHPEG_FREE(esc);
-                esc = NULL;
-            }
-        }
-        else {
-            if (parent_def_name) {
-                fprintf(stderr, "%s %s in %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        def_name ? def_name : "<N/A>",
-                        parent_def_name ? parent_def_name : "<N/A>",
-                        self->error_offset);
-            }
-            else {
-                fprintf(stderr, "%s %s at offset %lu\n",
-                        self->error_expected ? "Expected" : "Unexpected",
-                        def_name ? def_name : "<N/A>",
-                        self->error_offset);
-            }
-        }
-    }
-    else {
+    if (self->errors_size == 0) {
         fprintf(stderr, "No errors detected / tracked.\n");
+        return;
+    }
+
+    assert(self->errors_size > 0);
+    for (int i = all ? 0 : self->errors_size - 1; i < self->errors_size; ++i) {
+        ChpegErrorInfo *error = &self->errors[i];
+        const char *def_name = ChpegByteCode_def_name(self->bc, error->def);
+        int inst = self->bc->instructions[error->pc];
+        int op = inst & 0xff;
+        int arg = inst >> 8;
+
+        char *esc = NULL;
+        const char *str = NULL;
+        int depth_indent = (error->depth - 1) *2;
+        const char *expected = "Expected:";
+
+        // if a predicate is followed by an instruction case we can display,
+        // use that, switching to 'unexpected' for PREDN (predicate '!')
+        // (otherwise, it'll fall through to the default 'syntax error' case below)
+        if (op == CHPEG_OP_PREDN || op == CHPEG_OP_PREDA) {
+            int next_inst = self->bc->instructions[error->pc + 1];
+            switch (next_inst & 0xff) {
+                case CHPEG_OP_IDENT:
+                case CHPEG_OP_LIT:
+                case CHPEG_OP_CHRCLS:
+                case CHPEG_OP_DOT:
+                    if (op == CHPEG_OP_PREDN) {
+                        expected = "Unexpected:";
+                    }
+                    op = next_inst & 0xff;
+                    arg = next_inst >> 8;
+                    break;
+            }
+        }
+
+        switch (op) {
+            case CHPEG_OP_IDENT:
+                str = ChpegByteCode_def_name(self->bc, arg);
+                fprintf(stderr, "%11s %*s%s in %s at offset %lu\n",
+                    expected,
+                    depth_indent, "",
+                    str ? str : "<N/A>>",
+                    def_name ? def_name : "<N/A>",
+                    self->error_offset);
+                break;
+            case CHPEG_OP_LIT:
+                esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
+                    self->bc->str_len[arg], 20);
+                fprintf(stderr, "%11s %*s\"%s\" in %s at offset %lu\n",
+                    expected,
+                    depth_indent, "",
+                    esc ? esc : "<NULL>",
+                    def_name ? def_name : "<N/A>",
+                    self->error_offset);
+                CHPEG_FREE(esc); esc = NULL;
+                break;
+            case CHPEG_OP_CHRCLS:
+                esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
+                    self->bc->str_len[arg], 20);
+                fprintf(stderr, "%11s %*s[%s] in %s at offset %lu\n",
+                    expected,
+                    depth_indent, "",
+                    esc ? esc : "<NULL>",
+                    def_name ? def_name : "<N/A>",
+                    self->error_offset);
+                CHPEG_FREE(esc); esc = NULL;
+                break;
+            case CHPEG_OP_DOT:
+                fprintf(stderr, "%11s %*scharacter in %s at offset %lu\n",
+                    expected,
+                    depth_indent, "",
+                    def_name ? def_name : "<N/A>",
+                    self->error_offset);
+                break;
+            default: // unhandled op, show instruction in <> for debugging
+                fprintf(stderr, "%11s %*sSyntax error in %s at offset %lu <%s,%d>\n",
+                    "Error:",
+                    depth_indent, "",
+                    def_name ? def_name : "<N/A>",
+                    self->error_offset,
+                    Chpeg_op_name(op), arg);
+                break;
+        }
     }
 #else
     fprintf(stderr, "Error tracking disabled at compile time.\n");
 #endif
 }
 
+void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
+{
+    ChpegParser_print_errors(self, input, 0);
+}
 
 // TODO: work on check sanity checks and underflow/overflow/range checks, make macros to make it easier
 //
@@ -1040,7 +1078,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 ++self->prof_ifail_cnt[arg];
 #endif
                 // top=s+4: pc
-                pc = stack[top--] + 1; // top=s+3: offset
+                pc = stack[top--]; // top=s+3: offset
                 offset = stack[top--]; // top=s+2: def       // backtrack
                 cur_def = stack[top--]; // top=s+1: locked
 
@@ -1063,9 +1101,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 #if ERRORS && ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
-                    ChpegParser_expected(self,
-                            tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
-                            tree_stack[tree_top]->def, -1, offset, 1);
+                    ChpegParser_expected(self, offset, tree_top, // offset, depth
+                        tree_top > 0 ? tree_stack[tree_top-1]->def : -1, pc); // parent def, pc
 #if DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
@@ -1085,7 +1122,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
-                // pc is restored +1 (so resume execution at next instruction)
+                // pc has been restored, resume execution at next instruction
+                ++pc;
                 break;
 
 // Choice
@@ -1327,7 +1365,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[++top] = offset; // save offset for backtrack
 #if ERRORS
 #if ERRORS_PRED
-                stack[++top] = pc + 1; // 1st child inst address for error
+                //stack[++top] = pc + 1; // 1st child inst address for error
+                stack[++top] = pc; // save pc for error
 #endif
                 if (!err_locked) {
                     stack[++top] = 1; err_locked = 1;
@@ -1343,10 +1382,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
 #if ERRORS && ERRORS_PRED
                 if (stack[top]) {
-                    ChpegParser_expected(self,
-                            tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
-                            tree_stack[tree_top]->def, instructions[stack[top-1]],
-                            offset, (CHPEG_OP_PNOMATF == op));
+                    ChpegParser_expected(self, stack[top-2], tree_top, // offset, depth
+                        tree_stack[tree_top]->def, stack[top-1]); // def, pc
 #if DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
@@ -1408,9 +1445,8 @@ pred_cleanup:
                     }
 #if ERRORS && ERRORS_TERMINALS
                     if (!err_locked) {
-                        ChpegParser_expected(self,
-                                tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
-                                tree_stack[tree_top]->def, instructions[pc], offset, 1);
+                        ChpegParser_expected(self, offset, tree_top, // offset, depth
+                            tree_stack[tree_top]->def, pc); // def, pc
 #if DEBUG_ERRORS
                         ChpegParser_print_error(self, input);
 #endif
@@ -1433,9 +1469,8 @@ chrcls_done:
                 }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
-                    ChpegParser_expected(self,
-                            tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
-                            tree_stack[tree_top]->def, instructions[pc], offset, 1);
+                    ChpegParser_expected(self, offset, tree_top, // offset, depth
+                        tree_stack[tree_top]->def, pc); // def, pc
 #if DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
@@ -1453,9 +1488,8 @@ chrcls_done:
                 }
 #if ERRORS && ERRORS_TERMINALS
                 if (!err_locked) {
-                    ChpegParser_expected(self,
-                            tree_top > 0 ? tree_stack[tree_top-1]->def : -1,
-                            tree_stack[tree_top]->def, instructions[pc], offset, 1);
+                    ChpegParser_expected(self, offset, tree_top, // offset, depth
+                        tree_stack[tree_top]->def, pc); // def, pc
 #if DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
