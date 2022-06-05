@@ -142,6 +142,25 @@ static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **de
     return 1;
 }
 #endif
+#ifdef CHPEG_HAS_BACKREFERENCE
+static ChpegGNode *ChpegCU_find_mark_def(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode *node_ref)
+{
+    if(gnode == NULL)
+        ChpegCU_find_def_node(cu, node_ref->parent, &gnode);
+
+    for (ChpegGNode *p = gnode; p; p = p->next) {
+        if (p->type == CHPEG_BC(MARK) && p->num_children == 2 &&
+                strncmp(cu->input+p->head->next->node->offset, cu->input+node_ref->node->offset, node_ref->node->length)) {
+            return p;
+        }
+        if(p->num_children > 1) {
+            ChpegGNode *rc = ChpegCU_find_mark_def(cu, p->head, node_ref);
+            if(rc) return rc;
+        }
+    }
+    return NULL;
+}
+#endif
 
 #if DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
@@ -305,6 +324,17 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
 #endif
+#ifdef CHPEG_HAS_BACKREFERENCE
+        case CHPEG_BC(MARK):
+            ChpegCU_alloc_instructions(cu, gp->head->next);
+            break;
+        case CHPEG_BC(REFERENCE): {
+                ChpegGNode *def_node = ChpegCU_find_mark_def(cu, NULL, gp);
+                if(def_node) ChpegCU_alloc_instructions(cu, def_node->head->next);
+                //else panic(); TODO what if we get here ?
+            }
+            break;
+#endif
         case CHPEG_BC(REPEAT):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -386,6 +416,17 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_instructions(cu, gp->head);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
+            break;
+#endif
+#ifdef CHPEG_HAS_BACKREFERENCE
+        case CHPEG_BC(MARK):
+            ChpegCU_add_instructions(cu, gp->head->next);
+            break;
+        case CHPEG_BC(REFERENCE): {
+                ChpegGNode *def_node = ChpegCU_find_mark_def(cu, NULL, gp);
+                if(def_node) ChpegCU_add_instructions(cu, def_node->head->next);
+                //else panic(); TODO what if we get here ?
+            }
             break;
 #endif
         case CHPEG_BC(REPEAT):
