@@ -21,6 +21,10 @@
 #define CHPEG_STACK_SIZE 1024
 #endif
 
+#ifndef CHPEG_RSTACK_SIZE
+#define CHPEG_RSTACK_SIZE 256
+#endif
+
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
 #endif
@@ -44,6 +48,10 @@
 
 #ifndef ERRORS_TERMINALS
 #define ERRORS_TERMINALS 1
+#endif
+
+#ifndef ERRORS_REFS
+#define ERRORS_REFS 1
 #endif
 
 //
@@ -337,6 +345,15 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
 #endif
 
 #endif // #if CHPEG_PACKRAT
+
+#if CHPEG_EXTENSION_REFS
+typedef struct _ReferenceInfo
+{
+    size_t offset;
+    size_t length;
+} ReferenceInfo;
+
+#endif
 
 //
 // ChpegParser
@@ -636,14 +653,13 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 // TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal
 // with things this is meant to detect)
 
-int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
-{
-
 #define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= max_stack_size)
 #define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < 0)
 #define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
 #define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
 
+int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
+{
     int locked = 0, cur_def = -1, retval = 0;
 
 #if ERRORS
@@ -701,6 +717,13 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
         }
     }
 
+#endif
+
+#ifdef CHPEG_EXTENSION_REFS
+    const int num_refs = self->bc->num_refs;
+    ReferenceInfo* rstack = CHPEG_CALLOC(num_refs * CHPEG_RSTACK_SIZE, sizeof(ReferenceInfo));
+    ReferenceInfo* ref = NULL;
+    int rtop = 0; // item 0 is `global scope
 #endif
 
 #if CHPEG_VM_TRACE
@@ -1339,35 +1362,126 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 //
             case CHPEG_OP_MARK: // MARK start; arg: ref_id
 
-                //
-                // not implemented
-                //
+                if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 item
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
+
+                stack[++top] = offset; // push beginning offset
+                stack[++top] = arg;    // push ref_id
+
+#if CHPEG_VM_TRACE
+                if (self->vm_trace & 8) {
+                    fprintf(stderr, "+  MARK: START  ref %d (%12s) rtop=%d offset=%zu\n",
+                        arg, ChpegByteCode_ref_name(self->bc, arg), rtop, offset);
+                }
+#endif
 
                 ++pc; // next instruction
                 break;
 
             case CHPEG_OP_MARKS: // MARK Success: the contents inside ($name'<' ... '>') matched
                                  // arg = next pc
-                //
-                // not implemented
-                //
+
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+                assert(stack[top] < num_refs);
+                ref = &rstack[rtop * num_refs + stack[top]]; // stack[top] is ref_id
+                ref->offset = stack[top-1]; // stack[top-1] is beginning offset
+                ref->length = offset - ref->offset;
+
+#if CHPEG_VM_TRACE
+                if (self->vm_trace & 8) {
+                    char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
+                    fprintf(stderr, "+ MARKS: SET    ref %d (%12s) rtop=%d offset:%zu length:%zu data:\"%s\"\n",
+                        (int)stack[top], ChpegByteCode_ref_name(self->bc, stack[top]), rtop,
+                        ref->offset, ref->length, esc);
+                    CHPEG_FREE(esc);
+                }
+#endif
+
+                top -= 2;
                 pc = arg;
                 break;
 
             case CHPEG_OP_MARKF: // MARK Failed: the contents inside ($name'<' ... '>') did not match
                                  // arg = next pc
 
-                //
-                // not implemented
-                //
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+                // not sure the best behavior here, should the value be reset like this
+                // on failure or should it leave what is already there?
+                // it could be a choice
+                assert(stack[top] < num_refs);
+                ref = &rstack[rtop * num_refs + stack[top]]; // stack[top] is ref_id
+                ref->offset = 0;
+                ref->length = 0;
+
+#if CHPEG_VM_TRACE
+                if (self->vm_trace & 8) {
+                    fprintf(stderr, "+ MARKF: FAILED ref %d (%12s) rtop=%d offset:%zu length:%zu)\n",
+                        (int)stack[top], ChpegByteCode_ref_name(self->bc, stack[top]), rtop,
+                        ref->offset, ref->length);
+                }
+#endif
+
+                top -= 2;
                 pc = arg;
                 break;
 
-            case CHPEG_OP_REF: // REFerence: match reference; arg = ref_id;
+            case CHPEG_OP_REF: // match REFerence; arg = ref_id;
                                // skip next instruction on match
-                // eat a byte and act like we succeeded just for testing
-                ++offset;
-                pc += 2;
+                assert(arg < num_refs);
+                ref = &rstack[rtop * num_refs + arg]; // stack[top] is ref_id
+
+#if CHPEG_VM_TRACE
+                if (self->vm_trace & 8) {
+                    char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
+                    fprintf(stderr, "+   REF: LOOKUP ref %d (%12s) rtop=%d offset:%zu length:%zu data:\"%s\"\n",
+                        arg, ChpegByteCode_ref_name(self->bc, arg), rtop,
+                        ref->offset, ref->length, esc);
+                    CHPEG_FREE(esc);
+                }
+#endif
+                if ((offset < (length - (ref->length - 1))) &&
+                    memcmp(input + offset, input + ref->offset, ref->length) == 0)
+                {
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
+                        fprintf(stderr, "+   REF: MATCH  ref %d (%12s) rtop=%d offset:%zu length:%zu data:\"%s\"\n",
+                            arg, ChpegByteCode_ref_name(self->bc, arg), rtop,
+                            ref->offset, ref->length, esc);
+                        CHPEG_FREE(esc);
+                    }
+#endif
+                    offset += ref->length;
+                    pc += 2;
+                    break;
+                }
+#if CHPEG_VM_TRACE
+                if (self->vm_trace & 8) {
+                    char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
+                    fprintf(stderr, "+   REF: FAILED ref %d (%12s) rtop=%d offset=%zu\n",
+                        arg, ChpegByteCode_ref_name(self->bc, arg), rtop, offset);
+                    CHPEG_FREE(esc);
+                }
+#endif
+#if ERRORS && ERRORS_REFS
+                if (!err_locked) {
+                    ChpegParser_expected(self, offset, tree_top, // offset, depth
+                        tree_stack[tree_top]->def, pc); // def, pc
+#if DEBUG_ERRORS
+                    ChpegParser_print_error(self, input);
+#endif
+                }
+#endif
+                ++pc; // failed match, go to next instruction
                 break;
 #endif
 
@@ -1604,12 +1718,13 @@ done:
     self->parse_result = retval;
     return retval;
 
+}
+
 #undef CHPEG_CHECK_STACK_OVERFLOW
 #undef CHPEG_CHECK_STACK_UNDERFLOW
 #undef CHPEG_CHECK_TSTACK_OVERFLOW
 #undef CHPEG_CHECK_TSTACK_UNDERFLOW
 
-}
 
 // } chpeg: parser.c
 

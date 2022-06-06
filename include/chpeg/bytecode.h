@@ -40,6 +40,9 @@ CHPEG_API ChpegByteCode *ChpegByteCode_new();
 CHPEG_API void ChpegByteCode_free(ChpegByteCode *self);
 
 CHPEG_API const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index);
+#if CHPEG_EXTENSION_REFS
+CHPEG_API const char *ChpegByteCode_ref_name(const ChpegByteCode *self, int index);
+#endif
 CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b);
 CHPEG_API void ChpegByteCode_print_instructions(const ChpegByteCode *self);
 CHPEG_API void ChpegByteCode_print_defs(const ChpegByteCode *self);
