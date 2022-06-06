@@ -803,7 +803,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 case CHPEG_OP_IDENT:
                 case CHPEG_OP_ISUCC:
                 case CHPEG_OP_IFAIL:
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
                 case CHPEG_OP_TRIM:
 #endif
                     def_name = ChpegByteCode_def_name(self->bc, arg);
@@ -1009,13 +1009,13 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     }
 #endif
 
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
                     // if we haven't set length by trimming right, set length
                     if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
                     {
 #endif
                         tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
                     }
 #endif
 
@@ -1264,7 +1264,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 ++pc; // next instruction
                 break;
 
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
 //
 // Trim
 //
@@ -1484,13 +1484,13 @@ chrcls_done:
             case CHPEG_OP_SUCC: // overall success
                 pc = -1; // we're done
 
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
                 // if we haven't set length by trimming right, set length
                 if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
                 {
 #endif
                     tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
                 }
 #endif
 

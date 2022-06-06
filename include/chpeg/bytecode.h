@@ -28,6 +28,12 @@ typedef struct _ChpegByteCode
     int num_strings;
     unsigned char **strings;
     int *str_len;
+
+#if CHPEG_EXTENSION_REFS
+    int num_refs;
+    char **refs;
+#endif
+
 } ChpegByteCode;
 
 CHPEG_API ChpegByteCode *ChpegByteCode_new();

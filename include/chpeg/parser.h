@@ -48,6 +48,7 @@
 #define CHPEG_NODE_REF_COUNT 1
 #endif
 
+// parser error codes
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
@@ -66,6 +67,8 @@ enum ChpegErrorCodes
     CHPEG_ERR_INVALID_INSTRUCTION = 13,
     CHPEG_ERR_INVALID_OFFSET = 14,
     CHPEG_ERR_RUNAWAY = 15,
+    CHPEG_ERR_COMPILE = 16, // compiler error; shouldn't really be in here
+    CHPEG_NUM_ERR = 17,
 };
 
 struct _ChpegParser;

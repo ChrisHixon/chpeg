@@ -15,6 +15,19 @@
 #define CHPEG_DEF
 #endif
 
+#ifdef CHPEG_EXTENSIONS
+#define CHPEG_EXTENSION_TRIM 1
+#define CHPEG_EXTENSION_REFS 1
+#endif
+
+#ifndef CHPEG_EXTENSION_TRIM
+#define CHPEG_EXTENSION_TRIM 0
+#endif
+
+#ifndef CHPEG_EXTENSION_REFS
+#define CHPEG_EXTENSION_REFS 0
+#endif
+
 #endif // #ifndef CHPEG_API_H
 
 // } chpeg: chpeg_api.h

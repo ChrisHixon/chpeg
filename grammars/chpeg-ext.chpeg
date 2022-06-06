@@ -9,15 +9,20 @@
 Grammar     {S} <- S Definition+ !.
 Definition  { } <- Identifier S ('{' S Options S '}' S)? '<-' S Choice
 Choice      { } <- Sequence ('/' S Sequence)*
-Sequence    { } <- Predicate+
+Sequence    { } <- Element+
+Element         <- Mark / Predicate / Trim
 Predicate   { } <- (PredOp S)? Repeat
 Repeat      { } <- Primary (RepOp S)?
 Primary     { } <- Identifier S !'{' !'<-'
                  / '(' S Choice ')' S
-                 / Trim
+                 / Reference S
                  / Literal S
                  / CharClass S
                  / Dot S
+
+Mark         {S} <- '$' Identifier S '<' S Choice '>' S
+Reference    {S} <- '$' Identifier
+
 Trim        {S} <- '<' S Choice '>' S
 
 # Lexical syntax

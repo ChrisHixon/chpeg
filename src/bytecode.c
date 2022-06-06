@@ -19,23 +19,13 @@
 
 ChpegByteCode *ChpegByteCode_new()
 {
-    ChpegByteCode *self = (ChpegByteCode *)CHPEG_MALLOC(sizeof(ChpegByteCode));
-    if (NULL == self) { return self; }
-    self->num_defs = 0;
-    self->def_names = NULL;
-    self->def_flags = NULL;
-    self->def_addrs = NULL;
-    self->num_instructions = 0;
-    self->instructions = NULL;
-    self->num_strings = 0;
-    self->strings = NULL;
-    self->str_len = NULL;
+    ChpegByteCode *self = (ChpegByteCode *)CHPEG_CALLOC(1, sizeof(ChpegByteCode));
     return self;
 }
 
 void ChpegByteCode_free(ChpegByteCode *self)
 {
-    if (self == NULL) return;
+    if (!self) return;
 
     int i;
 
@@ -71,9 +61,23 @@ void ChpegByteCode_free(ChpegByteCode *self)
             CHPEG_FREE(self->strings[i]);
         }
         CHPEG_FREE(self->strings);
+        self->strings = NULL;
         CHPEG_FREE(self->str_len);
+        self->str_len = NULL;
         self->num_strings = 0;
     }
+
+#if CHPEG_EXTENSION_REFS
+    if (self->num_refs > 0) {
+        for (i = 0; i < self->num_refs; ++i) {
+            CHPEG_FREE(self->refs[i]);
+        }
+        CHPEG_FREE(self->refs);
+        self->refs = NULL;
+        self->num_refs = 0;
+    }
+#endif
+
     CHPEG_FREE(self);
 }
 
