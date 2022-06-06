@@ -12,7 +12,7 @@
 #include "chpeg/parser.h"
 #include "chpeg/compiler.h"
 #include "chpeg/opcodes.h"
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_USES_EXTENSIONS
 #include "chpeg/chpeg_ext_bytecode.h"
 #else
 #include "chpeg/chpeg_bytecode.h"
@@ -132,7 +132,7 @@ typedef struct _ChpegCU
     int refs_allocated;
 } ChpegCU;
 
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_EXTENSION_TRIM
 static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
 {
     ChpegGNode *parent = gnode;
@@ -283,6 +283,8 @@ static inline int ChpegCU_alloc_inst(ChpegCU *cu)
     return cu->bc->num_instructions++;
 }
 
+// reserve instructions and keep track of instruction addresses where references needed
+// (referred to as state: parse_state, parent_next_state, etc.)
 static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
@@ -314,12 +316,20 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_EXTENSION_TRIM
         case CHPEG_DEF_TRIM:
+#endif
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
             gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            break;
+#ifdef CHPEG_EXTENSION_REFS
+        case CHPEG_DEF_MARK:
+            gp->parse_state = ChpegCU_alloc_inst(cu);                     // MARK
+            ChpegCU_alloc_instructions(cu, gp->head->next);               // (CONTAINED INSTRUCTIONS)
+            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);   // MARKS
+            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);   // MARKF
             break;
 #endif
         case CHPEG_DEF_REPEAT:
@@ -340,6 +350,9 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
         case CHPEG_DEF_IDENTIFIER:
         case CHPEG_DEF_CHARCLASS:
         case CHPEG_DEF_LITERAL:
+#ifdef CHPEG_EXTENSION_REFS
+        case CHPEG_DEF_REFERENCE:
+#endif
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
@@ -352,9 +365,13 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
 
+#if CHPEG_EXTENSION_REFS
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node);
+#endif
+
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
-    int def = 0;
+    int def = 0, ref_id = 0;
     switch (gp->type) {
         case CHPEG_DEF_GRAMMAR:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
@@ -386,7 +403,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_EXTENSION_TRIM
         case CHPEG_DEF_TRIM:
             {
                 ChpegGNode *def_node;
@@ -399,6 +416,20 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_instructions(cu, gp->head);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
+            break;
+#endif
+#ifdef CHPEG_EXTENSION_REFS
+        case CHPEG_DEF_MARK:
+            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARK, ref_id));
+            ChpegCU_add_instructions(cu, gp->head->next);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKS, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKF, gp->parent_fail_state));
+            break;
+        case CHPEG_DEF_REFERENCE:
+            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_REF, ref_id));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
 #endif
         case CHPEG_DEF_REPEAT:

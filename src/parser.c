@@ -1333,6 +1333,44 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 #endif
 
+#if CHPEG_EXTENSION_REFS
+//
+// References
+//
+            case CHPEG_OP_MARK: // MARK start; arg: ref_id
+
+                //
+                // not implemented
+                //
+
+                ++pc; // next instruction
+                break;
+
+            case CHPEG_OP_MARKS: // MARK Success: the contents inside ($name'<' ... '>') matched
+                                 // arg = next pc
+                //
+                // not implemented
+                //
+                pc = arg;
+                break;
+
+            case CHPEG_OP_MARKF: // MARK Failed: the contents inside ($name'<' ... '>') did not match
+                                 // arg = next pc
+
+                //
+                // not implemented
+                //
+                pc = arg;
+                break;
+
+            case CHPEG_OP_REF: // REFerence: match reference; arg = ref_id;
+                               // skip next instruction on match
+                // eat a byte and act like we succeeded just for testing
+                ++offset;
+                pc += 2;
+                break;
+#endif
+
 // Predicate
             case CHPEG_OP_PREDA:
             case CHPEG_OP_PREDN:
