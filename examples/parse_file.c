@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-#ifdef CHPEG_EXTENSIONS
+#ifdef USE_EXTENSIONS
+#define CHPEG_EXTENSION_ALL
 #include "chpeg_ext.h"
 #else
 #include "chpeg.h"

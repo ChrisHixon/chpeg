@@ -64,7 +64,10 @@ int main(int argc, char *argv[])
     close(fd);
     fd = -1;
 
-    chpeg_compile(input, st.st_size, &byte_code, 0);
+    if ((ret = chpeg_compile(input, st.st_size, &byte_code, 0)) != 0) {
+        fprintf(stderr, "chpeg_compile failed:% d\n", ret);
+        return ret;
+    }
     ChpegByteCode_print(byte_code);
 
     ret = ChpegByteCode_compare(chpeg_default_bytecode(), byte_code);

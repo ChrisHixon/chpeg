@@ -719,7 +719,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 #endif
 
-#ifdef CHPEG_EXTENSION_REFS
+#if CHPEG_EXTENSION_REFS
     const int num_refs = self->bc->num_refs;
     ReferenceInfo* rstack = CHPEG_CALLOC(num_refs * CHPEG_RSTACK_SIZE, sizeof(ReferenceInfo));
     ReferenceInfo* ref = NULL;

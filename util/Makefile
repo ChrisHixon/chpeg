@@ -1,18 +1,27 @@
 SHELL=/bin/sh
 
-CC=gcc
+# list grammar extensions here, or use ALL to include all
+# current extensions: TRIM REFS
+EXTENSIONS = ALL
 
-CFLAGS_COMMON = -Wall -std=c17 -pedantic -DCHPEG_EXTENSIONS -DCHPEG_PACKRAT
+# list optional features here
+# current features: PACKRAT
+FEATURES = PACKRAT
+
+CC=gcc
+EXTENSION_DEFS = $(EXTENSIONS:%=-DCHPEG_EXTENSION_%)
+FEATURE_DEFS = $(FEATURES:%=-DCHPEG_%)
+CFLAGS_COMMON = -Wall -std=c17 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
 CFLAGS = $(CFLAGS_COMMON) -O3
 CFLAGS_TRACE = $(CFLAGS_COMMON) -g -DCHPEG_VM_TRACE -DCHPEG_VM_PRINT_TREE -DCHPEG_VM_PROFILE
-
 INCLUDES=-I$(INCLUDE) -I./src
 LDFLAGS=
 
 INCLUDE=../include
 
+BYTECODE_C=$(if $(EXTENSIONS), chpeg_ext_bytecode.c, chpeg_bytecode.c)
 
-CHPEG_SOURCE_FILES=mem.c opcodes.c bytecode.c chpeg_ext_bytecode.c util.c parser.c compiler.c
+CHPEG_SOURCE_FILES=mem.c opcodes.c bytecode.c util.c parser.c compiler.c $(BYTECODE_C)
 CHPEG_SRC=../src
 
 SRC = $(wildcard src/*.c) $(wildcard src/actions/*.c)

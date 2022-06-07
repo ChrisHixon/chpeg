@@ -112,14 +112,14 @@ void ChpegByteCode_print_instructions(const ChpegByteCode *self)
             case CHPEG_OP_IDENT:
             case CHPEG_OP_ISUCC:
             case CHPEG_OP_IFAIL:
-#ifdef CHPEG_EXTENSION_TRIM
+#if CHPEG_EXTENSION_TRIM
             case CHPEG_OP_TRIM:
 #endif
                 arg_str = ChpegByteCode_def_name(self, arg);
                 printf("INST %8d %12s %8d %s\n",
                     i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<NULL>");
                 break;
-#ifdef CHPEG_EXTENSION_REFS
+#if CHPEG_EXTENSION_REFS
             case CHPEG_OP_MARK:
             case CHPEG_OP_REF:
                 arg_str = ChpegByteCode_ref_name(self, arg);
@@ -176,7 +176,9 @@ void ChpegByteCode_print(const ChpegByteCode *self)
     ChpegByteCode_print_defs(self);
     ChpegByteCode_print_instructions(self);
     ChpegByteCode_print_strings(self);
+#if CHPEG_EXTENSION_REFS
     ChpegByteCode_print_refs(self);
+#endif
 }
 
 void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
@@ -262,93 +264,132 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
     fprintf(fp, "\n");
 
     fprintf(fp, "CHPEG_DEF const ChpegByteCode %s = {\n", varname ? varname : basename);
+
     fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
 
-    fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
-    for (i = 0; i < self->num_defs; i++) {
-        fprintf(fp, "%s\"%s\"", i ? ", " : "", self->def_names[i]);
-    }
-    fprintf(fp, "},\n");
+    if (self->num_defs > 0) {
+        fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
+        for (i = 0; i < self->num_defs; i++) {
+            fprintf(fp, "%s\"%s\"", i ? ", " : "", self->def_names[i]);
+        }
+        fprintf(fp, "},\n");
 
-    fprintf(fp, "  .def_flags = (int[%d]) {", self->num_defs);
-    for (i = 0; i < self->num_defs; i++) {
-        fprintf(fp, "%s", i ? ", " : "");
-        int flag_out = 0;
-        if (self->def_flags[i] & 0x7) {
-            if (self->def_flags[i] & CHPEG_FLAG_STOP) {
-                fprintf(fp, "%sCHPEG_FLAG_STOP", flag_out ? " | " : "");
-                flag_out = 1;
+        fprintf(fp, "  .def_flags = (int[%d]) {", self->num_defs);
+        for (i = 0; i < self->num_defs; i++) {
+            fprintf(fp, "%s", i ? ", " : "");
+            int flag_out = 0;
+            if (self->def_flags[i] & 0x7) {
+                if (self->def_flags[i] & CHPEG_FLAG_STOP) {
+                    fprintf(fp, "%sCHPEG_FLAG_STOP", flag_out ? " | " : "");
+                    flag_out = 1;
+                }
+                if (self->def_flags[i] & CHPEG_FLAG_IGNORE) {
+                    fprintf(fp, "%sCHPEG_FLAG_IGNORE", flag_out ? " | " : "");
+                    flag_out = 1;
+                }
+                if (self->def_flags[i] & CHPEG_FLAG_LEAF) {
+                    fprintf(fp, "%sCHPEG_FLAG_LEAF", flag_out ? " | " : "");
+                    flag_out = 1;
+                }
             }
-            if (self->def_flags[i] & CHPEG_FLAG_IGNORE) {
-                fprintf(fp, "%sCHPEG_FLAG_IGNORE", flag_out ? " | " : "");
-                flag_out = 1;
-            }
-            if (self->def_flags[i] & CHPEG_FLAG_LEAF) {
-                fprintf(fp, "%sCHPEG_FLAG_LEAF", flag_out ? " | " : "");
-                flag_out = 1;
+            else {
+                fprintf(fp, "0");
             }
         }
-        else {
-            fprintf(fp, "0");
-        }
-    }
-    fprintf(fp, "},\n");
+        fprintf(fp, "},\n");
 
-    fprintf(fp, "  .def_addrs = (int[%d]) {", self->num_defs);
-    for (i = 0; i < self->num_defs; i++) {
-        fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
+        fprintf(fp, "  .def_addrs = (int[%d]) {", self->num_defs);
+        for (i = 0; i < self->num_defs; i++) {
+            fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
+        }
+        fprintf(fp, "},\n");
     }
-    fprintf(fp, "},\n");
 
     fprintf(fp, "  .num_instructions = %d,\n", self->num_instructions);
 
-    fprintf(fp, "  .instructions = (int[%d]) {\n", self->num_instructions);
-    const char *arg_str = NULL;
-    int op, arg;
-    for (int i = 0; i < self->num_instructions; i++) {
-        op = self->instructions[i] & 0xff;
-        arg = self->instructions[i] >> 8;
-        switch (op) {
-            case CHPEG_OP_IDENT:
-            case CHPEG_OP_ISUCC:
-            case CHPEG_OP_IFAIL:
-#ifdef CHPEG_EXTENSION_TRIM
-            case CHPEG_OP_TRIM:
+    if (self->num_instructions > 0) {
+        fprintf(fp, "  .instructions = (int[%d]) {\n", self->num_instructions);
+        const char *arg_str = NULL;
+        int op, arg;
+        for (int i = 0; i < self->num_instructions; i++) {
+            op = self->instructions[i] & 0xff;
+            arg = self->instructions[i] >> 8;
+            switch (op) {
+                case CHPEG_OP_IDENT:
+                case CHPEG_OP_ISUCC:
+                case CHPEG_OP_IFAIL:
+#if CHPEG_EXTENSION_TRIM
+                case CHPEG_OP_TRIM:
 #endif
-                arg_str = ChpegByteCode_def_name(self, arg);
-                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* %s */\n",
-                    i, Chpeg_op_name(op), arg, arg_str ? arg_str : "<N/A>");
-                break;
-            case CHPEG_OP_LIT:
-            case CHPEG_OP_CHRCLS:
-                str = chpeg_esc_bytes(self->strings[arg], self->str_len[arg], 40);
-                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d), /* \"%s\" */\n",
-                    i, Chpeg_op_name(op), arg, str ? str : "<NULL>");
-                if (str) { CHPEG_FREE(str); str = NULL; }
-                break;
-            default:
-                arg_str = "";
-                fprintf(fp, "  /* %5d */ CHPEG_INST(CHPEG_OP_%-12s, %8d),\n",
-                    i, Chpeg_op_name(op), arg);
+                    arg_str = ChpegByteCode_def_name(self, arg);
+                    fprintf(fp, "  /* %6d */ CHPEG_INST(CHPEG_OP_%s,%*s %8d), // %s\n",
+                        i, Chpeg_op_name(op), 8-(int)strlen(Chpeg_op_name(op)), "",
+                        arg, arg_str ? arg_str : "<NULL>");
+                    break;
+#if CHPEG_EXTENSION_REFS
+                case CHPEG_OP_MARK:
+                case CHPEG_OP_REF:
+                    arg_str = ChpegByteCode_ref_name(self, arg);
+                    fprintf(fp, "  /* %6d */ CHPEG_INST(CHPEG_OP_%s,%*s %8d), // $%s\n",
+                        i, Chpeg_op_name(op), 8-(int)strlen(Chpeg_op_name(op)), "",
+                        arg, arg_str ? arg_str : "<NULL>");
+                    break;
+#endif
+                case CHPEG_OP_LIT:
+                    str = chpeg_esc_bytes(self->strings[arg], self->str_len[arg], 40);
+                    fprintf(fp, "  /* %6d */ CHPEG_INST(CHPEG_OP_%s,%*s %8d), // \"%s\"\n",
+                        i, Chpeg_op_name(op), 8-(int)strlen(Chpeg_op_name(op)), "",
+                        arg, str ? str : "<NULL>");
+                    if (str) { CHPEG_FREE(str); str = NULL; }
+                    break;
+                case CHPEG_OP_CHRCLS:
+                    str = chpeg_esc_bytes(self->strings[arg], self->str_len[arg], 40);
+                    fprintf(fp, "  /* %6d */ CHPEG_INST(CHPEG_OP_%s,%*s %8d), // [%s]\n",
+                        i, Chpeg_op_name(op), 8-(int)strlen(Chpeg_op_name(op)), "",
+                        arg, str ? str : "<NULL>");
+                    if (str) { CHPEG_FREE(str); str = NULL; }
+                    break;
+                default:
+                    arg_str = "";
+                    fprintf(fp, "  /* %6d */ CHPEG_INST(CHPEG_OP_%s,%*s %8d),\n",
+                        i, Chpeg_op_name(op), 8-(int)strlen(Chpeg_op_name(op)), "",
+                        arg);
+            }
         }
+        fprintf(fp, "  },\n");
     }
-    fprintf(fp, "  },\n");
 
     fprintf(fp, "  .num_strings = %d,\n", self->num_strings);
 
-    fprintf(fp, "  .strings = (unsigned char**)(char*[%d]) {", self->num_strings);
-    for (i = 0; i < self->num_strings; i++) {
-        str = chpeg_esc_bytes(self->strings[i], self->str_len[i], 0);
-        fprintf(fp, "%s\"%s\"", i ? ", " : "", str);
-        CHPEG_FREE(str);
-    }
-    fprintf(fp, "},\n");
+    if (self->num_strings > 0) {
+        fprintf(fp, "  .strings = (unsigned char**)(char*[%d]) {", self->num_strings);
+        for (i = 0; i < self->num_strings; i++) {
+            str = chpeg_esc_bytes(self->strings[i], self->str_len[i], 0);
+            fprintf(fp, "%s\"%s\"", i ? ", " : "", str);
+            CHPEG_FREE(str);
+        }
+        fprintf(fp, "},\n");
 
-    fprintf(fp, "  .str_len = (int[%d]) {", self->num_strings);
-    for (i = 0; i < self->num_strings; i++) {
-        fprintf(fp, "%s%d", i ? ", " : "", self->str_len[i]);
+        fprintf(fp, "  .str_len = (int[%d]) {", self->num_strings);
+        for (i = 0; i < self->num_strings; i++) {
+            fprintf(fp, "%s%d", i ? ", " : "", self->str_len[i]);
+        }
+        fprintf(fp, "},\n");
     }
-    fprintf(fp, "}\n");
+
+#if CHPEG_EXTENSION_REFS
+    if (self->num_refs > 0) {
+        fprintf(fp, "#if CHPEG_EXTENSION_REFS\n");
+        fprintf(fp, "  .num_refs = %d,\n", self->num_refs);
+
+        fprintf(fp, "  .refs = (char*[%d]) {", self->num_refs);
+        for (i = 0; i < self->num_refs; i++) {
+            fprintf(fp, "%s\"%s\"", i ? ", " : "", self->refs[i]);
+        }
+        fprintf(fp, "},\n");
+        fprintf(fp, "#endif\n");
+    }
+#endif
 
     fprintf(fp, "};\n");
 }

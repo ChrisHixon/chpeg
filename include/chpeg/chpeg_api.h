@@ -16,7 +16,7 @@
 #endif
 
 // define to enable ALL extensions
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_EXTENSION_ALL
 #define CHPEG_EXTENSION_TRIM 1
 #define CHPEG_EXTENSION_REFS 1
 #endif
