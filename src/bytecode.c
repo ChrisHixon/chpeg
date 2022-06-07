@@ -497,11 +497,36 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
             case CHPEG_OP_RPBEG:
             case CHPEG_OP_RQBEG:
             case CHPEG_OP_RSBEG:
-                fprintf(fp, "( "); break;
+                switch(CHPEG_INST_OP(bc->instructions[i+4])) {
+			case CHPEG_OP_RPDONE:
+			case CHPEG_OP_RSDONE:
+			case CHPEG_OP_RQDONE:
+				break;
+			default: //Not at the end of predicate
+				fprintf(fp, "( ");
+		}
+                break;
 
-            case CHPEG_OP_RPDONE: fprintf(fp, ")+ "); break;
-            case CHPEG_OP_RSDONE: fprintf(fp, ")* "); break;
-            case CHPEG_OP_RQDONE: fprintf(fp, ")? "); break;
+            case CHPEG_OP_RPDONE:
+            case CHPEG_OP_RSDONE:
+            case CHPEG_OP_RQDONE:
+                switch(CHPEG_INST_OP(bc->instructions[i-4])) {
+                    case CHPEG_OP_RPBEG:
+                    case CHPEG_OP_RQBEG:
+                    case CHPEG_OP_RSBEG:
+                        break;
+                    default:
+			fprintf(fp, ")");
+                }
+
+		switch(op) {
+		    case CHPEG_OP_RPDONE: fprintf(fp, "+ "); break;
+		    case CHPEG_OP_RSDONE: fprintf(fp, "* "); break;
+		    case CHPEG_OP_RQDONE: fprintf(fp, "? "); break;
+			default:
+				fprintf(fp, ":?OP?: "); break;
+		}
+		break;
 
             case CHPEG_OP_PREDN:
             case CHPEG_OP_PREDA:
