@@ -1,7 +1,12 @@
 #include <stdio.h>
 
 #ifndef CHPEG_AMALGAMATION
+#ifdef USE_EXTENSIONS
+#define CHPEG_EXTENSION_ALL
+#include "chpeg_ext.h"
+#else
 #include "chpeg.h"
+#endif
 #endif
 
 void usage(const char *prog) {
@@ -116,12 +121,12 @@ int main(int argc, char *argv[])
     // Parse the data file using byte code
     parser = ChpegParser_new(byte_code ? byte_code : chpeg_default_bytecode());
 
-#if VM_TRACE
+#if CHPEG_VM_TRACE
     // set to non-zero to enable VM instruction execution tracing
     parser->vm_trace = 0;
 #endif
 
-#if VM_PRINT_TREE
+#if CHPEG_VM_PRINT_TREE
     // set to non-zero to print parse tree as it is being built
     parser->vm_print_tree = 0;
 #endif

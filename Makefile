@@ -25,6 +25,16 @@ CHPEG_EXT_HEADERS=$(patsubst %.h,$(CHPEG_INCLUDE)/%.h,$(CHPEG_EXT_HEADER_FILES))
 
 all: $(CHPEG_AMALG) $(CHPEG_EXT_AMALG)
 
+bytecode-std: grammars/chpeg.chpeg
+	-util/chpeg --bytecodec -g $< -basename chpeg_bytecode -cout src/chpeg_bytecode.c -hout include/chpeg/chpeg_bytecode.h
+	-sed -i -E 's,^#include "chpeg_bytecode.h",#include "chpeg/chpeg_bytecode.h",' src/chpeg_bytecode.c
+
+bytecode-ext: grammars/chpeg-ext.chpeg
+	-util/chpeg --bytecodec -g $< -basename chpeg_bytecode -cout src/chpeg_ext_bytecode.c -hout include/chpeg/chpeg_ext_bytecode.h
+	-sed -i -E 's,^#include "chpeg_bytecode.h",#include "chpeg/chpeg_ext_bytecode.h",' src/chpeg_ext_bytecode.c
+
+bytecode: bytecode-std bytecode-ext
+
 # concatenate amalgamation files (normal)
 $(CHPEG_AMALG): $(CHPEG_HEADERS) $(CHPEG_SOURCES)
 	-printf "#define CHPEG_AMALGAMATION\n\n" > $(CHPEG_AMALG)

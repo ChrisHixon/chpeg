@@ -12,11 +12,15 @@
 #include "chpeg/parser.h"
 #include "chpeg/compiler.h"
 #include "chpeg/opcodes.h"
+#if CHPEG_USES_EXTENSIONS
+#include "chpeg/chpeg_ext_bytecode.h"
+#else
 #include "chpeg/chpeg_bytecode.h"
 #endif
+#endif
 
-#ifndef DEBUG_COMPILER
-#define DEBUG_COMPILER 0
+#ifndef CHPEG_DEBUG_COMPILER
+#define CHPEG_DEBUG_COMPILER 0
 #endif
 
 #ifndef CHPEG_BC
@@ -121,9 +125,10 @@ typedef struct _ChpegCU
     ChpegByteCode *bc;
     ChpegGNode *root;
     int strings_allocated;
+    int refs_allocated;
 } ChpegCU;
 
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
 static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
 {
     ChpegGNode *parent = gnode;
@@ -142,27 +147,8 @@ static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **de
     return 1;
 }
 #endif
-#ifdef CHPEG_HAS_BACKREFERENCE
-static ChpegGNode *ChpegCU_find_mark_def(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode *node_ref)
-{
-    if(gnode == NULL)
-        ChpegCU_find_def_node(cu, node_ref->parent, &gnode);
 
-    for (ChpegGNode *p = gnode; p; p = p->next) {
-        if (p->type == CHPEG_BC(MARK) && p->num_children == 2 &&
-                strncmp(cu->input+p->head->next->node->offset, cu->input+node_ref->node->offset, node_ref->node->length)) {
-            return p;
-        }
-        if(p->num_children > 1) {
-            ChpegGNode *rc = ChpegCU_find_mark_def(cu, p->head, node_ref);
-            if(rc) return rc;
-        }
-    }
-    return NULL;
-}
-#endif
-
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
 static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
 {
     int flags = 0;
@@ -176,20 +162,21 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
     }
 
     if (depth == 0) {
-        printf("---------------------------------------------------------------------------------\n");
-        printf(" Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
-        printf("---------------------------------------------------------------------------------\n");
+        fprintf(stderr, "---------------------------------------------------------------------------------\n");
+        fprintf(stderr, " Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
+        fprintf(stderr, "---------------------------------------------------------------------------------\n");
     }
-    printf("%6zu %6zu %6d | %6d %6d %6d | %s%s%s | %*s%s \"%s\"\n",
+    fprintf(stderr, "%6zu %6zu %6d | %6d %6d %6d | %s%s%s%s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
         gnode->type,
         gnode->parse_state,
         gnode->parent_next_state,
         gnode->parent_fail_state,
-        flags & CHPEG_FLAG_STOP ? "S" : " ",
-        flags & CHPEG_FLAG_IGNORE ? "I" : " ",
-        flags & CHPEG_FLAG_LEAF ? "L" : " ",
+        flags & CHPEG_FLAG_STOP ? "S" : "-",
+        flags & CHPEG_FLAG_IGNORE ? "I" : "-",
+        flags & CHPEG_FLAG_LEAF ? "L" : "-",
+        flags & CHPEG_FLAG_PACKRAT ? "P" : "-",
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : ""
@@ -208,8 +195,8 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
     int i = 0, j = 0;
 
     cu->bc->num_defs = cu->parser->tree_root->num_children;
-#if DEBUG_COMPILER
-    printf("ChpegCU_setup_defs: num_defs=%d\n", cu->bc->num_defs);
+#if CHPEG_DEBUG_COMPILER
+    fprintf(stderr, "ChpegCU_setup_defs: num_defs=%d\n", cu->bc->num_defs);
 #endif
 
     cu->bc->def_names = (char **)CHPEG_MALLOC(cu->bc->num_defs * sizeof(char *));
@@ -230,17 +217,24 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
         if (NULL != tmp && CHPEG_BC(OPTIONS) == tmp->def) {
             for (j = 0; j < tmp->length; ++j) {
                 switch(cu->input[tmp->offset + j]) {
-                    case 'S': flags |= CHPEG_FLAG_STOP; break;
-                    case 'I': flags |= CHPEG_FLAG_IGNORE; break;
-                    case 'L': flags |= CHPEG_FLAG_LEAF; break;
+                    case 'C':
+                    case 'S':
+                        flags |= CHPEG_FLAG_STOP; break;
+                    case 'I':
+                        flags |= CHPEG_FLAG_IGNORE; break;
+                    case 'L':
+                    case 'T':
+                        flags |= CHPEG_FLAG_LEAF; break;
+                    case 'P':
+                        flags |= CHPEG_FLAG_PACKRAT; break;
                 }
             }
             p->head->next = tmp->next; // eliminate OPTIONS node
             ChpegNode_free(tmp);
         }
         cu->bc->def_flags[i] = flags;
-#if DEBUG_COMPILER
-        printf("Compile_setup_defs: def[%i]: name=%s flags=%d\n", i, cu->bc->def_names[i], cu->bc->def_flags[i]);
+#if CHPEG_DEBUG_COMPILER
+        fprintf(stderr, "Compile_setup_defs: def[%i]: name=%s flags=%d\n", i, cu->bc->def_names[i], cu->bc->def_flags[i]);
 #endif
     }
 }
@@ -285,6 +279,8 @@ static inline int ChpegCU_alloc_inst(ChpegCU *cu)
     return cu->bc->num_instructions++;
 }
 
+// reserve instructions and keep track of instruction addresses where references needed
+// (referred to as state: parse_state, parent_next_state, etc.)
 static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     switch (gp->type) {
@@ -316,7 +312,7 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             }
             gp->parse_state = gp->head->parse_state;
             break;
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
         case CHPEG_BC(TRIM):
             gp->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_instructions(cu, gp->head);
@@ -324,15 +320,18 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
 #endif
-#ifdef CHPEG_HAS_BACKREFERENCE
-        case CHPEG_BC(MARK):
-            ChpegCU_alloc_instructions(cu, gp->head->next);
+#if CHPEG_EXTENSION_REFS
+        case CHPEG_BC(REFSCOPE):
+            gp->parse_state = ChpegCU_alloc_inst(cu);             // RSCOPE
+            ChpegCU_alloc_instructions(cu, gp->head);             // ...
+            gp->head->parent_next_state = ChpegCU_alloc_inst(cu); // RSCOPES
+            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu); // RSCOPEF
             break;
-        case CHPEG_BC(REFERENCE): {
-                ChpegGNode *def_node = ChpegCU_find_mark_def(cu, NULL, gp);
-                if(def_node) ChpegCU_alloc_instructions(cu, def_node->head->next);
-                //else panic(); TODO what if we get here ?
-            }
+        case CHPEG_BC(MARK):
+            gp->parse_state = ChpegCU_alloc_inst(cu);                   // MARK
+            ChpegCU_alloc_instructions(cu, gp->head->next);             // ...
+            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu); // MARKS
+            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu); // MARKF
             break;
 #endif
         case CHPEG_BC(REPEAT):
@@ -353,6 +352,9 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
         case CHPEG_BC(IDENTIFIER):
         case CHPEG_BC(CHARCLASS):
         case CHPEG_BC(LITERAL):
+#if CHPEG_EXTENSION_REFS
+        case CHPEG_BC(REFERENCE):
+#endif
 #ifdef CHPEG_HAS_NOCASE
         //case CHPEG_BC(LITERALSQ):
         //case CHPEG_BC(LITERALDQ):
@@ -363,7 +365,10 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
     }
 }
 
-// TODO: move to ChpegByteCode
+#if CHPEG_EXTENSION_REFS
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node);
+#endif
+
 static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 {
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
@@ -372,6 +377,9 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
     int def = 0;
+#if CHPEG_EXTENSION_REFS
+    int ref_id = 0;
+#endif
     switch (gp->type) {
         case CHPEG_BC(GRAMMAR):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
@@ -403,7 +411,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
                 ChpegCU_add_instructions(cu, p);
             }
             break;
-#ifdef CHPEG_EXTENSIONS
+#if CHPEG_EXTENSION_TRIM
         case CHPEG_BC(TRIM):
             {
                 ChpegGNode *def_node;
@@ -418,15 +426,24 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
             break;
 #endif
-#ifdef CHPEG_HAS_BACKREFERENCE
-        case CHPEG_BC(MARK):
-            ChpegCU_add_instructions(cu, gp->head->next);
+#if CHPEG_EXTENSION_REFS
+        case CHPEG_BC(REFSCOPE):
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPE, 0));
+            ChpegCU_add_instructions(cu, gp->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPES, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPEF, gp->parent_fail_state));
             break;
-        case CHPEG_BC(REFERENCE): {
-                ChpegGNode *def_node = ChpegCU_find_mark_def(cu, NULL, gp);
-                if(def_node) ChpegCU_add_instructions(cu, def_node->head->next);
-                //else panic(); TODO what if we get here ?
-            }
+        case CHPEG_BC(MARK):
+            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARK, ref_id));
+            ChpegCU_add_instructions(cu, gp->head->next);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKS, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKF, gp->parent_fail_state));
+            break;
+        case CHPEG_BC(REFERENCE):
+            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_REF, ref_id));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
             break;
 #endif
         case CHPEG_BC(REPEAT):
@@ -549,9 +566,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                     offset += p->value_len;
                 }
                 gp->val.ival = ChpegCU_alloc_string(cu, str, len);
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(str, len, 20);
-                printf("PEG BC_LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
+                fprintf(stderr, "alloc_strings: LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
                 CHPEG_FREE(tmp);
 #endif
                 CHPEG_FREE(str);
@@ -566,9 +583,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[1] = '-';
                 gp->val.cval[2] = gp->head->next->val.cval[0];
                 gp->value_len = 3;
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_BC_CHARRANGE %s\n", tmp);
+                fprintf(stderr, "alloc_strings: CHARRANGE %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -577,9 +594,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
             {
                 gp->val.cval[0] = cu->input[gp->node->offset];
                 gp->value_len = 1;
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_BC_PLAINCHAR %s\n", tmp);
+                fprintf(stderr, "alloc_strings: PLAINCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -600,9 +617,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                     case 'r': gp->val.cval[0] = '\r'; break;
                     case 't': gp->val.cval[0] = '\t'; break;
                 }
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_BC_ESCCHAR %s\n", tmp);
+                fprintf(stderr, "alloc_strings: ESCCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -616,9 +633,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 }
                 gp->val.cval[0] = val & 255;
                 gp->value_len = 1;
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_BC_OCTCHAR %s\n", tmp);
+                fprintf(stderr, "alloc_strings: OCTCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -667,8 +684,8 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
                 gp->val.cval[0] = val & 255;
                 gp->value_len = 1;
 #if DEBUG_COMPILER
-                unsigned char *tmp = esc_string(gp->val.cval, gp->value_len, 10);
-                printf("CHPEG_BC_HEXCHAR %s\n", tmp);
+                unsigned char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
+                printf("HEXCHAR %s\n", tmp);
                 CHPEG_FREE(tmp);
 #endif
             }
@@ -682,12 +699,180 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
     }
 }
 
+#if CHPEG_EXTENSION_REFS
+
+// Return the reference id given a Mark or Reference node;
+// node's first child should be an Identifier containing the reference name;
+// Returns int reference id, or:
+// -1, if not found
+// -2, if node's first child (head) is NULL or not an identifier
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node)
+{
+    ChpegNode *ident = node->head;
+
+    if (!ident) return -2;
+    if (ident->def != CHPEG_BC(IDENTIFIER)) return -2;
+
+    for (int i = 0; i < cu->bc->num_refs; ++i) {
+        if (ident->length == strlen(cu->bc->refs[i]) &&
+            0 == memcmp(cu->input + ident->offset, cu->bc->refs[i], ident->length))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Return the reference id given a Mark or Reference node; allocates reference if necessary.
+// node's first child (head) should be an Identifier containing the reference name;
+// Returns int reference id; or:
+// -2, if first child is not found or not an identifier
+// -3, if unable to allocate reference string
+static int ChpegCU_alloc_ref(ChpegCU *cu, ChpegNode *node)
+{
+    int ref = ChpegCU_find_ref(cu, node);
+    if (ref != -1) { // ref already exists or error
+        return ref;
+    }
+
+    // refs array initial allocation
+    if (!cu->bc->refs) {
+        cu->bc->num_refs = 0;
+        cu->refs_allocated = 16;
+        cu->bc->refs = (char **)CHPEG_MALLOC(cu->refs_allocated * sizeof(unsigned char *));
+    }
+    // grow refs array if necessary
+    if (cu->bc->num_refs + 1 >= cu->refs_allocated) {
+        cu->refs_allocated *= 2;
+        cu->bc->refs = (char **)CHPEG_REALLOC(cu->bc->refs, cu->refs_allocated * sizeof(char *));
+    }
+
+    ChpegNode *ident = node->head;
+    int ref_id = cu->bc->num_refs++;
+
+    // allocate reference string
+    char *str = (char *)CHPEG_MALLOC(ident->length + 1);
+    if (!str) return -3;
+
+    // copy string data and terminate
+    memcpy(str, cu->input + ident->offset, ident->length);
+    str[ident->length] = '\0';
+    cu->bc->refs[ref_id] = str;
+
+    return ref_id;
+}
+
+static int ChpegCU_alloc_refs(ChpegCU *cu, ChpegGNode *gp)
+{
+    int err = 0;
+    switch (gp->type) {
+        case CHPEG_BC(MARK):
+        case CHPEG_BC(REFERENCE):
+            {
+                int ref_id = ChpegCU_alloc_ref(cu, gp->node);
+#if CHPEG_DEBUG_COMPILER
+                const char *def_name = ChpegByteCode_def_name(chpeg_default_bytecode(), gp->type);
+                fprintf(stderr, "alloc_refs: (via %s) refs[%d]=\"%s\"\n", def_name,
+                    ref_id, ref_id >= 0 ? cu->bc->refs[ref_id] : "<ERROR>");
+#endif
+                err = (ref_id < 0) ? ref_id : 0;
+                goto done;
+            }
+        default:
+            for (ChpegGNode *p = gp->head; p; p = p->next) {
+                if ((err = ChpegCU_alloc_refs(cu, p)) != 0) {
+                    goto done;
+                }
+            }
+            break;
+    }
+done:
+    return err;
+}
+
+#endif
+
+// Compiler sanity check: assert def names looked up via CHPEG_DEF_* macros
+// match what is expected. This might help detect mismatches of included
+// bytecode header vs. linked bytecode.
+CHPEG_API void chpeg_sanity_check()
+{
+    const ChpegByteCode *bc = chpeg_default_bytecode();
+
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(GRAMMAR)), "Grammar") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(DEFINITION)), "Definition") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(CHOICE)), "Choice") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(SEQUENCE)), "Sequence") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(PREDICATE)), "Predicate") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(REPEAT)), "Repeat") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(PRIMARY)), "Primary") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(OPTIONS)), "Options") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(IDENTIFIER)), "Identifier") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(LITERAL)), "Literal") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(CHARCLASS)), "CharClass") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(CHARRANGE)), "CharRange") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(CHAR)), "Char") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(ESCCHAR)), "EscChar") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(OCTCHAR)), "OctChar") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(PLAINCHAR)), "PlainChar") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(PREDOP)), "PredOp") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(REPOP)), "RepOp") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(DOT)), "Dot") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(S)), "S") == 0);
+
+#ifdef CHPEG_EXTENSION_TRIM
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(TRIM)), "Trim") == 0);
+#endif
+
+#ifdef CHPEG_EXTENSION_REFS
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(REFSCOPE)), "RefScope") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(MARK)), "Mark") == 0);
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_BC(REFERENCE)), "Reference") == 0);
+#endif
+
+}
+
+
+// int chpeg_compile(
+//    const unsigned char *input,       // grammar input
+//    size_t length,                    // input data length
+//    ChpegByteCode **bytecode_return,  // bytecode returned here
+//    int verbose                       // bitfield; see below
+//    );
+// returns: ChpegParser_parse status/error code (see ChpegErrorCodes)
+//
+// Parse and compile grammar input to bytecode.
+//
 // This is more of a convenience function, thus the lowercase chpeg_ prefix.
 // I plan to create a more OO-like API to the compiler to allow more flexibility.
+// Error handling and warnings are mostly not present. Many error/warning conditions silently ignored.
+//
 // verbose is a bit field: 1: info | 2: print parse tree | 1<<15: disable errors
+//
+// I need a better way to deal with errors. Should be dealt with when creating a better API.
+// For now I'm just using CHPEG_ERR_COMPILE, added into the parser error codes (ChpegErrorCodes)
 CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
+    if (verbose & 3) {
+#if CHPEG_USES_EXTENSIONS
+        fprintf(stderr, "Using extensions:");
+
+#if CHPEG_EXTENSION_TRIM
+        fprintf(stderr, " TRIM");
+#endif
+#if CHPEG_EXTENSION_REFS
+        fprintf(stderr, " REFS");
+#endif
+        fprintf(stderr, "\n");
+
+#else
+        fprintf(stderr, "Not using extensions.\n");
+#endif
+    }
+    chpeg_sanity_check();
+
+    int err = 0;
     ChpegCU cu;
 
     cu.parser = ChpegParser_new(chpeg_default_bytecode());
@@ -698,6 +883,7 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
 
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
+    err = parse_result;
 
     if (parse_result == 0) {
         if (verbose & 1) {
@@ -732,21 +918,28 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
 
     ChpegCU_alloc_strings(&cu, cu.root);
 
+#if CHPEG_EXTENSION_REFS
+    if ((err = ChpegCU_alloc_refs(&cu, cu.root)) != 0) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+#endif
+
     ChpegCU_alloc_instructions(&cu, cu.root);
-#if DEBUG_COMPILER
-    printf("instructions alloc'd: %d\n", cu.bc->num_instructions);
+#if CHPEG_DEBUG_COMPILER
+    fprintf(stderr, "instructions alloc'd: %d\n", cu.bc->num_instructions);
 #endif
     cu.bc->instructions = (int *)CHPEG_CALLOC(cu.bc->num_instructions, sizeof(int));
 
     cu.bc->num_instructions = 0;
     ChpegCU_add_instructions(&cu, cu.root);
-#if DEBUG_COMPILER
-    printf("instructions after add: %d\n", cu.bc->num_instructions);
+#if CHPEG_DEBUG_COMPILER
+    fprintf(stderr, "instructions after add: %d\n", cu.bc->num_instructions);
 #endif
 
     ChpegCU_setup_def_addrs(&cu);
 
-#if DEBUG_COMPILER
+#if CHPEG_DEBUG_COMPILER
     ChpegCU_print(&cu, cu.root, input, 0);
 #endif
 
@@ -756,7 +949,7 @@ done:
     if (bytecode_return) {
         *bytecode_return = cu.bc;
     }
-    return parse_result;
+    return err;
 }
 
 #ifndef CHPEG_DEFAULT_BYTECODE

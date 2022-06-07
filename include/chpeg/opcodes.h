@@ -9,7 +9,7 @@
 #include "chpeg/util.h"
 #endif
 
-enum ChpegOp
+typedef enum
 {
     CHPEG_OP_GOTO,
     CHPEG_OP_IDENT,
@@ -41,14 +41,24 @@ enum ChpegOp
     CHPEG_OP_SUCC,
     CHPEG_OP_FAIL,
 
-#ifdef CHPEG_EXTENSIONS
+#ifdef CHPEG_EXTENSION_TRIM
     CHPEG_OP_TRIM,
     CHPEG_OP_TRIMS,
     CHPEG_OP_TRIMF,
 #endif
 
+#ifdef CHPEG_EXTENSION_REFS
+    CHPEG_OP_RSCOPE,
+    CHPEG_OP_RSCOPES,
+    CHPEG_OP_RSCOPEF,
+    CHPEG_OP_MARK,
+    CHPEG_OP_MARKS,
+    CHPEG_OP_MARKF,
+    CHPEG_OP_REF,
+#endif
+
     CHPEG_NUM_OPS
-};
+} ChpegOp;
 
 CHPEG_API const char *Chpeg_op_names[CHPEG_NUM_OPS];
 

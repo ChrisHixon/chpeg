@@ -1,27 +1,34 @@
 # Extended PEG grammar for chpeg bytecode parser/compiler, defined in its own grammar.
 #
-# The effective grammar is the same as the original PEG grammar from
-# Bryan Ford's paper, but with Options added in front of <- to guide parse tree building.
-#
 # This grammar is optimized for chpeg and generates the AST the compiler expects
 
 # Hierarchical syntax
 Grammar     {S} <- S Definition+ !.
 Definition  { } <- Identifier S ('{' S Options S '}' S)? '<-' S Choice
 Choice      { } <- Sequence ('/' S Sequence)*
-Sequence    { } <- Predicate+
+Sequence    { } <- Element+
+Element     { } <- Predicate / RefScope / Mark / Trim
 Predicate   { } <- (PredOp S)? Repeat
 Repeat      { } <- Primary (RepOp S)?
-Primary     { } <- Identifier S ![{<]
+Primary     { } <- Identifier S !'{' !'<-'
                  / '(' S Choice ')' S
-                 / Trim
-                 / Literal S / CharClass S / Dot S
+                 / Reference S
+                 / Literal S
+                 / CharClass S
+                 / Dot S
+
+# REFS extension
+RefScope    {S} <- '$<' S Choice '>' S
+Mark        {S} <- '$' Identifier '<' S Choice '>' S
+Reference   {S} <- '$' Identifier !'<'
+
+# TRIM extension
 Trim        {S} <- '<' S Choice '>' S
 
 # Lexical syntax
-Options     { } <- [ILS]*
+Options     { } <- [A-Za-z]*
 Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
-Literal     {S} <- ( ['] (!['] Char)* ['] /  ["] (!["] Char)* ["] ) NoCase?
+Literal     {S} <- ( ['] (!['] Char)* ['] / ["] (!["] Char)* ["] ) NoCase?
 CharClass   {S} <- '[' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
 Char        { } <- EscChar / HexChar / OctChar / PlainChar
