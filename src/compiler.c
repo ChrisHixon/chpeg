@@ -326,11 +326,17 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             break;
 #endif
 #if CHPEG_EXTENSION_REFS
+        case CHPEG_DEF_REFSCOPE:
+            gp->parse_state = ChpegCU_alloc_inst(cu);             // RSCOPE
+            ChpegCU_alloc_instructions(cu, gp->head);             // ...
+            gp->head->parent_next_state = ChpegCU_alloc_inst(cu); // RSCOPES
+            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu); // RSCOPEF
+            break;
         case CHPEG_DEF_MARK:
-            gp->parse_state = ChpegCU_alloc_inst(cu);                     // MARK
-            ChpegCU_alloc_instructions(cu, gp->head->next);               // (CONTAINED INSTRUCTIONS)
-            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);   // MARKS
-            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);   // MARKF
+            gp->parse_state = ChpegCU_alloc_inst(cu);                   // MARK
+            ChpegCU_alloc_instructions(cu, gp->head->next);             // ...
+            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu); // MARKS
+            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu); // MARKF
             break;
 #endif
         case CHPEG_DEF_REPEAT:
@@ -360,15 +366,14 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
     }
 }
 
-// TODO: move to ChpegByteCode
+#if CHPEG_EXTENSION_REFS
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node);
+#endif
+
 static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
 {
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
-
-#if CHPEG_EXTENSION_REFS
-static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node);
-#endif
 
 static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
 {
@@ -423,6 +428,12 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             break;
 #endif
 #if CHPEG_EXTENSION_REFS
+        case CHPEG_DEF_REFSCOPE:
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPE, 0));
+            ChpegCU_add_instructions(cu, gp->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPES, gp->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSCOPEF, gp->parent_fail_state));
+            break;
         case CHPEG_DEF_MARK:
             ref_id = ChpegCU_find_ref(cu, gp->node);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARK, ref_id));
@@ -709,6 +720,9 @@ done:
 
 #endif
 
+// Compiler sanity check: assert def names looked up via CHPEG_DEF_* macros
+// match what is expected. This might help detect mismatches of included
+// bytecode header vs. linked bytecode.
 void chpeg_sanity_check()
 {
     const ChpegByteCode *bc = chpeg_default_bytecode();

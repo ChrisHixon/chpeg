@@ -52,23 +52,31 @@
 enum ChpegErrorCodes
 {
     CHPEG_ERR_NONE = 0,
+
+    // errors possible from user input
     CHPEG_ERR_PARSE_FAILED = 1,
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
-    CHPEG_ERR_STACK_RANGE = 3,
-    CHPEG_ERR_STACK_OVERFLOW = 4,
-    CHPEG_ERR_STACK_UNDERFLOW = 5,
-    CHPEG_ERR_TREE_STACK_RANGE = 6,
-    CHPEG_ERR_TREE_STACK_OVERFLOW = 7,
-    CHPEG_ERR_TREE_STACK_UNDERFLOW = 8,
-    CHPEG_ERR_UNEXPECTED_STACK_DATA = 9,
-    CHPEG_ERR_UNEXPECTED_TREE_STACK_DATA = 10,
-    CHPEG_ERR_INVALID_IDENTIFIER = 11,
-    CHPEG_ERR_INVALID_PC = 12,
-    CHPEG_ERR_INVALID_INSTRUCTION = 13,
-    CHPEG_ERR_INVALID_OFFSET = 14,
-    CHPEG_ERR_RUNAWAY = 15,
-    CHPEG_ERR_COMPILE = 16, // compiler error; shouldn't really be in here
-    CHPEG_NUM_ERR = 17,
+    CHPEG_ERR_STACK_OVERFLOW = 3,
+    CHPEG_ERR_TSTACK_OVERFLOW = 4,
+    CHPEG_ERR_RSTACK_OVERFLOW = 5,
+    CHPEG_ERR_INVALID_IDENTIFIER = 6, // shouldn't be allowed in bytecode
+    CHPEG_ERR_COMPILE = 7, // compiler error; shouldn't really be in here
+
+    // internal errors that shouldn't happen
+    CHPEG_ERR_STACK_RANGE = 8,
+    CHPEG_ERR_STACK_UNDERFLOW = 9,
+    CHPEG_ERR_STACK_DATA = 10,
+    CHPEG_ERR_TSTACK_RANGE = 11,
+    CHPEG_ERR_TSTACK_UNDERFLOW = 12,
+    CHPEG_ERR_TSTACK_DATA = 13,
+    CHPEG_ERR_RSTACK_RANGE = 14,
+    CHPEG_ERR_RSTACK_UNDERFLOW = 15,
+    CHPEG_ERR_RSTACK_DATA = 16,
+    CHPEG_ERR_INVALID_PC = 17,
+    CHPEG_ERR_INVALID_INSTRUCTION = 18,
+    CHPEG_ERR_INVALID_OFFSET = 19,
+    CHPEG_ERR_RUNAWAY = 20,
+    CHPEG_NUM_ERR = 21,
 };
 
 struct _ChpegParser;
@@ -157,6 +165,10 @@ typedef struct _ChpegParser
 #if CHPEG_PACKRAT
     int packrat;
     int packrat_window_size;
+#endif
+
+#if CHPEG_EXTENSION_REFS
+    int rstack_size;
 #endif
 
 } ChpegParser;
