@@ -6,7 +6,7 @@ EXTENSIONS = ALL
 
 # list optional features here
 # current features: PACKRAT
-FEATURES =
+FEATURES = PACKRAT
 
 CC=gcc
 EXTENSION_DEFS = $(EXTENSIONS:%=-DCHPEG_EXTENSION_%)

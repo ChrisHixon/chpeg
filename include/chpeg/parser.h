@@ -81,25 +81,37 @@ enum ChpegErrorCodes
 
 struct _ChpegParser;
 
+#if CHPEG_EXTENSION_REFS
+typedef struct _ReferenceInfo
+{
+    size_t offset;
+    size_t length;
+    int flags;
+} ReferenceInfo;
+#endif
+
 //
-// Syntax tree ChpegNode
+// Parse/syntax tree Node
 //
 
 typedef struct _ChpegNode
 {
     size_t offset; // token offset (may be adjusted by trim '<')
     size_t length; // token length (may be adjusted by trim '>')
-#ifdef CHPEG_PACKRAT
-    size_t match_length; // full match length
-#endif
-#ifdef CHPEG_NODE_REF_COUNT
-    int refs;
-#endif
     int def;
     int flags;
     int num_children;
     struct _ChpegNode *head;
     struct _ChpegNode *next;
+#if CHPEG_PACKRAT
+    size_t match_length; // full match length
+#endif
+#if CHPEG_NODE_REF_COUNT
+    int ref_count;
+#endif
+#if CHPEG_EXTENSION_REFS
+    ReferenceInfo *refs;
+#endif
 } ChpegNode;
 
 CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
