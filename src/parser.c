@@ -351,6 +351,7 @@ typedef struct _ReferenceInfo
 {
     size_t offset;
     size_t length;
+    int flags;
 } ReferenceInfo;
 
 #endif
@@ -659,8 +660,10 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 #define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < 0)
 #define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
 #define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
+#if CHPEG_EXTENSION_REFS
 #define CHPEG_CHECK_RSTACK_OVERFLOW(size) (rtop + (size) >= rstack_size)
 #define CHPEG_CHECK_RSTACK_UNDERFLOW(size) (rtop - (size) < 0)
+#endif
 
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
@@ -726,7 +729,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if CHPEG_EXTENSION_REFS
     const int num_refs = self->bc->num_refs;
     int rstack_size = self->rstack_size;
-    ReferenceInfo* rstack = CHPEG_CALLOC(num_refs * rstack_size, sizeof(ReferenceInfo));
+    assert(num_refs >= 0);
+    ReferenceInfo* rstack = num_refs ? CHPEG_CALLOC(num_refs * rstack_size, sizeof(ReferenceInfo)) : NULL;
     ReferenceInfo* ref = NULL;
     int rtop = 0; // item 0 is `global scope
 #endif
@@ -781,38 +785,16 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     {
 
 #if SANITY_CHECKS
-        if (pc < 0 || pc > num_instructions) {
-            retval = CHPEG_ERR_INVALID_PC;
-            goto done;
-        }
-        if (top >= max_stack_size) {
-            retval = CHPEG_ERR_STACK_RANGE;
-            goto done;
-        }
-        if (top < 0) {
-            retval = CHPEG_ERR_STACK_RANGE;
-            goto done;
-        }
-        if (tree_top >= max_tree_depth) {
-            retval = CHPEG_ERR_TSTACK_RANGE;
-            goto done;
-        }
-        if (tree_top < 0) {
-            retval = CHPEG_ERR_TSTACK_RANGE;
-            goto done;
-        }
-        if (rtop >= rstack_size) {
-            retval = CHPEG_ERR_RSTACK_RANGE;
-            goto done;
-        }
-        if (rtop < 0) {
-            retval = CHPEG_ERR_RSTACK_RANGE;
-            goto done;
-        }
-        if (offset > length) {
-            retval = CHPEG_ERR_INVALID_OFFSET;
-            goto done;
-        }
+        if (offset > length) { retval = CHPEG_ERR_INVALID_OFFSET; goto done; }
+        if (pc < 0 || pc > num_instructions) { retval = CHPEG_ERR_INVALID_PC; goto done; }
+        if (top >= max_stack_size) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
+        if (top < 0) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
+        if (tree_top >= max_tree_depth) { retval = CHPEG_ERR_TSTACK_RANGE; goto done; }
+        if (tree_top < 0) { retval = CHPEG_ERR_TSTACK_RANGE; goto done; }
+#if CHPEG_EXTENSION_REFS
+        if (rtop >= rstack_size) { retval = CHPEG_ERR_RSTACK_RANGE; goto done; }
+        if (rtop < 0) { retval = CHPEG_ERR_RSTACK_RANGE; goto done; }
+#endif
 #endif
         op = instructions[pc] & 0xff;
         arg = instructions[pc] >> 8;
@@ -1006,10 +988,24 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 stack[++top] = offset; // top=s+3: offset
                 stack[++top] = pc; // top=s+4: pc
 
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+                    if (CHPEG_CHECK_RSTACK_OVERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_OVERFLOW; break;
+                    }
+                    ++rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+   IDENT: rtop=%d\n", rtop);
+                    }
+#endif
+                    memset(rstack + rtop * num_refs, 0, num_refs * sizeof(ReferenceInfo));
+                }
+#endif
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
-
                 pc = def_addrs[arg];
                 break;
 
@@ -1093,6 +1089,34 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     }
                 }
 
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
+                    }
+#endif
+                    ref = rstack + rtop * num_refs;
+                    for (i = 0; i < num_refs; ++i, ++ref) {
+                        if (ref->flags) {
+                            memcpy(ref - num_refs, ref, sizeof(ReferenceInfo));
+#if CHPEG_VM_TRACE
+                            if (self->vm_trace & 8) {
+                                fprintf(stderr, "+   ISUCC: rtop=%d (copied ref %d to level %d)\n",
+                                    rtop, i, rtop - 1);
+                            }
+#endif
+                        }
+                    }
+                    --rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+   ISUCC: rtop=%d\n", rtop);
+                    }
+#endif
+                }
+#endif
+
 
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
@@ -1153,6 +1177,22 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     ChpegNode_pop_child(tree_stack[--tree_top]);
                 }
 
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
+                    }
+#endif
+                    --rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+   IFAIL: rtop=%d\n", rtop);
+                    }
+#endif
+                }
+#endif
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -1162,33 +1202,76 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 // Choice
             case CHPEG_OP_CHOICE:
-                if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 items
-                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
-                }
 #if CHPEG_VM_PROFILE
                 ++self->prof_choice_cnt[cur_def];
 #endif
+                if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 items
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
+
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+                    if (CHPEG_CHECK_RSTACK_OVERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_OVERFLOW; break;
+                    }
+                    ++rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+  CHOICE: rtop=%d\n", rtop);
+                    }
+#endif
+                    memset(rstack + rtop * num_refs, 0, num_refs * sizeof(ReferenceInfo));
+                }
+#endif
+
                 ++pc; // next instruction
                 break;
 
-            case CHPEG_OP_CISUCC: // arg = success/fail pc addr
+            case CHPEG_OP_CISUCC: // Choice Item SUCCess arg = success/fail pc addr
 #if CHPEG_VM_PROFILE
                 ++self->prof_cisucc_cnt[cur_def];
 #endif
-                // fallthrough
-            case CHPEG_OP_CFAIL:
 #if SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
                 top -= 2;
+
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
+                    }
+#endif
+                    ref = rstack + rtop * num_refs;
+                    for (i = 0; i < num_refs; ++i, ++ref) {
+                        if (ref->flags) {
+                            memcpy(ref - num_refs, ref, sizeof(ReferenceInfo));
+#if CHPEG_VM_TRACE
+                            if (self->vm_trace & 8) {
+                                fprintf(stderr, "+  CISUCC: rtop=%d (copied ref %d to level %d)\n",
+                                    rtop, i, rtop - 1);
+                            }
+#endif
+                        }
+                    }
+                    --rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+  CISUCC: rtop=%d\n", rtop);
+                    }
+#endif
+                }
+#endif
+
                 pc = arg;
                 break;
 
-            case CHPEG_OP_CIFAIL:
+            case CHPEG_OP_CIFAIL: // Choice Item FAIL; arg: unused
 #if CHPEG_VM_PROFILE
                 ++self->prof_cifail_cnt[cur_def];
 #endif
@@ -1196,10 +1279,49 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 offset = stack[top];
                 for (i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
                     ChpegNode_pop_child(tree_stack[tree_top]);
+
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+                    memset(rstack + rtop * num_refs, 0, num_refs * sizeof(ReferenceInfo));
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+  CIFAIL: rtop=%d (cleared stack frame)\n", rtop);
+                    }
+#endif
+                }
+#endif
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
                 ++pc; // next instruction
+                break;
+
+            case CHPEG_OP_CFAIL: // Choice FAIL; arg: pc
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+
+#if CHPEG_EXTENSION_REFS
+                if (num_refs) {
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
+                    }
+#endif
+                    --rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+   CFAIL: rtop=%d\n", rtop);
+                    }
+#endif
+                }
+#endif
+
+                top -= 2;
+                pc = arg;
                 break;
 
 
@@ -1374,36 +1496,44 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 // References
 //
             case CHPEG_OP_RSCOPE: // new Reference SCOPE; arg: unused
-                if (CHPEG_CHECK_RSTACK_OVERFLOW(1)) {
-                    pc = -1; retval = CHPEG_ERR_RSTACK_OVERFLOW; break;
-                }
-                ++rtop;
+                if (num_refs) {
+                    if (CHPEG_CHECK_RSTACK_OVERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_OVERFLOW; break;
+                    }
+                    ++rtop;
+                    memset(rstack + rtop * num_refs, 0, num_refs * sizeof(ReferenceInfo));
 #if CHPEG_VM_TRACE
-                if (self->vm_trace & 8) {
-                    fprintf(stderr, "+  RSCOPE: rtop=%d\n", rtop);
-                }
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+  RSCOPE: rtop=%d\n", rtop);
+                    }
 #endif
+                }
                 ++pc; // next instruction
                 break;
 
             case CHPEG_OP_RSCOPES: // end Reference SCOPE Success; arg: next pc
             case CHPEG_OP_RSCOPEF: // end Reference SCOPE Fail; arg: next pc
-                if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
-                    pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
-                }
-                --rtop;
-#if CHPEG_VM_TRACE
-                if (self->vm_trace & 8) {
-                    fprintf(stderr, "+ %s: rtop=%d\n",
-                        op == CHPEG_OP_RSCOPES ? "RSCOPES" : "RSCOPEF",
-                        rtop);
-                }
+                if (num_refs) {
+#if SANITY_CHECKS
+                    if (CHPEG_CHECK_RSTACK_UNDERFLOW(1)) {
+                        pc = -1; retval = CHPEG_ERR_RSTACK_UNDERFLOW; break;
+                    }
 #endif
+                    --rtop;
+#if CHPEG_VM_TRACE
+                    if (self->vm_trace & 8) {
+                        fprintf(stderr, "+ %s: rtop=%d\n",
+                            op == CHPEG_OP_RSCOPES ? "RSCOPES" : "RSCOPEF",
+                            rtop);
+                    }
+#endif
+                }
                 pc = arg;
                 break;
 
             case CHPEG_OP_MARK: // MARK start; arg: ref_id
 
+                assert(num_refs);
                 if (CHPEG_CHECK_STACK_OVERFLOW(2)) { // pushes 2 item
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
@@ -1429,10 +1559,12 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
+                assert(num_refs);
                 assert(stack[top] < num_refs);
                 ref = &rstack[rtop * num_refs + stack[top]]; // stack[top] is ref_id
                 ref->offset = stack[top-1]; // stack[top-1] is beginning offset
                 ref->length = offset - ref->offset;
+                ref->flags = 1;
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
@@ -1456,19 +1588,19 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                // not sure the best behavior here, should the value be reset like this
-                // on failure or should it leave what is already there?
-                // it could be a choice
+                // here we unset the reference (flags=0)
+                assert(num_refs);
                 assert(stack[top] < num_refs);
                 ref = &rstack[rtop * num_refs + stack[top]]; // stack[top] is ref_id
                 ref->offset = 0;
                 ref->length = 0;
+                ref->flags = 0;
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
-                    fprintf(stderr, "+   MARKF: FAILED ref %d (%12s) rtop=%d offset:%zu length:%zu)\n",
+                    fprintf(stderr, "+   MARKF: FAILED ref %d (%12s) rtop=%d flags:%d\n",
                         (int)stack[top], ChpegByteCode_ref_name(self->bc, stack[top]), rtop,
-                        ref->offset, ref->length);
+                        ref->flags);
                 }
 #endif
 
@@ -1478,33 +1610,47 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_REF: // match REFerence; arg = ref_id;
                                // skip next instruction on match
+                assert(num_refs);
                 assert(arg < num_refs);
-                ref = &rstack[rtop * num_refs + arg]; // stack[top] is ref_id
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
-                    char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
-                    fprintf(stderr, "+     REF: LOOKUP ref %d (%12s) rtop=%d offset:%zu length:%zu data:\"%s\"\n",
-                        arg, ChpegByteCode_ref_name(self->bc, arg), rtop,
-                        ref->offset, ref->length, esc);
-                    CHPEG_FREE(esc);
+                    fprintf(stderr, "+     REF: LOOKUP ref %d (%12s) rtop=%d offset=%zu\n",
+                        arg, ChpegByteCode_ref_name(self->bc, arg), rtop, offset);
                 }
 #endif
-                if ((offset < (length - (ref->length - 1))) &&
-                    memcmp(input + offset, input + ref->offset, ref->length) == 0)
-                {
+                for (i = rtop; i >= 0; --i) {
+                    ref = &rstack[i * num_refs + arg];
 #if CHPEG_VM_TRACE
+                    /*
                     if (self->vm_trace & 8) {
-                        char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
-                        fprintf(stderr, "+     REF: MATCH  ref %d (%12s) rtop=%d offset:%zu length:%zu data:\"%s\"\n",
-                            arg, ChpegByteCode_ref_name(self->bc, arg), rtop,
-                            ref->offset, ref->length, esc);
-                        CHPEG_FREE(esc);
+                        fprintf(stderr, "+     REF: SEARCH ref %d (%12s) rlevel=%d ridx=%d (f:%d o:%zu l:%zu)\n",
+                            arg, ChpegByteCode_ref_name(self->bc, arg), i, i * num_refs + arg,
+                            ref->flags, ref->offset, ref->length);
                     }
+                    */
 #endif
-                    offset += ref->length;
-                    pc += 2;
-                    break;
+                    if (ref->flags == 1) {
+                        if ((offset < (length - (ref->length - 1))) &&
+                            memcmp(input + offset, input + ref->offset, ref->length) == 0)
+                        {
+#if CHPEG_VM_TRACE
+                            if (self->vm_trace & 8) {
+                                char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
+                                fprintf(stderr, "+     REF: MATCH  ref %d (%12s) rlevel=%d offset:%zu length:%zu data:\"%s\"\n",
+                                    arg, ChpegByteCode_ref_name(self->bc, arg), i,
+                                    ref->offset, ref->length, esc);
+                                CHPEG_FREE(esc);
+                            }
+#endif
+                            offset += ref->length;
+                            pc += 2;
+                            goto op_matchs_done;
+                        }
+                        else {
+                            break;
+                        }
+                    }
                 }
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
@@ -1524,6 +1670,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
 #endif
                 ++pc; // failed match, go to next instruction
+op_matchs_done:
                 break;
 #endif // #if CHPEG_EXTENSION_REFS
 
@@ -1700,9 +1847,11 @@ chrcls_done:
                 else if (tree_top != 0) {
                     retval = CHPEG_ERR_TSTACK_DATA;
                 }
+#if CHPEG_EXTENSION_REFS
                 else if (rtop != 0) {
                     retval = CHPEG_ERR_RSTACK_DATA;
                 }
+#endif
                 else {
                     if (consumed != NULL) {
                         *consumed = offset;
@@ -1775,6 +1924,10 @@ done:
 #undef CHPEG_CHECK_STACK_UNDERFLOW
 #undef CHPEG_CHECK_TSTACK_OVERFLOW
 #undef CHPEG_CHECK_TSTACK_UNDERFLOW
+#if CHPEG_EXTENSION_REFS
+#undef CHPEG_CHECK_RSTACK_OVERFLOW
+#undef CHPEG_CHECK_RSTACK_UNDERFLOW
+#endif
 
 
 // } chpeg: parser.c

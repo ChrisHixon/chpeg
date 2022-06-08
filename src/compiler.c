@@ -748,11 +748,12 @@ void chpeg_sanity_check()
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_DOT), "Dot") == 0);
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_S), "S") == 0);
 
-#ifdef CHPEG_EXTENSION_TRIM
+#if CHPEG_EXTENSION_TRIM
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_TRIM), "Trim") == 0);
 #endif
 
-#ifdef CHPEG_EXTENSION_REFS
+#if CHPEG_EXTENSION_REFS
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_REFSCOPE), "RefScope") == 0);
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_MARK), "Mark") == 0);
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_REFERENCE), "Reference") == 0);
 #endif
