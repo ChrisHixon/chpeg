@@ -48,6 +48,22 @@
 #define CHPEG_NODE_REF_COUNT 1
 #endif
 
+// Undo action support
+#ifndef CHPEG_UNDO
+#define CHPEG_UNDO 1
+#endif
+#if CHPEG_UNDO
+#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child_undo
+#define CHPEG_CHOICE_PUSHES 3
+#define CHPEG_RP_PUSHES 4
+#define CHPEG_RSQ_PUSHES 3
+#else
+#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child
+#define CHPEG_CHOICE_PUSHES 2
+#define CHPEG_RP_PUSHES 3
+#define CHPEG_RSQ_PUSHES 2
+#endif
+
 // parser error codes
 enum ChpegErrorCodes
 {
@@ -58,36 +74,32 @@ enum ChpegErrorCodes
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
     CHPEG_ERR_STACK_OVERFLOW = 3,
     CHPEG_ERR_TSTACK_OVERFLOW = 4,
-    CHPEG_ERR_RSTACK_OVERFLOW = 5,
-    CHPEG_ERR_INVALID_IDENTIFIER = 6, // shouldn't be allowed in bytecode
-    CHPEG_ERR_COMPILE = 7, // compiler error; shouldn't really be in here
+    CHPEG_ERR_INVALID_IDENTIFIER = 5, // shouldn't be allowed in bytecode
+    CHPEG_ERR_COMPILE = 6, // compiler error; shouldn't really be in here
 
     // internal errors that shouldn't happen
-    CHPEG_ERR_STACK_RANGE = 8,
-    CHPEG_ERR_STACK_UNDERFLOW = 9,
-    CHPEG_ERR_STACK_DATA = 10,
-    CHPEG_ERR_TSTACK_RANGE = 11,
-    CHPEG_ERR_TSTACK_UNDERFLOW = 12,
-    CHPEG_ERR_TSTACK_DATA = 13,
-    CHPEG_ERR_RSTACK_RANGE = 14,
-    CHPEG_ERR_RSTACK_UNDERFLOW = 15,
-    CHPEG_ERR_RSTACK_DATA = 16,
-    CHPEG_ERR_INVALID_PC = 17,
-    CHPEG_ERR_INVALID_INSTRUCTION = 18,
-    CHPEG_ERR_INVALID_OFFSET = 19,
-    CHPEG_ERR_RUNAWAY = 20,
-    CHPEG_NUM_ERR = 21,
+    CHPEG_ERR_STACK_RANGE = 7,
+    CHPEG_ERR_STACK_UNDERFLOW = 8,
+    CHPEG_ERR_STACK_DATA = 9,
+    CHPEG_ERR_TSTACK_RANGE = 10,
+    CHPEG_ERR_TSTACK_UNDERFLOW = 11,
+    CHPEG_ERR_TSTACK_DATA = 12,
+    CHPEG_ERR_INVALID_PC = 13,
+    CHPEG_ERR_INVALID_INSTRUCTION = 14,
+    CHPEG_ERR_INVALID_OFFSET = 15,
+    CHPEG_ERR_RUNAWAY = 16,
+    CHPEG_NUM_ERR = 17,
 };
 
 struct _ChpegParser;
 
 #if CHPEG_EXTENSION_REFS
-typedef struct _ReferenceInfo
+typedef struct _ChpegReferenceInfo
 {
     size_t offset;
     size_t length;
     int flags;
-} ReferenceInfo;
+} ChpegReferenceInfo;
 #endif
 
 //
@@ -103,6 +115,10 @@ typedef struct _ChpegNode
     int num_children;
     struct _ChpegNode *head;
     struct _ChpegNode *next;
+#if CHPEG_UNDO
+    int num_undo;
+    struct _ChpegUndoAction *undo_action;
+#endif
 #if CHPEG_PACKRAT
     size_t match_length; // full match length
 #endif
@@ -110,7 +126,7 @@ typedef struct _ChpegNode
     int ref_count;
 #endif
 #if CHPEG_EXTENSION_REFS
-    ReferenceInfo *refs;
+    ChpegReferenceInfo *refs;
 #endif
 } ChpegNode;
 
@@ -127,6 +143,16 @@ typedef struct _ChpegErrorInfo
     int def;
     int pc;
 } ChpegErrorInfo;
+
+typedef void (*ChpegUndoFunction) (ChpegNode *node, void *data);
+typedef struct _ChpegUndoAction
+{
+    struct _ChpegUndoAction *next;
+    ChpegUndoFunction func;
+    ChpegUndoFunction cleanup;
+    void *data;
+} ChpegUndoAction;
+
 
 //
 // ChpegParser
@@ -177,10 +203,6 @@ typedef struct _ChpegParser
 #if CHPEG_PACKRAT
     int packrat;
     int packrat_window_size;
-#endif
-
-#if CHPEG_EXTENSION_REFS
-    int rstack_size;
 #endif
 
 } ChpegParser;

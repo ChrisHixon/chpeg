@@ -5,6 +5,7 @@
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/mem.h"
 #include "chpeg/util.h"
+#include "chpeg/bytecode.h"
 #endif
 
 #include <stddef.h>
@@ -180,6 +181,40 @@ cleanup:
     }
     return ret;
 }
+
+char *chpeg_flags(char *buf, int flags)
+{
+    buf[CHPEG_FLAGS_DISPLAY_LENGTH] = '\0';
+
+    if (flags & CHPEG_FLAG_IGNORE) {
+        buf[2] = 'I';
+    }
+    else if (flags & CHPEG_FLAG_STOP) {
+        buf[2] = 'S';
+    }
+    else if (flags & CHPEG_FLAG_LEAF) {
+        buf[2] = 'L';
+    }
+    else {
+        buf[2] = '-';
+    }
+
+    if (flags & CHPEG_FLAG_PACKRAT) {
+        buf[1] = 'P';
+    }
+    else {
+        buf[1] = '-';
+    }
+
+    if (flags & CHPEG_FLAG_REFSCOPE) {
+        buf[0] = 'R';
+    }
+    else {
+        buf[0] = '-';
+    }
+    return buf;
+}
+
 
 // } chpeg: util.c
 

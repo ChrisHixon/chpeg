@@ -44,9 +44,6 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
 #endif
 
 #ifdef CHPEG_EXTENSION_REFS
-    "RSCOPE",
-    "RSCOPES",
-    "RSCOPEF",
     "MARK",
     "MARKS",
     "MARKF",
