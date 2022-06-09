@@ -38,16 +38,13 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "SUCC",
     "FAIL",
 
-#ifdef CHPEG_EXTENSION_TRIM
+#if CHPEG_EXTENSION_TRIM
     "TRIM",
     "TRIMS",
     "TRIMF",
 #endif
 
-#ifdef CHPEG_EXTENSION_REFS
-    "RSCOPE",
-    "RSCOPES",
-    "RSCOPEF",
+#if CHPEG_EXTENSION_REFS
     "MARK",
     "MARKS",
     "MARKF",

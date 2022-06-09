@@ -48,8 +48,24 @@
 #define CHPEG_NODE_REF_COUNT 1
 #endif
 
+// Undo action support
+#ifndef CHPEG_UNDO
+#define CHPEG_UNDO 1
+#endif
+#if CHPEG_UNDO
+#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child_undo
+#define CHPEG_CHOICE_PUSHES 3
+#define CHPEG_RP_PUSHES 4
+#define CHPEG_RSQ_PUSHES 3
+#else
+#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child
+#define CHPEG_CHOICE_PUSHES 2
+#define CHPEG_RP_PUSHES 3
+#define CHPEG_RSQ_PUSHES 2
+#endif
+
 // parser error codes
-enum ChpegErrorCodes
+typedef enum
 {
     CHPEG_ERR_NONE = 0,
 
@@ -58,48 +74,60 @@ enum ChpegErrorCodes
     CHPEG_ERR_EXTRANEOUS_INPUT = 2,
     CHPEG_ERR_STACK_OVERFLOW = 3,
     CHPEG_ERR_TSTACK_OVERFLOW = 4,
-    CHPEG_ERR_RSTACK_OVERFLOW = 5,
-    CHPEG_ERR_INVALID_IDENTIFIER = 6, // shouldn't be allowed in bytecode
-    CHPEG_ERR_COMPILE = 7, // compiler error; shouldn't really be in here
+    CHPEG_ERR_INVALID_IDENTIFIER = 5, // shouldn't be allowed in bytecode
+    CHPEG_ERR_COMPILE = 6, // compiler error; shouldn't really be in here
 
     // internal errors that shouldn't happen
-    CHPEG_ERR_STACK_RANGE = 8,
-    CHPEG_ERR_STACK_UNDERFLOW = 9,
-    CHPEG_ERR_STACK_DATA = 10,
-    CHPEG_ERR_TSTACK_RANGE = 11,
-    CHPEG_ERR_TSTACK_UNDERFLOW = 12,
-    CHPEG_ERR_TSTACK_DATA = 13,
-    CHPEG_ERR_RSTACK_RANGE = 14,
-    CHPEG_ERR_RSTACK_UNDERFLOW = 15,
-    CHPEG_ERR_RSTACK_DATA = 16,
-    CHPEG_ERR_INVALID_PC = 17,
-    CHPEG_ERR_INVALID_INSTRUCTION = 18,
-    CHPEG_ERR_INVALID_OFFSET = 19,
-    CHPEG_ERR_RUNAWAY = 20,
-    CHPEG_NUM_ERR = 21,
-};
+    CHPEG_ERR_STACK_RANGE = 7,
+    CHPEG_ERR_STACK_UNDERFLOW = 8,
+    CHPEG_ERR_STACK_DATA = 9,
+    CHPEG_ERR_TSTACK_RANGE = 10,
+    CHPEG_ERR_TSTACK_UNDERFLOW = 11,
+    CHPEG_ERR_TSTACK_DATA = 12,
+    CHPEG_ERR_INVALID_PC = 13,
+    CHPEG_ERR_INVALID_INSTRUCTION = 14,
+    CHPEG_ERR_INVALID_OFFSET = 15,
+    CHPEG_ERR_RUNAWAY = 16,
+    CHPEG_NUM_ERR = 17,
+} ChpegErrorCodes;
 
 struct _ChpegParser;
 
+#if CHPEG_EXTENSION_REFS
+typedef struct _ChpegReferenceInfo
+{
+    size_t offset;
+    size_t length;
+    int flags;
+} ChpegReferenceInfo;
+#endif
+
 //
-// Syntax tree ChpegNode
+// Parse/syntax tree Node
 //
 
 typedef struct _ChpegNode
 {
     size_t offset; // token offset (may be adjusted by trim '<')
     size_t length; // token length (may be adjusted by trim '>')
-#ifdef CHPEG_PACKRAT
-    size_t match_length; // full match length
-#endif
-#ifdef CHPEG_NODE_REF_COUNT
-    int refs;
-#endif
     ChpegOp def;
     ChpegFlags flags;
     int num_children;
     struct _ChpegNode *head;
     struct _ChpegNode *next;
+#if CHPEG_UNDO
+    int num_undo;
+    struct _ChpegUndoAction *undo_action;
+#endif
+#if CHPEG_PACKRAT
+    size_t match_length; // full match length
+#endif
+#if CHPEG_NODE_REF_COUNT
+    int ref_count;
+#endif
+#if CHPEG_EXTENSION_REFS
+    ChpegReferenceInfo *refs;
+#endif
 } ChpegNode;
 
 CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
@@ -115,6 +143,16 @@ typedef struct _ChpegErrorInfo
     int def;
     int pc;
 } ChpegErrorInfo;
+
+typedef void (*ChpegUndoFunction) (ChpegNode *node, void *data);
+typedef struct _ChpegUndoAction
+{
+    struct _ChpegUndoAction *next;
+    ChpegUndoFunction func;
+    ChpegUndoFunction cleanup;
+    void *data;
+} ChpegUndoAction;
+
 
 //
 // ChpegParser
@@ -167,10 +205,6 @@ typedef struct _ChpegParser
     int packrat_window_size;
 #endif
 
-#if CHPEG_EXTENSION_REFS
-    int rstack_size;
-#endif
-
 #ifdef CHPEG_DEFINITION_TRACE
     int vm_count;
     int *def_count;
@@ -189,6 +223,7 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, size_t length, FILE *fp);
+CHPEG_API void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc);
 CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE

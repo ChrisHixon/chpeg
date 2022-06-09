@@ -88,7 +88,7 @@ CHPEG_API const char *ChpegByteCode_def_name(const ChpegByteCode *self, int inde
     return NULL;
 }
 
-#ifdef CHPEG_EXTENSION_REFS
+#if CHPEG_EXTENSION_REFS
 CHPEG_API const char *ChpegByteCode_ref_name(const ChpegByteCode *self, int index)
 {
     if (index >= 0 && index < self->num_refs) {
@@ -465,6 +465,39 @@ CHPEG_API int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode 
     return 0;
 }
 
+CHPEG_API char *chpeg_flags(char *buf, int flags)
+{
+    buf[CHPEG_FLAGS_DISPLAY_LENGTH] = '\0';
+
+    if (flags & CHPEG_FLAG_IGNORE) {
+        buf[2] = 'I';
+    }
+    else if (flags & CHPEG_FLAG_STOP) {
+        buf[2] = 'S';
+    }
+    else if (flags & CHPEG_FLAG_LEAF) {
+        buf[2] = 'L';
+    }
+    else {
+        buf[2] = '-';
+    }
+
+    if (flags & CHPEG_FLAG_PACKRAT) {
+        buf[1] = 'P';
+    }
+    else {
+        buf[1] = '-';
+    }
+
+    if (flags & CHPEG_FLAG_REFSCOPE) {
+        buf[0] = 'R';
+    }
+    else {
+        buf[0] = '-';
+    }
+    return buf;
+}
+
 CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_id, FILE *fp)
 {
     int nested_choice = 0;
@@ -557,16 +590,14 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
 
             case CHPEG_OP_DOT: fprintf(fp, ". "); break;
 
-#ifdef CHPEG_EXTENSION_TRIM
+#if CHPEG_EXTENSION_TRIM
             case CHPEG_OP_TRIM: fprintf(fp, "< "); break;
                 break;
             case CHPEG_OP_TRIMS: fprintf(fp, "> "); break;
 #endif
 
-#ifdef CHPEG_EXTENSION_REFS
-            case CHPEG_OP_RSCOPE: fprintf(fp, "$< "); break;
+#if CHPEG_EXTENSION_REFS
             case CHPEG_OP_MARK: fprintf(fp, "$%s< ", bc->refs[arg]); break;
-            case CHPEG_OP_RSCOPES:
             case CHPEG_OP_MARKS: fprintf(fp, "> "); break;
             case CHPEG_OP_REF: fprintf(fp, "$%s ", bc->refs[arg]); break;
 #endif
@@ -592,3 +623,4 @@ CHPEG_API void ChpegByteCode_output_definition(const ChpegByteCode *bc, int def_
 }
 
 // } chpeg: bytecode.c
+

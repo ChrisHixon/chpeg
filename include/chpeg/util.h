@@ -10,7 +10,29 @@
 #define CHPEG_DEF
 #endif
 
+// define to enable ALL extensions
+#ifdef CHPEG_EXTENSION_ALL
+#define CHPEG_EXTENSION_TRIM 1
+#define CHPEG_EXTENSION_REFS 1
+#endif
+
+#ifndef CHPEG_EXTENSION_TRIM
+#define CHPEG_EXTENSION_TRIM 0
+#endif
+
+#ifndef CHPEG_EXTENSION_REFS
+#define CHPEG_EXTENSION_REFS 0
+#endif
+
+// used to check if using ANY extension
+#if CHPEG_EXTENSION_TRIM || CHPEG_EXTENSION_REFS
+#define CHPEG_USES_EXTENSIONS 1
+#endif
+
 #include <stddef.h>
+
+#define CHPEG_FLAGS_DISPLAY_LENGTH 3
+#define CHPEG_FLAGS_DISPLAY_SIZE (CHPEG_FLAGS_DISPLAY_LENGTH+1)
 
 #ifndef CHPEG_MALLOC
 CHPEG_API void *chpeg_malloc(size_t sz);
