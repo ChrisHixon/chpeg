@@ -58,8 +58,8 @@ enum ChpegFlags {
     CHPEG_FLAG_STOP     = 1<<0,  // {C|S} stop automatic unwrapping, forcing this node to be a container
     CHPEG_FLAG_IGNORE   = 1<<1,  // {I} deletes nodes matching this identifier
     CHPEG_FLAG_LEAF     = 1<<2,  // {L|T} collects this node and anything underneath as a final leaf (text) node
-    CHPEG_FLAG_PACKRAT  = 1<<3,  // {P} add node to packrat cache
-    CHPEG_FLAG_REFSCOPE = 1<<4,  // {R} add node to packrat cache
+    CHPEG_FLAG_PACKRAT  = 1<<3,  // {P} add resulting node to packrat cache
+    CHPEG_FLAG_REFSCOPE = 1<<4,  // {R} make resulting node a reference scope
 
 #ifdef CHPEG_EXTENSION_TRIM
     // These flags are used internally
