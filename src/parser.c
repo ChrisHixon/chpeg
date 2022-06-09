@@ -251,7 +251,7 @@ void ChpegNode_undo_free(ChpegNode *self, int depth)
 }
 
 // drop-in replacement for ChpegNode_pop_child that calls undo actions
-void CHPEG_NODE_POP_CHILD(ChpegNode *self)
+void ChpegNode_pop_child_undo(ChpegNode *self)
 {
     if (self->head) {
         ChpegNode *tmp = self->head;
