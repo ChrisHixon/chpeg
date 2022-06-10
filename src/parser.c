@@ -69,7 +69,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
             "     "
 #endif
-            " OFFSET   LEN     ID DP FLG IDENT \"DATA\"\n");
+            " OFFSET   LEN     ID NC FLG IDENT \"DATA\"\n");
     }
 
     fprintf(fp,
@@ -88,7 +88,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
         self->length,
 #endif
         self->def,
-        depth,
+        self->num_children,
         chpeg_flags(flags, self->flags),
         depth * 2, "",
         def_name ? def_name : "<N/A>",
@@ -322,6 +322,67 @@ void ChpegNode_pop_undo(ChpegNode *self)
 }
 #endif
 
+// replace first child with contents of first child
+void ChpegNode_unpack_child(ChpegNode *self)
+{
+    ChpegNode *first_child = self->head; // first child
+    // find last child of first child
+    ChpegNode *p = first_child->head;
+    for (;;) {
+        p->parent = self;
+        ++self->num_children;
+        if (!p->next) break;
+        p = p->next;
+    }
+    p->next = self->head->next; // link last item to second child
+    self->head = first_child->head; // change first child link
+    ChpegNode_free_nr(first_child);
+    --self->num_children;
+}
+
+// scans the child nodes to determine if we can simplify this node
+int ChpegNode_can_simplify(ChpegNode *self)
+{
+    // STOP flag means no simplification (force a node capture)
+    if (self->flags & CHPEG_FLAG_STOP) {
+        return 0;
+    }
+
+    ChpegNode *p = NULL;
+
+    size_t pos = self->offset + self->length; // start at end this node
+    // scanning goes backwards since child order is reversed in tree as build while parsing
+
+    int cnt = 0, text = 0;
+    for (p = self->head; p;) {
+        //fprintf(stderr, "node: <d:%d o:%zu l:%zu f:%d>, pos=%zu, cnt=%d, text=%d\n",
+        //    p->def, p->offset, p->length, p->flags, pos, cnt, text);
+        assert(p->offset + p->length <= pos);
+        if (p->offset + p->length < pos) {
+            ++text;                             // a gap is considered a text node
+        }
+        pos = p->offset;
+        if (!(p->flags & CHPEG_FLAG_IGNORE)) {
+            ++cnt;                              // a non-ignore node is candidate
+        }
+        p = p->next;
+    }
+    assert(pos >= self->offset);
+    if (pos > self->offset) {
+        ++text;
+    }
+    // if we have one candidate node and no text nodes, we can simplify
+    if (cnt == 1 && !text) {
+        //fprintf(stderr, "can simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+        //    self->def, self->offset, self->length, self->flags,
+        //    cnt, text);
+        return 1;
+    }
+    //fprintf(stderr, "can't simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+    //    self->def, self->offset, self->length, self->flags,
+    //    cnt, text);
+    return 0;
+}
 
 // 'Unwrap' a ChpegNode, recursively removing unnecessary parent nodes containing only one child.
 // In the process, this reverses the reverse node insertion used in tree building, so should only
@@ -345,6 +406,7 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
     return self;
 }
 
+// reverse a tree
 ChpegNode *ChpegNode_reverse(ChpegNode *self)
 {
     ChpegNode *p = self->head; self->head = NULL;
@@ -358,6 +420,25 @@ ChpegNode *ChpegNode_reverse(ChpegNode *self)
     return self;
 }
 
+// reverse a tree, deleting IGNORE nodes in the process
+ChpegNode *ChpegNode_reverse_clean(ChpegNode *self)
+{
+    ChpegNode *p = self->head; self->head = NULL;
+    ChpegNode *tmp;
+    for (; p; p=tmp) {
+        tmp = p->next;
+        if (p->flags & CHPEG_FLAG_IGNORE) {
+            ChpegNode_free(p);
+            --self->num_children;
+        }
+        else {
+            p = ChpegNode_reverse_clean(p);
+            p->next = self->head;
+            self->head = p;
+        }
+    }
+    return self;
+}
 
 
 #if CHPEG_PACKRAT
@@ -432,7 +513,7 @@ static ChpegPUndoNode *ChpegPNode_push_undo(ChpegPNode *self, ChpegPUndoNode *un
 static int chpeg_packrat_node_count(ChpegNode *node, int *count, int depth, int limit, ChpegParser *parser)
 {
     // 'unwrap' nodes except the top one (skip useless intermediate nodes with only one child)
-    if (depth > 0 && parser->simplification) {
+    if (depth > 0 && parser->simplification == 1) {
         while (node->num_children == 1 && !(node->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF))) {
             node = node->head;
         }
@@ -465,7 +546,7 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
     }
     // 'unwrap' nodes except the top one (skip useless intermediate nodes with only one child)
     // this can lead to quite a performance increase by cutting down on nodes created in _node_copy()
-    if (depth > 0 && parser->simplification) {
+    if (depth > 0 && parser->simplification == 1) {
         while (node->num_children == 1 && !(node->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF))) {
             node = node->head;
         }
@@ -1301,11 +1382,25 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
                     }
 #endif
+                    if (self->simplification == 2) {
+                        // drop zero-length ignore nodes now
+                        if ((def_flags[arg] & CHPEG_FLAG_IGNORE) &&
+                            tree_stack[tree_top]->length == 0)
+                        {
+                            ChpegNode_pop_child(tree_stack[tree_top - 1]);
+                        }
+                        // else, if we can simplify, unpack the node in-place
+                        else if (ChpegNode_can_simplify(tree_stack[tree_top])) {
+                            ChpegNode_unpack_child(tree_stack[tree_top - 1]);
+                        }
+                    }
+                    else {
+                        if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
+                            ChpegNode_pop_child(tree_stack[tree_top - 1]);
+                        }
+                    }
 
                     --tree_top;
-                    if (def_flags[arg] & CHPEG_FLAG_IGNORE) {
-                        ChpegNode_pop_child(tree_stack[tree_top]);
-                    }
                 }
 
 #if CHPEG_VM_PRINT_TREE
@@ -1991,14 +2086,25 @@ chrcls_done:
                 }
 #endif
 
-                // clean up the parse tree, reversing the reverse node insertion in the process
-                if (self->simplification) {
-                    self->tree_root = ChpegNode_unwrap(self->tree_root);
-                }
-                else {
-                    assert(self->tree_root->num_children == 1);
-                    self->tree_root = ChpegNode_reverse(self->tree_root->head);
-                    ChpegNode_free_nr(tree_stack[0]);
+                //
+                // reverse, simplify, and cleanup based on algo
+                //
+
+                switch (self->simplification) {
+                    case 1:
+                        self->tree_root = ChpegNode_unwrap(self->tree_root);
+                        break;
+                    case 2:
+                        self->tree_root = ChpegNode_reverse_clean(self->tree_root);
+                        assert(self->tree_root->num_children == 1);
+                        self->tree_root = self->tree_root->head;
+                        ChpegNode_free_nr(tree_stack[0]);
+                        break;
+                    default:
+                        assert(self->tree_root->num_children == 1);
+                        self->tree_root = ChpegNode_reverse(self->tree_root->head);
+                        ChpegNode_free_nr(tree_stack[0]);
+                        break;
                 }
 
 
