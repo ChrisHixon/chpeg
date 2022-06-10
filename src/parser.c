@@ -57,7 +57,11 @@
 void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth, FILE *fp)
 {
     char flags[CHPEG_FLAGS_DISPLAY_SIZE];
+#if CHPEG_EXTENSION_TRIM
+    char *data = chpeg_esc_bytes(&input[self->token_offset], self->token_length, 40);
+#else
     char *data = chpeg_esc_bytes(&input[self->offset], self->length, 40);
+#endif
     const char *def_name = ChpegByteCode_def_name(parser->bc, self->def);
 
     if (depth == 0) {
@@ -65,7 +69,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
             "     "
 #endif
-            " offset   len     id dp flg ident \"data\"\n");
+            " OFFSET   LEN     ID DP FLG IDENT \"DATA\"\n");
     }
 
     fprintf(fp,
@@ -76,8 +80,13 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
         self->ref_count,
 #endif
+#if CHPEG_EXTENSION_TRIM
+        self->token_offset,
+        self->token_length,
+#else
         self->offset,
         self->length,
+#endif
         self->def,
         depth,
         chpeg_flags(flags, self->flags),
@@ -1136,7 +1145,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     if (self->vm_trace & 2) {
                         if (packrat_lookup && packrat_lookup != packrat_no_match) {
                             esc_str = chpeg_esc_bytes(input + offset,
-                                packrat_lookup->node->match_length, 40);
+                                packrat_lookup->node->length, 40);
                         }
                         fprintf(stderr, "packrat IDENT %6d %4d %12s %s%s%s%s\n",
                             (int)offset, arg,
@@ -1161,7 +1170,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                                 tree_changed = 1;
 #endif
                             }
-                            offset += packrat_lookup->node->match_length;
+                            offset += packrat_lookup->node->length;
                             pc += 2;
                             break;
                         }
@@ -1228,6 +1237,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 pc = stack[top--] + 2; // top=s+3: offset
 
 #if CHPEG_PACKRAT
+                // TODO: these may not be necessary with trim/token_offset/token_length change
                 poffset = stack[top--]; // top=s+2: def
                 plen = offset - poffset;
 #else
@@ -1245,19 +1255,24 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     }
 #endif
 
+                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+
 #if CHPEG_EXTENSION_TRIM
-                    // if we haven't set length by trimming right, set length
+                    // if we haven't set token_offset by trimming left, set token_length
+                    if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_LEFT) == 0)
+                    {
+                        tree_stack[tree_top]->token_offset = tree_stack[tree_top]->offset;
+                    }
+                    // if we haven't set token_length by trimming right, set token_length
                     if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
                     {
-#endif
-                        tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-#if CHPEG_EXTENSION_TRIM
+                        tree_stack[tree_top]->token_length = tree_stack[tree_top]->length;
                     }
 #endif
 
 #if CHPEG_PACKRAT
                     if (self->packrat) {
-                        tree_stack[tree_top]->match_length = plen;
+                        tree_stack[tree_top]->length = plen;
                         packrat_index = !packrat_flags || (def_flags[arg] & CHPEG_FLAG_PACKRAT);
 #if CHPEG_VM_TRACE
                         if (self->vm_trace & 2) {
@@ -1571,16 +1586,16 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
                 }
 
-                // Save original offset and flags
-                stack[++top] = tree_stack[tree_top]->offset;
+                // Save original token_offset and flags
+                stack[++top] = tree_stack[tree_top]->token_offset;
                 stack[++top] = tree_stack[tree_top]->flags;
 
-                // Trim on left (set offset and mark as 'trimmed left')
-                tree_stack[tree_top]->offset = offset;
+                // Trim on left (set token_offset and mark as 'trimmed left')
+                tree_stack[tree_top]->token_offset = offset;
                 tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_LEFT;
 
                 // Save changed offset and flags on the stack
-                stack[++top] = tree_stack[tree_top]->offset;
+                stack[++top] = tree_stack[tree_top]->token_offset;
                 stack[++top] = tree_stack[tree_top]->flags;
 
                 ++pc; // next instruction
@@ -1597,10 +1612,10 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
                 // Restore the changed flags and offset values from the stack
                 tree_stack[tree_top]->flags = stack[top--];
-                tree_stack[tree_top]->offset = stack[top--];
+                tree_stack[tree_top]->token_offset = stack[top--];
 
-                // Trim of right (set length and mark as 'trimmed right')
-                tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+                // Trim on right (set length and mark as 'trimmed right')
+                tree_stack[tree_top]->token_length = offset - tree_stack[tree_top]->token_offset;
                 tree_stack[tree_top]->flags |= CHPEG_FLAG_TRIMMED_RIGHT;
 
                 // Discard the original flags and offset values saved on stack
@@ -1621,9 +1636,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 // Discard the changed flags and offset values saved on stack
                 top -= 2;
 
-                // Restore the original flags and offset values from the stack
+                // Restore the original flags and token_offset values from the stack
                 tree_stack[tree_top]->flags = stack[top--];
-                tree_stack[tree_top]->offset = stack[top--];
+                tree_stack[tree_top]->token_offset = stack[top--];
 
                 pc = arg;
                 break;
@@ -1961,13 +1976,18 @@ chrcls_done:
             case CHPEG_OP_SUCC: // overall success
                 pc = -1; // we're done
 
+                tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
+
 #if CHPEG_EXTENSION_TRIM
-                // if we haven't set length by trimming right, set length
+                // if we haven't set token_offset by trimming left, set token_length
+                if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_LEFT) == 0)
+                {
+                    tree_stack[tree_top]->token_offset = tree_stack[tree_top]->offset;
+                }
+                // if we haven't set token_length by trimming right, set token_length
                 if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_RIGHT) == 0)
                 {
-#endif
-                    tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
-#if CHPEG_EXTENSION_TRIM
+                    tree_stack[tree_top]->token_length = tree_stack[tree_top]->length;
                 }
 #endif
 
