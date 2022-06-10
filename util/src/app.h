@@ -18,6 +18,7 @@ struct _App {
     int verbose;
     int debug;
     int error;
+    int simplification;
 
     // arg processing / action run state
     const Action *action;   // current action

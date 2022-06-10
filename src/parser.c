@@ -336,6 +336,21 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
     return self;
 }
 
+ChpegNode *ChpegNode_reverse(ChpegNode *self)
+{
+    ChpegNode *p = self->head; self->head = NULL;
+    ChpegNode *tmp;
+    for (; p; p=tmp) {
+        tmp = p->next;
+        p = ChpegNode_reverse(p);
+        p->next = self->head;
+        self->head = p;
+    }
+    return self;
+}
+
+
+
 #if CHPEG_PACKRAT
 
 #if CHPEG_UNDO
@@ -572,6 +587,7 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
     self->bc = bc;
     self->tree_root = NULL;
+    self->simplification = 1;
     self->max_tree_depth = CHPEG_MAX_TREE_DEPTH;
     self->max_stack_size = CHPEG_STACK_SIZE;
     self->error_offset = 0;
@@ -1954,7 +1970,17 @@ chrcls_done:
 #endif
 
                 // clean up the parse tree, reversing the reverse node insertion in the process
-                self->tree_root = ChpegNode_unwrap(self->tree_root);
+                if (self->simplification) {
+                    self->tree_root = ChpegNode_unwrap(self->tree_root);
+                }
+                else {
+                    self->tree_root = ChpegNode_reverse(self->tree_root);
+                    assert(self->tree_root->num_children == 1);
+                    self->tree_root = self->tree_root->head;
+                    ChpegNode_free_nr(tree_stack[0]);
+                }
+
+
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif

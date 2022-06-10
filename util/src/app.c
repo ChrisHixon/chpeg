@@ -72,6 +72,7 @@ void help(App *app, FILE *fp)
     fprintf(fp, "  -P STRING       parse STRING, using grammar from -g/-G, if present\n");
     fprintf(fp, "\n");
     fprintf(fp, "Global debugging and verbosity options:\n");
+    fprintf(fp, "  -sN             set AST simplification (0=off; 1=on; default is 1)\n");
     fprintf(fp, "  -d              increase debug level\n");
     fprintf(fp, "  -dN             set debug level to N (use 0 to disable)\n");
     fprintf(fp, "  -v              increase verbosity\n");
@@ -84,12 +85,12 @@ void help(App *app, FILE *fp)
 
 #if CHPEG_VM_TRACE
     fprintf(fp, "  -t              increase VM trace level\n");
-    fprintf(fp, "  -tN             set VM trace level to N (0=off,1=on)\n");
+    fprintf(fp, "  -tN             set VM trace level to N (0=off, 1=on)\n");
 #endif
 
 #if CHPEG_VM_PRINT_TREE
     fprintf(fp, "  -tp             increase VM print tree level\n");
-    fprintf(fp, "  -tpN            set VM print tree level to N (0=off,1=on)\n");
+    fprintf(fp, "  -tpN            set VM print tree level to N (0=off, 1=on)\n");
 #endif
 
 #if CHPEG_VM_TRACE || CHPEG_VM_PRINT_TREE
@@ -138,6 +139,7 @@ int init(App *app, int argc, const char **argv,
         .argv = argv,
         .num_actions = num_actions,
         .actions = actions,
+        .simplification = 1,
     };
     return 0;
 }
@@ -175,12 +177,12 @@ void cleanup(App *app)
 // print App state for debugging (can be called mid-processing any time with -state)
 void print_state(App *app, FILE *fp)
 {
-    fprintf(fp, "STATE: verbose=%d, debug=%d, error=%d | "
+    fprintf(fp, "STATE: verbose=%d, debug=%d, error=%d, simplification=%d | "
         "action_start=%d, action_default=%d, help_printed=%d | "
         "grammars.size=%zu, grammars.capacity=%zu | "
         "parses.size=%zu, parses.capacity=%zu | "
         "files.size=%zu, files.capacity=%zu | arg=%d, argc=%d\n",
-        app->verbose, app->debug, app->error,
+        app->verbose, app->debug, app->error, app->simplification,
         app->action_start, app->action_default, app->help_printed,
         app->grammars.size, app->grammars.capacity,
         app->parses.size, app->parses.capacity,
@@ -475,6 +477,10 @@ static int run(App *app)
         // debug (-dN)
         else if (arg_int(app, "-d", &value) == 0) {
             app->debug = value;
+        }
+        // AST simplification (-sN)
+        else if (arg_int(app, "-s", &value) == 0) {
+            app->simplification = value;
         }
         // dump state for debugging purposes (-state)
         else if (strcmp(app->argv[app->arg], "-state") == 0) {

@@ -167,6 +167,7 @@ typedef struct _ChpegParser
 {
     const ChpegByteCode *bc;
     ChpegNode *tree_root;
+    int simplification; // run unwrap on parse tree to generate AST (default is 1)
     int max_tree_depth;
     int max_stack_size;
     int parse_result;
