@@ -1976,9 +1976,8 @@ chrcls_done:
                     self->tree_root = ChpegNode_unwrap(self->tree_root);
                 }
                 else {
-                    self->tree_root = ChpegNode_reverse(self->tree_root);
                     assert(self->tree_root->num_children == 1);
-                    self->tree_root = self->tree_root->head;
+                    self->tree_root = ChpegNode_reverse(self->tree_root->head);
                     ChpegNode_free_nr(tree_stack[0]);
                 }
 
