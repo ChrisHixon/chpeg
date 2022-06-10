@@ -420,17 +420,17 @@ static ChpegPUndoNode *ChpegPNode_push_undo(ChpegPNode *self, ChpegPUndoNode *un
 #endif
 
 
-static int chpeg_packrat_node_count(ChpegNode *node, int *count, int depth, int limit)
+static int chpeg_packrat_node_count(ChpegNode *node, int *count, int depth, int limit, ChpegParser *parser)
 {
     // 'unwrap' nodes except the top one (skip useless intermediate nodes with only one child)
-    if (depth > 0) {
+    if (depth > 0 && parser->simplification) {
         while (node->num_children == 1 && !(node->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF))) {
             node = node->head;
         }
     }
 
     for (ChpegNode *p = node->head; p; p = p->next) {
-        chpeg_packrat_node_count(p, count, depth + 1, limit);
+        chpeg_packrat_node_count(p, count, depth + 1, limit, parser);
         if (limit && *count >= limit) {
             return limit;
         }
@@ -444,17 +444,19 @@ static int chpeg_packrat_node_count(ChpegNode *node, int *count, int depth, int 
 
 
 // wraps Node sub-tree in PNodes; call with depth=0
-static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int depth)
+static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int depth, ChpegParser *parser)
 {
     if (depth == 0) {
         int count = 0;
-        if (chpeg_packrat_node_count(node, &count, 0, CHPEG_PACKRAT_NODE_LIMIT) >= CHPEG_PACKRAT_NODE_LIMIT) {
+        if (chpeg_packrat_node_count(node, &count, 0, CHPEG_PACKRAT_NODE_LIMIT, parser) >=
+            CHPEG_PACKRAT_NODE_LIMIT)
+        {
             return NULL;
         }
     }
     // 'unwrap' nodes except the top one (skip useless intermediate nodes with only one child)
     // this can lead to quite a performance increase by cutting down on nodes created in _node_copy()
-    if (depth > 0) {
+    if (depth > 0 && parser->simplification) {
         while (node->num_children == 1 && !(node->flags & (CHPEG_FLAG_STOP | CHPEG_FLAG_LEAF))) {
             node = node->head;
         }
@@ -468,7 +470,7 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
     ++node->ref_count;
     for (ChpegNode *p = node->head; p; p = p->next) {
         ChpegPNode *pchild = CHPEG_CALLOC(1, sizeof(ChpegPNode));
-        ChpegPNode_from_node(pchild, p, depth + 1) ;
+        ChpegPNode_from_node(pchild, p, depth + 1, parser);
         ChpegPNode_push_child(pnode, pchild);
     }
 
@@ -1273,7 +1275,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                         {
                             packrat_index = (poffset % window_size) * num_defs + arg;
                             packrat[packrat_index] = ChpegPNode_from_node(
-                                NULL, tree_stack[tree_top], 0);
+                                NULL, tree_stack[tree_top], 0, self);
 #if CHPEG_VM_TRACE
                             if (self->vm_trace & 4) {
                                 ChpegPNode_print(packrat[packrat_index],
