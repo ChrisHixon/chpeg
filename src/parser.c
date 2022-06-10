@@ -130,6 +130,21 @@ ChpegNode *ChpegNode_copy(ChpegNode *other)
 }
 #endif
 
+void ChpegUndoAction_free(ChpegUndoAction *self)
+{
+#if CHPEG_NODE_REF_COUNT
+        assert(self->ref_count > 0);
+        if (--self->ref_count == 0) {
+#endif
+            if (self->data) {
+                CHPEG_FREE(self->data);
+            }
+            CHPEG_FREE(self);
+#if CHPEG_NODE_REF_COUNT
+        }
+#endif
+}
+
 // Actually free a node, ignoring reference count.
 // Don't call this directly.
 // Instead, call one of:
@@ -142,8 +157,8 @@ void ChpegNode__free__(ChpegNode *self)
         ChpegUndoAction *action, *tmp;
         for (action = self->undo_action; action; action = tmp) {
             tmp = action->next;
-            if (action->cleanup) {
-                action->cleanup(self, action->data);
+            if (action->data) {
+                CHPEG_FREE(action->data);
             }
             CHPEG_FREE(action);
         }
@@ -168,6 +183,16 @@ void ChpegNode_free(ChpegNode *self)
             ChpegNode_free(p);
         }
         self->head = NULL;
+
+#if CHPEG_UNDO
+        ChpegUndoAction *action, *atmp;
+        for (action = self->undo_action; action; action = atmp) {
+            atmp = action->next;
+            ChpegUndoAction_free(action);
+        }
+        self->undo_action = NULL;
+#endif
+
 #if CHPEG_NODE_REF_COUNT
         assert(self->ref_count > 0);
         if (--self->ref_count == 0) {
@@ -183,7 +208,17 @@ void ChpegNode_free(ChpegNode *self)
 void ChpegNode_free_nr(ChpegNode *self)
 {
     if (self) {
+#if CHPEG_UNDO
+        ChpegUndoAction *action, *atmp;
+        for (action = self->undo_action; action; action = atmp) {
+            atmp = action->next;
+            ChpegUndoAction_free(action);
+        }
+        self->undo_action = NULL;
+#endif
+
 #if CHPEG_NODE_REF_COUNT
+        assert(self->ref_count > 0);
         if (--self->ref_count == 0) {
 #endif
             ChpegNode__free__(self);
@@ -195,6 +230,7 @@ void ChpegNode_free_nr(ChpegNode *self)
 
 ChpegNode *ChpegNode_push_child(ChpegNode *self, ChpegNode *node)
 {
+    node->parent = self;
     node->next = self->head;
     self->head = node;
     ++(self->num_children);
@@ -213,13 +249,16 @@ void ChpegNode_pop_child(ChpegNode *self)
 
 #if CHPEG_UNDO
 void ChpegNode_add_undo(ChpegNode *self, ChpegUndoFunction func,
-    ChpegUndoFunction cleanup, void *data)
+    void *data, size_t data_size)
 {
     ChpegUndoAction *action = CHPEG_MALLOC(sizeof(ChpegUndoAction));
     assert(func);
+#if CHPEG_NODE_REF_COUNT
+    action->ref_count = 1;
+#endif
     action->func = func;
-    action->cleanup = cleanup;
     action->data = data;
+    action->data_size = data_size;
     action->next = self->undo_action;
     self->undo_action = action;
     self->num_undo++;
@@ -269,10 +308,7 @@ void ChpegNode_pop_undo(ChpegNode *self)
         self->undo_action = self->undo_action->next;
         assert(action->func);
         action->func(self, action->data);
-        if (action->cleanup) {
-            action->cleanup(self, action->data);
-        }
-        CHPEG_FREE(action);
+        ChpegUndoAction_free(action);
     }
 }
 #endif
@@ -301,12 +337,56 @@ ChpegNode *ChpegNode_unwrap(ChpegNode *self)
 }
 
 #if CHPEG_PACKRAT
+
+#if CHPEG_UNDO
+typedef struct _ChpegPUndoNode
+{
+    struct _ChpegPUndoNode *head;
+    struct _ChpegPUndoNode *next;
+    ChpegUndoAction *undo_action;
+} ChpegPUndoNode;
+#endif
+
 typedef struct _ChpegPNode
 {
-    ChpegNode *node;
     struct _ChpegPNode *head;
     struct _ChpegPNode *next;
+    ChpegNode *node;
+#if CHPEG_UNDO
+    ChpegPUndoNode *undo;
+#endif
 } ChpegPNode;
+
+static void ChpegPUndoNode_free(ChpegPUndoNode *self)
+{
+    if (self) {
+        ChpegUndoAction_free(self->undo_action);
+        CHPEG_FREE(self);
+    }
+}
+
+static void ChpegPNode_free(ChpegPNode *self)
+{
+    if (self) {
+        ChpegPNode *tmp;
+        for (ChpegPNode *p = self->head; p; p = tmp) {
+            tmp = p->next;
+            ChpegPNode_free(p);
+        }
+        self->head = NULL;
+
+        ChpegPUndoNode *utmp;
+        for (ChpegPUndoNode *pu = self->undo; pu; pu = utmp) {
+            utmp = pu->next;
+            ChpegPUndoNode_free(pu);
+        }
+        self->undo = NULL;
+
+        ChpegNode_free_nr(self->node);
+        CHPEG_FREE(self);
+    }
+}
+
 
 static ChpegPNode *ChpegPNode_push_child(ChpegPNode *self, ChpegPNode *child)
 {
@@ -314,6 +394,15 @@ static ChpegPNode *ChpegPNode_push_child(ChpegPNode *self, ChpegPNode *child)
     self->head = child;
     return child;
 }
+
+#if CHPEG_UNDO
+static ChpegPUndoNode *ChpegPNode_push_undo(ChpegPNode *self, ChpegPUndoNode *undo)
+{
+    undo->next = self->undo;
+    self->undo = undo;
+    return undo;
+}
+#endif
 
 
 static int chpeg_packrat_node_count(ChpegNode *node, int *count, int depth, int limit)
@@ -359,6 +448,7 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
     if (!pnode) {
         pnode = CHPEG_CALLOC(1, sizeof(ChpegPNode));
     }
+
     pnode->node = node;
     ++node->ref_count;
     for (ChpegNode *p = node->head; p; p = p->next) {
@@ -366,10 +456,20 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
         ChpegPNode_from_node(pchild, p, depth + 1) ;
         ChpegPNode_push_child(pnode, pchild);
     }
+
+#if CHPEG_UNDO
+    for (ChpegUndoAction *action = node->undo_action; action; action = action->next) {
+        ChpegPUndoNode *pu = CHPEG_CALLOC(1, sizeof(ChpegPUndoNode));
+        pu->undo_action = action;
+        ++action->ref_count;
+        ChpegPNode_push_undo(pnode, pu);
+    }
+#endif
+
     return pnode;
 }
 
-static ChpegNode *ChpegPNode_node_copy(ChpegPNode *pnode)
+static ChpegNode *ChpegPNode_export(ChpegParser *parser, ChpegPNode *pnode)
 {
     assert(pnode);
     ChpegNode *node = CHPEG_MALLOC(sizeof(ChpegNode));
@@ -379,24 +479,21 @@ static ChpegNode *ChpegPNode_node_copy(ChpegPNode *pnode)
     node->num_children = 0;
     node->ref_count = 1;
     for (ChpegPNode *p = pnode->head; p; p = p->next) {
-        ChpegNode *child = ChpegPNode_node_copy(p) ;
+        ChpegNode *child = ChpegPNode_export(parser, p) ;
         ChpegNode_push_child(node, child);
     }
-    return node;
-}
-
-static void ChpegPNode_free(ChpegPNode *self)
-{
-    if (self) {
-        ChpegPNode *tmp;
-        for (ChpegPNode *p = self->head; p; p = tmp) {
-            tmp = p->next;
-            ChpegPNode_free(p);
-        }
-        self->head = NULL;
-        ChpegNode_free_nr(self->node);
-        CHPEG_FREE(self);
+#if CHPEG_UNDO
+    for (ChpegPUndoNode *pu = pnode->undo; pu; pu = pu->next) {
+        void *action_data = CHPEG_MALLOC(pu->undo_action->data_size);
+        memcpy(action_data, pu->undo_action->data, pu->undo_action->data_size);
+        ChpegNode_add_undo(node, pu->undo_action->func, action_data, pu->undo_action->data_size);
     }
+#endif
+#if CHPEG_EXTENSION_REFS
+    node->refs = CHPEG_MALLOC(parser->bc->num_refs * sizeof(ChpegReferenceInfo));
+    memcpy(node->refs, pnode->node->refs, parser->bc->num_refs * sizeof(ChpegReferenceInfo));
+#endif
+    return node;
 }
 
 #if CHPEG_VM_TRACE
@@ -405,7 +502,7 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
 {
     if (!self) return;
 
-    int flags = self->node->flags;
+    char flags[CHPEG_FLAGS_DISPLAY_SIZE];
     char *data = chpeg_esc_bytes(&input[self->node->offset], self->node->length, 40);
     const char *def_name = ChpegByteCode_def_name(parser->bc, self->node->def);
 
@@ -414,16 +511,13 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
         fprintf(fp, " OFFSET   LEN     ID NC DP FLG IDENT \"DATA\"\n");
     }
 
-    fprintf(fp, "%6zu %6zu %6d %2d %2d %s%s%s%s %*s%s \"%s\"\n",
+    fprintf(fp, "%6zu %6zu %6d %2d %2d %3s %*s%s \"%s\"\n",
         self->node->offset,
         self->node->length,
         self->node->def,
         self->node->num_children,
         depth,
-        flags & CHPEG_FLAG_STOP ? "S" : "-",
-        flags & CHPEG_FLAG_IGNORE ? "I" : "-",
-        flags & CHPEG_FLAG_LEAF ? "L" : "-",
-        flags & CHPEG_FLAG_PACKRAT ? "P" : "-",
+        chpeg_flags(flags, self->node->flags),
         depth * 2, "",
         def_name ? def_name : "<N/A>",
         data ? data : "<NULL>"
@@ -446,7 +540,7 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
 
 #if CHPEG_UNDO
 typedef struct _ChpegUndoMarkData {
-    ChpegReferenceInfo *ref;
+    int ref_id;
     ChpegReferenceInfo value;
 } ChpegUndoMarkData;
 
@@ -457,13 +551,11 @@ void chpeg_undo_mark(ChpegNode *node, void *_data)
     fprintf(stderr, "chpeg_undo_mark: <o:%zu l:%zu f:%d>\n",
         data->value.offset, data->value.length, data->value.flags);
 #endif
-    *(data->ref) = data->value;
-}
-
-void chpeg_undo_mark_cleanup(ChpegNode *node, void *_data)
-{
-    if (_data) {
-        CHPEG_FREE(_data);
+    for (ChpegNode *p = node; p; p = p->parent) {
+        if (p->flags & CHPEG_FLAG_REFSCOPE) {
+            p->refs[data->ref_id] = data->value;
+            break;
+        }
     }
 }
 
@@ -1045,7 +1137,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                             if (!locked) {
                                 if ((packrat_lookup->node->flags & CHPEG_FLAG_IGNORE) == 0) {
                                     ChpegNode_push_child(tree_stack[tree_top],
-                                        ChpegPNode_node_copy(packrat_lookup));
+                                        ChpegPNode_export(self, packrat_lookup));
                                 }
 #if CHPEG_VM_PRINT_TREE
                                 tree_changed = 1;
@@ -1565,10 +1657,10 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 #if CHPEG_UNDO
                 undo_mark = CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
-                undo_mark->ref = ref;
+                undo_mark->ref_id = stack[top];
                 undo_mark->value = *ref;
                 ChpegNode_add_undo(tree_stack[tree_top],
-                    chpeg_undo_mark, chpeg_undo_mark_cleanup, undo_mark);
+                    chpeg_undo_mark, undo_mark, sizeof(ChpegUndoMarkData));
                 undo_mark = NULL;
 #endif
 
@@ -1613,17 +1705,15 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
 #if CHPEG_UNDO
                 undo_mark = CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
-                undo_mark->ref = ref;
+                undo_mark->ref_id = stack[top];
                 undo_mark->value = *ref;
                 ChpegNode_add_undo(tree_stack[tree_top],
-                    chpeg_undo_mark, chpeg_undo_mark_cleanup, undo_mark);
+                    chpeg_undo_mark, undo_mark, sizeof(ChpegUndoMarkData));
                 undo_mark = NULL;
 #endif
 
                 // unset the reference (flags=0)
-                ref->offset = 0;
-                ref->length = 0;
-                ref->flags = 0;
+                *ref = (ChpegReferenceInfo) { 0 };
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {

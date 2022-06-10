@@ -52,6 +52,7 @@
 #ifndef CHPEG_UNDO
 #define CHPEG_UNDO 1
 #endif
+
 #if CHPEG_UNDO
 #define CHPEG_NODE_POP_CHILD ChpegNode_pop_child_undo
 #define CHPEG_CHOICE_PUSHES 3
@@ -113,6 +114,7 @@ typedef struct _ChpegNode
     int def;
     int flags;
     int num_children;
+    struct _ChpegNode *parent;
     struct _ChpegNode *head;
     struct _ChpegNode *next;
 #if CHPEG_UNDO
@@ -149,8 +151,11 @@ typedef struct _ChpegUndoAction
 {
     struct _ChpegUndoAction *next;
     ChpegUndoFunction func;
-    ChpegUndoFunction cleanup;
     void *data;
+    size_t data_size;
+#if CHPEG_NODE_REF_COUNT
+    int ref_count;
+#endif
 } ChpegUndoAction;
 
 
