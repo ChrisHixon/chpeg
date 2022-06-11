@@ -54,12 +54,12 @@
 #endif
 
 #if CHPEG_UNDO
-#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child_undo
+#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child_undo
 #define CHPEG_CHOICE_PUSHES 3
 #define CHPEG_RP_PUSHES 4
 #define CHPEG_RSQ_PUSHES 3
 #else
-#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child
+#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child
 #define CHPEG_CHOICE_PUSHES 2
 #define CHPEG_RP_PUSHES 3
 #define CHPEG_RSQ_PUSHES 2

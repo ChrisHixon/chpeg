@@ -299,6 +299,7 @@ void ChpegNode_undo_free(ChpegNode *self, int depth)
 }
 
 // drop-in replacement for ChpegNode_pop_child that calls undo actions
+// (use only when something fails and we do backtrack)
 void ChpegNode_pop_child_undo(ChpegNode *self)
 {
     if (self->head) {
@@ -327,16 +328,16 @@ void ChpegNode_unpack_child(ChpegNode *self)
 {
     ChpegNode *first_child = self->head; // first child
     // find last child of first child
-    ChpegNode *p = first_child->head;
+    ChpegNode *last = first_child->head;
     for (;;) {
-        p->parent = self;
+        last->parent = self;
         ++self->num_children;
-        if (!p->next) break;
-        p = p->next;
+        if (!last->next) break;
+        last = last->next;
     }
-    p->next = self->head->next; // link last item to second child
-    self->head = first_child->head; // change first child link
-    ChpegNode_free_nr(first_child);
+    last->next = self->head->next; // link last item to second child
+    self->head = first_child->head; // change first child (head) link
+    ChpegNode_free_nr(first_child); // free the former first child
     --self->num_children;
 }
 
@@ -355,8 +356,10 @@ int ChpegNode_can_simplify(ChpegNode *self)
 
     int cnt = 0, text = 0;
     for (p = self->head; p;) {
-        //fprintf(stderr, "node: <d:%d o:%zu l:%zu f:%d>, pos=%zu, cnt=%d, text=%d\n",
-        //    p->def, p->offset, p->length, p->flags, pos, cnt, text);
+#ifdef CHPEG_DEBUG_CAN_SIMPLIFY
+        fprintf(stderr, "node: <d:%d o:%zu l:%zu f:%d>, pos=%zu, cnt=%d, text=%d\n",
+            p->def, p->offset, p->length, p->flags, pos, cnt, text);
+#endif
         assert(p->offset + p->length <= pos);
         if (p->offset + p->length < pos) {
             ++text;                             // a gap is considered a text node
@@ -373,14 +376,18 @@ int ChpegNode_can_simplify(ChpegNode *self)
     }
     // if we have one candidate node and no text nodes, we can simplify
     if (cnt == 1 && !text) {
-        //fprintf(stderr, "can simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
-        //    self->def, self->offset, self->length, self->flags,
-        //    cnt, text);
+#ifdef CHPEG_DEBUG_CAN_SIMPLIFY
+        fprintf(stderr, "can simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+            self->def, self->offset, self->length, self->flags,
+            cnt, text);
+#endif
         return 1;
     }
-    //fprintf(stderr, "can't simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
-    //    self->def, self->offset, self->length, self->flags,
-    //    cnt, text);
+#ifdef CHPEG_DEBUG_CAN_SIMPLIFY
+    fprintf(stderr, "can't simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+        self->def, self->offset, self->length, self->flags,
+        cnt, text);
+#endif
     return 0;
 }
 
@@ -1246,6 +1253,12 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                                 if ((packrat_lookup->node->flags & CHPEG_FLAG_IGNORE) == 0) {
                                     ChpegNode_push_child(tree_stack[tree_top],
                                         ChpegPNode_export(self, packrat_lookup));
+                                    if (self->simplification == 2) {
+                                        // if we can simplify, unpack the node in-place
+                                        if (ChpegNode_can_simplify(tree_stack[tree_top]->head)) {
+                                            ChpegNode_unpack_child(tree_stack[tree_top]);
+                                        }
+                                    }
                                 }
 #if CHPEG_VM_PRINT_TREE
                                 tree_changed = 1;
@@ -1459,7 +1472,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                         pc = -1; retval = CHPEG_ERR_TSTACK_UNDERFLOW; break;
                     }
 #endif
-                    CHPEG_NODE_POP_CHILD(tree_stack[--tree_top]);
+                    CHPEG_NODE_FAIL_POP_CHILD(tree_stack[--tree_top]);
                 }
 
 #if CHPEG_VM_PRINT_TREE
@@ -1508,7 +1521,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 offset = stack[top];
                 // restore children to previous state
                 for (i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i) {
-                    CHPEG_NODE_POP_CHILD(tree_stack[tree_top]);
+                    CHPEG_NODE_FAIL_POP_CHILD(tree_stack[tree_top]);
                 }
 #if CHPEG_UNDO
                 // undo until previous state
@@ -1578,7 +1591,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 offset = stack[top-1];
                 // restore children to previous state
                 for (i = tree_stack[tree_top]->num_children - stack[top-2]; i > 0; --i)
-                    CHPEG_NODE_POP_CHILD(tree_stack[tree_top]);
+                    CHPEG_NODE_FAIL_POP_CHILD(tree_stack[tree_top]);
 #if CHPEG_UNDO
                 // undo until previous state
                 for (i = tree_stack[tree_top]->num_undo - stack[top-3]; i > 0; --i) {
@@ -1644,7 +1657,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 offset = stack[top];
                 // restore children to previous state
                 for (i = tree_stack[tree_top]->num_children - stack[top-1]; i > 0; --i)
-                    CHPEG_NODE_POP_CHILD(tree_stack[tree_top]);
+                    CHPEG_NODE_FAIL_POP_CHILD(tree_stack[tree_top]);
 #if CHPEG_UNDO
                 // undo until previous state
                 for (i = tree_stack[tree_top]->num_undo - stack[top-2]; i > 0; --i) {
@@ -1984,7 +1997,7 @@ pred_cleanup:
                 // backtrack
                 offset = stack[top--]; // restore saved offset (don't consume)
                 for (i = tree_stack[tree_top]->num_children - stack[top--]; i > 0; --i)
-                    CHPEG_NODE_POP_CHILD(tree_stack[tree_top]);
+                    CHPEG_NODE_FAIL_POP_CHILD(tree_stack[tree_top]);
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
