@@ -59,6 +59,7 @@ CHPEG_API char *chpeg_flags(char *buf, int flags);
 
 // node flags
 typedef enum {
+    CHPEG_FLAG_NONE,
     // These flags correspond to Options used in the Definition:
     CHPEG_FLAG_STOP     = 1<<0,  // {C|S} stop automatic unwrapping, forcing this node to be a container
     CHPEG_FLAG_IGNORE   = 1<<1,  // {I} deletes nodes matching this identifier

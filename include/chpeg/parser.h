@@ -52,13 +52,14 @@
 #ifndef CHPEG_UNDO
 #define CHPEG_UNDO 1
 #endif
+
 #if CHPEG_UNDO
-#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child_undo
+#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child_undo
 #define CHPEG_CHOICE_PUSHES 3
 #define CHPEG_RP_PUSHES 4
 #define CHPEG_RSQ_PUSHES 3
 #else
-#define CHPEG_NODE_POP_CHILD ChpegNode_pop_child
+#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child
 #define CHPEG_CHOICE_PUSHES 2
 #define CHPEG_RP_PUSHES 3
 #define CHPEG_RSQ_PUSHES 2
@@ -108,29 +109,37 @@ typedef struct _ChpegReferenceInfo
 
 typedef struct _ChpegNode
 {
-    size_t offset; // token offset (may be adjusted by trim '<')
-    size_t length; // token length (may be adjusted by trim '>')
     ChpegOp def;
     ChpegFlags flags;
-    int num_children;
+
+    size_t offset; // full match offset
+    size_t length; // full match length
+
+#if CHPEG_EXTENSION_TRIM
+    size_t token_offset; // token offset (adjusted by trim '<')
+    size_t token_length; // token length (adjusted by trim '>')
+#endif
+
+    struct _ChpegNode *parent;
     struct _ChpegNode *head;
     struct _ChpegNode *next;
-#if CHPEG_UNDO
-    int num_undo;
-    struct _ChpegUndoAction *undo_action;
-#endif
-#if CHPEG_PACKRAT
-    size_t match_length; // full match length
-#endif
+    int num_children;
+
 #if CHPEG_NODE_REF_COUNT
     int ref_count;
 #endif
+
 #if CHPEG_EXTENSION_REFS
     ChpegReferenceInfo *refs;
 #endif
+
+#if CHPEG_UNDO
+    struct _ChpegUndoAction *undo_action;
+    int num_undo;
+#endif
 } ChpegNode;
 
-CHPEG_API ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags);
+CHPEG_API ChpegNode *ChpegNode_new(ChpegOp def, size_t offset, size_t length, ChpegFlags flags);
 CHPEG_API void ChpegNode_free(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, ChpegNode *other);
 CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
@@ -149,8 +158,11 @@ typedef struct _ChpegUndoAction
 {
     struct _ChpegUndoAction *next;
     ChpegUndoFunction func;
-    ChpegUndoFunction cleanup;
     void *data;
+    size_t data_size;
+#if CHPEG_NODE_REF_COUNT
+    int ref_count;
+#endif
 } ChpegUndoAction;
 
 
@@ -162,6 +174,7 @@ typedef struct _ChpegParser
 {
     const ChpegByteCode *bc;
     ChpegNode *tree_root;
+    int simplification; // run unwrap on parse tree to generate AST (default is 1)
     int max_tree_depth;
     int max_stack_size;
     int parse_result;

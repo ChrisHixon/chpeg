@@ -190,7 +190,7 @@ CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
 
     // guard
-    char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
+    const char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
     for (j = 0; j < 2; j++) {
         fprintf(fp, "%s ", preproc[j]);
         if (prefix) {

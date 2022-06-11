@@ -66,7 +66,7 @@ CHPEG_API char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limi
                 case '\e': *p++ = 'e'; break;
                 case '\f': *p++ = 'f'; break;
                 case '\v': *p++ = 'v'; break;
-#endif                
+#endif
                 case '\r': *p++ = 'r'; break;
                 case '\t': *p++ = 't'; break;
                 case '\n': *p++ = 'n'; break;
@@ -124,7 +124,7 @@ CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, size_t
     }
 
     // initial allocation
-    buf = CHPEG_MALLOC(CHPEG_READ_FILE_INITIAL_SIZE);
+    buf = (unsigned char*)CHPEG_MALLOC(CHPEG_READ_FILE_INITIAL_SIZE);
     if (buf == NULL) {
         perror("malloc");
         ret = 1;
@@ -141,7 +141,7 @@ CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, size_t
             p += bytes_read;
             len += bytes_read;
             if (remain == 0) {
-                buf = CHPEG_REALLOC(buf, bsize * 2);
+                buf = (unsigned char*)CHPEG_REALLOC(buf, bsize * 2);
                 if (buf == NULL) {
                     perror("realloc");
                     ret = 1;
@@ -183,7 +183,7 @@ cleanup:
     }
     else {
         if (len > CHPEG_READ_FILE_INITIAL_SIZE) {
-            buf = CHPEG_REALLOC(buf, len);
+            buf = (unsigned char*)CHPEG_REALLOC(buf, len);
         }
         *data = buf;
         *length = len;

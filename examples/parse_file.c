@@ -10,8 +10,8 @@
 #endif
 
 void usage(const char *prog) {
-    fprintf(stderr, "usage: %s [<grammar>] <input>\n", prog);
-    fprintf(stderr, "   or: %s --cbytecode basename <grammar>\n", prog);
+    fprintf(stderr, "usage: %s [-s [0 1 2]] [<grammar>] <input>\n", prog);
+    fprintf(stderr, "   or: %s [-s [0 1 2]] --cbytecode basename <grammar>\n", prog);
 }
 
 int main(int argc, char *argv[])
@@ -124,6 +124,10 @@ int main(int argc, char *argv[])
 #if CHPEG_VM_TRACE
     // set to non-zero to enable VM instruction execution tracing
     parser->vm_trace = 0;
+#endif
+
+#ifdef CHPEG_VM_SIMPLIFICATION2
+    parser->simplification = 2;
 #endif
 
 #if CHPEG_VM_PRINT_TREE

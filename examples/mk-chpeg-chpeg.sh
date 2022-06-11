@@ -1,7 +1,8 @@
 out_bfn=chpeg_chpeg
 
-#./parse_file --cbytecode chpeg_hex_bytecode chpeg-hex.chpeg
-./chpeg --cbytecode ${out_bfn=chpeg_chpeg}_bc ../grammars/chpeg.chpeg
+cmd="./chpeg --cbytecode ${out_bfn=chpeg_chpeg}_bc ../grammars/chpeg.chpeg"
+echo $cmd
+$cmd
 
 
 cat <<EOS > $out_bfn.c
