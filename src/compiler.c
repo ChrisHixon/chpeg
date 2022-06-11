@@ -25,11 +25,10 @@
 #endif
 
 //
-// Gnode: grammar tree node (internal use during compilation)
-// FIXME: probably more of a 'compilation unit node'
+// CNode: compilation unit node
 //
 
-typedef struct _ChpegGNode
+typedef struct _ChpegCNode
 {
     ChpegNode *node;
     int type;
@@ -45,14 +44,14 @@ typedef struct _ChpegGNode
     int value_len;
 
     int num_children;
-    struct _ChpegGNode *head;
-    struct _ChpegGNode *next;
-    struct _ChpegGNode *parent;
-} ChpegGNode;
+    struct _ChpegCNode *head;
+    struct _ChpegCNode *next;
+    struct _ChpegCNode *parent;
+} ChpegCNode;
 
-static ChpegGNode *ChpegGNode_new()
+static ChpegCNode *ChpegCNode_new()
 {
-    ChpegGNode *self = (ChpegGNode *)CHPEG_MALLOC(sizeof(ChpegGNode));
+    ChpegCNode *self = (ChpegCNode *)CHPEG_MALLOC(sizeof(ChpegCNode));
 
     self->node = NULL;
     self->type = -1;
@@ -71,20 +70,20 @@ static ChpegGNode *ChpegGNode_new()
     return self;
 }
 
-static void ChpegGNode_free(ChpegGNode *self)
+static void ChpegCNode_free(ChpegCNode *self)
 {
     if (self == NULL) return;
 
-    ChpegGNode *tmp;
-    for (ChpegGNode *p = self->head; p; p = tmp) {
+    ChpegCNode *tmp;
+    for (ChpegCNode *p = self->head; p; p = tmp) {
         tmp = p->next;
-        ChpegGNode_free(p);
+        ChpegCNode_free(p);
     }
     self->head = NULL;
     CHPEG_FREE(self);
 }
 
-static ChpegGNode *ChpegGNode_push_child(ChpegGNode *self, ChpegGNode *child)
+static ChpegCNode *ChpegCNode_push_child(ChpegCNode *self, ChpegCNode *child)
 {
     child->parent = self;
     child->next = self->head;
@@ -95,24 +94,24 @@ static ChpegGNode *ChpegGNode_push_child(ChpegGNode *self, ChpegGNode *child)
 
 // unused
 #if 0
-static void ChpegGNode_pop_child(ChpegGNode *self)
+static void ChpegCNode_pop_child(ChpegCNode *self)
 {
     if (self->head) {
-        ChpegGNode *tmp = self->head;
+        ChpegCNode *tmp = self->head;
         self->head = self->head->next;
-        ChpegGNode_free(tmp);
+        ChpegCNode_free(tmp);
         --(self->num_children);
     }
 }
 #endif
 
-static ChpegGNode *ChpegGNode_reverse(ChpegGNode *self)
+static ChpegCNode *ChpegCNode_reverse(ChpegCNode *self)
 {
-    ChpegGNode *p = self->head; self->head = NULL;
-    ChpegGNode *tmp;
+    ChpegCNode *p = self->head; self->head = NULL;
+    ChpegCNode *tmp;
     for (; p; p=tmp) {
         tmp = p->next;
-        p = ChpegGNode_reverse(p);
+        p = ChpegCNode_reverse(p);
         p->next = self->head;
         self->head = p;
     }
@@ -128,39 +127,76 @@ typedef struct _ChpegCU
     ChpegParser *parser;
     const unsigned char *input;
     ChpegByteCode *bc;
-    ChpegGNode *root;
+    ChpegCNode *root;
     int strings_allocated;
     int refs_allocated;
 } ChpegCU;
 
-#if CHPEG_EXTENSION_TRIM
-static int ChpegCU_find_def_node(ChpegCU *cu, ChpegGNode *gnode, ChpegGNode **def_return)
-{
-    ChpegGNode *parent = gnode;
+static int ChpegCU_find_def(ChpegCU *cu, ChpegNode *ident);
 
+#if CHPEG_EXTENSION_TRIM
+static ChpegCNode *ChpegCU_find_def_node(ChpegCU *cu, ChpegCNode *cnode)
+{
+    ChpegCNode *parent = cnode;
     for (; parent && parent != cu->root; parent = parent->parent) {
         if (parent->type == CHPEG_DEF_DEFINITION) {
-            if (def_return) {
-                *def_return = parent;
-            }
-            return 0;
+            return parent;
         }
     }
-    if (def_return) {
-        *def_return = NULL;
+    return NULL;
+}
+
+static int ChpegCU_contains_trim(ChpegCNode *cnode)
+{
+    assert(cnode);
+    switch (cnode->type) {
+        case CHPEG_DEF_TRIM:
+            return 1;
+            break;
+        default:
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
+                if (ChpegCU_contains_trim(p)) {
+                    return 1;
+                }
+            }
+            break;
     }
-    return 1;
+    return 0;
+}
+
+static int ChpegCU_auto_leaf(ChpegCU *cu)
+{
+    assert(cu->root && cu->root->head);
+    ChpegCNode *cdef = cu->root->head;
+
+    for (; cdef; cdef = cdef->next) {
+
+        assert(cdef->head && cdef->head->next);
+
+        if (ChpegCU_contains_trim(cdef->head->next)) {
+            int def_id = cdef->val.ival;
+            assert(def_id >= 0 && def_id < cu->bc->num_defs);
+
+            cu->bc->def_flags[def_id] |= CHPEG_FLAG_LEAF;
+
+#if CHPEG_DEBUG_COMPILER
+            fprintf(stderr, "%s: def_id=%d; found TRIM, adding CHPEG_FLAG_LEAF flags; flags=%d\n",
+                __func__, def_id, cu->bc->def_flags[def_id]);
+#endif
+        }
+    }
+    return 0;
 }
 #endif
 
 #if CHPEG_DEBUG_COMPILER
-static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *input, int depth)
+static void ChpegCU_print(ChpegCU *cu, ChpegCNode *cnode, const unsigned char *input, int depth)
 {
     char *data = NULL;
     char flags[CHPEG_FLAGS_DISPLAY_SIZE];
-    const char *def_name = ChpegByteCode_def_name(cu->parser->bc, gnode->type);
+    const char *def_name = ChpegByteCode_def_name(cu->parser->bc, cnode->type);
 
-    ChpegNode *node = gnode->node;
+    ChpegNode *node = cnode->node;
     if (node) {
         data = chpeg_esc_bytes(&input[node->offset], node->length, 40);
     }
@@ -173,10 +209,10 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
     fprintf(stderr, "%6zu %6zu %6d | %6d %6d %6d | %3s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
-        gnode->type,
-        gnode->parse_state,
-        gnode->parent_next_state,
-        gnode->parent_fail_state,
+        cnode->type,
+        cnode->parse_state,
+        cnode->parent_next_state,
+        cnode->parent_fail_state,
         chpeg_flags(flags, node->flags),
         depth * 2, "",
         def_name ? def_name : "<N/A>",
@@ -184,7 +220,7 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
         );
     if (data) { CHPEG_FREE(data); data = NULL; }
 
-    for (ChpegGNode *p = gnode->head; p; p = p->next) {
+    for (ChpegCNode *p = cnode->head; p; p = p->next) {
         ChpegCU_print(cu, p, input, depth + 1);
     }
 }
@@ -192,32 +228,37 @@ static void ChpegCU_print(ChpegCU *cu, ChpegGNode *gnode, const unsigned char *i
 
 static void ChpegCU_setup_defs(ChpegCU *cu)
 {
-    ChpegNode *p = NULL;
-    int i = 0, j = 0;
+    cu->bc->num_defs = cu->root->num_children;
 
-    cu->bc->num_defs = cu->parser->tree_root->num_children;
 #if CHPEG_DEBUG_COMPILER
-    fprintf(stderr, "ChpegCU_setup_defs: num_defs=%d\n", cu->bc->num_defs);
+    fprintf(stderr, "%s: num_defs=%d\n", __func__, cu->bc->num_defs);
 #endif
 
     cu->bc->def_names = (char **)CHPEG_MALLOC(cu->bc->num_defs * sizeof(char *));
     cu->bc->def_flags = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
     cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
 
-    for (p = cu->parser->tree_root->head, i = 0; p; p = p->next, ++i) {
-        if (CHPEG_DEF_DEFINITION != p->def) { continue; }
+    ChpegCNode *cdef = cu->root->head;
+    for (int def_id = 0; cdef; cdef = cdef->next, ++def_id) {
+        assert (cdef->node->def == CHPEG_DEF_DEFINITION);
 
-        ChpegNode *tmp = p->head; // Identifier, definition name
-        if (NULL == tmp || CHPEG_DEF_IDENTIFIER != tmp->def) { continue; }
-        cu->bc->def_names[i] = (char *)CHPEG_MALLOC(1 + tmp->length);
-        memcpy(cu->bc->def_names[i], &cu->input[tmp->offset], tmp->length);
-        cu->bc->def_names[i][tmp->length] = '\0';
+        ChpegCNode *cident = cdef->head; // Identifier: definition name
+        assert (cident->node->def == CHPEG_DEF_IDENTIFIER);
 
+        // stash the def_id in the DEFINITION cnode
+        cdef->val.ival = def_id;
+
+        cu->bc->def_names[def_id] = (char *)CHPEG_MALLOC(1 + cident->node->length);
+        memcpy(cu->bc->def_names[def_id], &cu->input[cident->node->offset], cident->node->length);
+        cu->bc->def_names[def_id][cident->node->length] = '\0';
+
+        // Options, flags
         int flags = 0;
-        tmp = tmp->next; // Options, flags
-        if (NULL != tmp && CHPEG_DEF_OPTIONS == tmp->def) {
-            for (j = 0; j < tmp->length; ++j) {
-                switch(cu->input[tmp->offset + j]) {
+        if (cident->next->node->def == CHPEG_DEF_OPTIONS) {
+            ChpegCNode *coptions = cident->next;
+
+            for (int i = 0; i < coptions->node->length; ++i) {
+                switch(cu->input[coptions->node->offset + i]) {
                     case 'C':
                     case 'S':
                         flags |= CHPEG_FLAG_STOP; break;
@@ -232,12 +273,17 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
                         flags |= CHPEG_FLAG_REFSCOPE; break;
                 }
             }
-            p->head->next = tmp->next; // eliminate OPTIONS node
-            ChpegNode_free(tmp);
+            // eliminate OPTIONS node
+            cident->node->next = coptions->node->next;
+            cident->next = coptions->next;
+            ChpegNode_free(coptions->node);
+            ChpegCNode_free(coptions);
         }
-        cu->bc->def_flags[i] = flags;
+
+        cu->bc->def_flags[def_id] = flags;
 #if CHPEG_DEBUG_COMPILER
-        fprintf(stderr, "Compile_setup_defs: def[%i]: name=%s flags=%d\n", i, cu->bc->def_names[i], cu->bc->def_flags[i]);
+        fprintf(stderr, "%s: def[%i]: name=%s flags=%d\n", __func__,
+            def_id, cu->bc->def_names[def_id], cu->bc->def_flags[def_id]);
 #endif
     }
 }
@@ -245,7 +291,7 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
 static void ChpegCU_setup_def_addrs(ChpegCU *cu)
 {
     int i = 0;
-    ChpegGNode *p = NULL;
+    ChpegCNode *p = NULL;
     for (i = 0, p = cu->root->head; p; p = p->next, ++i) {
         cu->bc->def_addrs[i] = p->head->next->parse_state;
     }
@@ -263,20 +309,19 @@ static int ChpegCU_find_def(ChpegCU *cu, ChpegNode *ident)
     return -1;
 }
 
-static void ChpegCU_build_tree(ChpegCU *cu, ChpegNode *np, ChpegGNode *gp)
+static void ChpegCU_build_tree(ChpegCU *cu, ChpegNode *node, ChpegCNode *cnode)
 {
-    if (NULL == np) { np = cu->parser->tree_root; }
-    if (NULL == gp) { gp = cu->root; }
-    gp->node = np;
-    gp->type = np->def;
-    for (ChpegNode *p = np->head; p; p = p->next) {
-        ChpegGNode *g = ChpegGNode_new();
-        ChpegCU_build_tree(cu, p, g);
-        ChpegGNode_push_child(gp, g);
+    if (NULL == node) { node = cu->parser->tree_root; }
+    if (NULL == cnode) { cnode = cu->root; }
+    cnode->node = node;
+    cnode->type = node->def;
+    for (ChpegNode *p = node->head; p; p = p->next) {
+        ChpegCNode *cnew = ChpegCNode_new();
+        ChpegCU_build_tree(cu, p, cnew);
+        ChpegCNode_push_child(cnode, cnew);
     }
 }
 
-// TODO: count in cu not bc
 static inline int ChpegCU_alloc_inst(ChpegCU *cu)
 {
     return cu->bc->num_instructions++;
@@ -284,25 +329,25 @@ static inline int ChpegCU_alloc_inst(ChpegCU *cu)
 
 // reserve instructions and keep track of instruction addresses where references needed
 // (referred to as state: parse_state, parent_next_state, etc.)
-static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
+static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegCNode *cnode)
 {
-    switch (gp->type) {
+    switch (cnode->type) {
         case CHPEG_DEF_GRAMMAR:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
             }
             break;
         case CHPEG_DEF_DEFINITION:
-            ChpegCU_alloc_instructions(cu, gp->head->next);
-            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
-            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, cnode->head->next);
+            cnode->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
+            cnode->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
         case CHPEG_DEF_CHOICE:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
                 p->parent_next_state = ChpegCU_alloc_inst(cu);
                 p->parent_fail_state = ChpegCU_alloc_inst(cu);
@@ -310,41 +355,41 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
             ChpegCU_alloc_inst(cu);
             break;
         case CHPEG_DEF_SEQUENCE:
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_instructions(cu, p);
             }
-            gp->parse_state = gp->head->parse_state;
+            cnode->parse_state = cnode->head->parse_state;
             break;
 #if CHPEG_EXTENSION_TRIM
         case CHPEG_DEF_TRIM:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
-            ChpegCU_alloc_instructions(cu, gp->head);
-            gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
-            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, cnode->head);
+            cnode->head->parent_next_state = ChpegCU_alloc_inst(cu);
+            cnode->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
 #endif
 #if CHPEG_EXTENSION_REFS
         case CHPEG_DEF_MARK:
-            gp->parse_state = ChpegCU_alloc_inst(cu);                   // MARK
-            ChpegCU_alloc_instructions(cu, gp->head->next);             // ...
-            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu); // MARKS
-            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu); // MARKF
+            cnode->parse_state = ChpegCU_alloc_inst(cu);                   // MARK
+            ChpegCU_alloc_instructions(cu, cnode->head->next);             // ...
+            cnode->head->next->parent_next_state = ChpegCU_alloc_inst(cu); // MARKS
+            cnode->head->next->parent_fail_state = ChpegCU_alloc_inst(cu); // MARKF
             break;
 #endif
         case CHPEG_DEF_REPEAT:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
-            ChpegCU_alloc_instructions(cu, gp->head);
-            gp->head->parent_next_state = ChpegCU_alloc_inst(cu);
-            gp->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, cnode->head);
+            cnode->head->parent_next_state = ChpegCU_alloc_inst(cu);
+            cnode->head->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
         case CHPEG_DEF_PREDICATE:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
-            ChpegCU_alloc_instructions(cu, gp->head->next);
-            gp->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
-            gp->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
+            ChpegCU_alloc_instructions(cu, cnode->head->next);
+            cnode->head->next->parent_next_state = ChpegCU_alloc_inst(cu);
+            cnode->head->next->parent_fail_state = ChpegCU_alloc_inst(cu);
             break;
         case CHPEG_DEF_DOT:
-            gp->parse_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
             break;
         case CHPEG_DEF_IDENTIFIER:
         case CHPEG_DEF_CHARCLASS:
@@ -352,14 +397,14 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegGNode *gp)
 #if CHPEG_EXTENSION_REFS
         case CHPEG_DEF_REFERENCE:
 #endif
-            gp->parse_state = ChpegCU_alloc_inst(cu);
+            cnode->parse_state = ChpegCU_alloc_inst(cu);
             ChpegCU_alloc_inst(cu);
             break;
     }
 }
 
 #if CHPEG_EXTENSION_REFS
-static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node);
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegCNode *cnode);
 #endif
 
 static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
@@ -367,91 +412,88 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
 
-static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
+static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
 {
-    int def = 0;
+    int def_id = 0;
 #if CHPEG_EXTENSION_REFS
     int ref_id = 0;
 #endif
-    switch (gp->type) {
+    switch (cnode->type) {
         case CHPEG_DEF_GRAMMAR:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_FAIL, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_SUCC, 0));
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
             }
             break;
         case CHPEG_DEF_DEFINITION:
-            def = ChpegCU_find_def(cu, gp->head->node);
-            ChpegCU_add_instructions(cu, gp->head->next);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def));
+            def_id = ChpegCU_find_def(cu, cnode->head->node);
+            ChpegCU_add_instructions(cu, cnode->head->next);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def_id));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def_id));
             break;
         case CHPEG_DEF_CHOICE:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_add_instructions(cu, p);
-                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, gp->parent_next_state));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, cnode->parent_next_state));
                 ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CIFAIL, 0));
             }
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CFAIL, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_SEQUENCE:
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
-                p->parent_next_state = p->next ? p->next->parse_state : gp->parent_next_state;
-                p->parent_fail_state = gp->parent_fail_state;
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
+                p->parent_next_state = p->next ? p->next->parse_state : cnode->parent_next_state;
+                p->parent_fail_state = cnode->parent_fail_state;
                 ChpegCU_add_instructions(cu, p);
             }
             break;
 #if CHPEG_EXTENSION_TRIM
         case CHPEG_DEF_TRIM:
             {
-                ChpegGNode *def_node;
-                def = -1;
-                if (0 == ChpegCU_find_def_node(cu, gp, &def_node)) {
-                    def = ChpegCU_find_def(cu, def_node->head->node);
-                }
+                ChpegCNode *def_node = ChpegCU_find_def_node(cu, cnode);
+                def_id = def_node ? def_node->val.ival : 0;
             }
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def)); // arg def is informational only
-            ChpegCU_add_instructions(cu, gp->head);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, gp->parent_next_state));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def_id)); // def_id is informational only
+            ChpegCU_add_instructions(cu, cnode->head);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, cnode->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, cnode->parent_fail_state));
             break;
 #endif
 #if CHPEG_EXTENSION_REFS
         case CHPEG_DEF_MARK:
-            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ref_id = ChpegCU_find_ref(cu, cnode);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARK, ref_id));
-            ChpegCU_add_instructions(cu, gp->head->next);
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKS, gp->parent_next_state));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKF, gp->parent_fail_state));
+            ChpegCU_add_instructions(cu, cnode->head->next);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKS, cnode->parent_next_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKF, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_REFERENCE:
-            ref_id = ChpegCU_find_ref(cu, gp->node);
+            ref_id = ChpegCU_find_ref(cu, cnode);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_REF, ref_id));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
 #endif
         case CHPEG_DEF_REPEAT:
             {
-                unsigned char op = cu->input[gp->head->next->node->offset];
+                unsigned char op = cu->input[cnode->head->next->node->offset];
                 switch (op) {
                     case '+':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPBEG, 0));
-                        ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, gp->head->parse_state));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, gp->parent_fail_state));
+                        ChpegCU_add_instructions(cu, cnode->head);
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, cnode->head->parse_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, cnode->parent_fail_state));
                         break;
                     case '*':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSBEG, 0));
-                        ChpegCU_add_instructions(cu, gp->head);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, gp->head->parse_state));
+                        ChpegCU_add_instructions(cu, cnode->head);
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, cnode->head->parse_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSDONE, 0));
                         break;
                     case '?':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQBEG, 0));
-                        ChpegCU_add_instructions(cu, gp->head);
+                        ChpegCU_add_instructions(cu, cnode->head);
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQMAT, 0));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQDONE, 0));
                         break;
@@ -460,37 +502,37 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegGNode *gp)
             break;
         case CHPEG_DEF_PREDICATE:
             {
-                unsigned char op = cu->input[gp->head->node->offset];
+                unsigned char op = cu->input[cnode->head->node->offset];
                 switch (op) {
                     case '&':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
-                        ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, gp->parent_fail_state));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, gp->parent_fail_state));
+                        ChpegCU_add_instructions(cu, cnode->head->next);
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, cnode->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, cnode->parent_fail_state));
                         break;
                     case '!':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
-                        ChpegCU_add_instructions(cu, gp->head->next);
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, gp->parent_fail_state));
-                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, gp->parent_fail_state));
+                        ChpegCU_add_instructions(cu, cnode->head->next);
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, cnode->parent_fail_state));
+                        ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, cnode->parent_fail_state));
                         break;
                 }
             }
             break;
         case CHPEG_DEF_DOT:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_IDENTIFIER:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, gp->node)));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, cnode->node)));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_CHARCLASS:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, gp->val.ival));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, cnode->val.ival));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_LITERAL:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, gp->val.ival));
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, gp->parent_fail_state));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, cnode->val.ival));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
     }
 }
@@ -521,92 +563,105 @@ static int ChpegCU_alloc_string(ChpegCU *cu, const unsigned char *str, int len)
     return idx;
 }
 
-static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
+static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
 {
-    switch (gp->type) {
+    if (!cnode) { cnode = cu->root; }
+
+    switch (cnode->type) {
         case CHPEG_DEF_LITERAL:
         case CHPEG_DEF_CHARCLASS:
             {
                 int len = 0, offset = 0;
-                for (ChpegGNode *p = gp->head; p; p = p->next) {
+                for (ChpegCNode *p = cnode->head; p; p = p->next) {
                     ChpegCU_alloc_strings(cu, p);
                     len += p->value_len;
                 }
                 unsigned char *str = (unsigned char *)CHPEG_MALLOC(len);
-                for (ChpegGNode *p = gp->head; p; p = p->next) {
+                for (ChpegCNode *p = cnode->head; p; p = p->next) {
                     memcpy(str+offset, p->val.cval, p->value_len);
                     offset += p->value_len;
                 }
-                gp->val.ival = ChpegCU_alloc_string(cu, str, len);
+                cnode->val.ival = ChpegCU_alloc_string(cu, str, len);
+
 #if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(str, len, 20);
-                fprintf(stderr, "alloc_strings: LITERAL/CHARCLASS %s %d\n", tmp, gp->val.ival);
+                fprintf(stderr, "%s: LITERAL/CHARCLASS str_id=%d, value=\"%s\"\n",
+                    __func__, cnode->val.ival, tmp);
                 CHPEG_FREE(tmp);
 #endif
+
                 CHPEG_FREE(str);
             }
             break;
         case CHPEG_DEF_CHARRANGE:
             {
-                for (ChpegGNode *p = gp->head; p; p = p->next) {
+                for (ChpegCNode *p = cnode->head; p; p = p->next) {
                     ChpegCU_alloc_strings(cu, p);
                 }
-                gp->val.cval[0] = gp->head->val.cval[0];
-                gp->val.cval[1] = '-';
-                gp->val.cval[2] = gp->head->next->val.cval[0];
-                gp->value_len = 3;
+                cnode->val.cval[0] = cnode->head->val.cval[0];
+                cnode->val.cval[1] = '-';
+                cnode->val.cval[2] = cnode->head->next->val.cval[0];
+                cnode->value_len = 3;
+
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                fprintf(stderr, "alloc_strings: CHARRANGE %s\n", tmp);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                fprintf(stderr, "%s: CHARRANGE [%s]\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
+
             }
             break;
         case CHPEG_DEF_PLAINCHAR:
             {
-                gp->val.cval[0] = cu->input[gp->node->offset];
-                gp->value_len = 1;
+                cnode->val.cval[0] = cu->input[cnode->node->offset];
+                cnode->value_len = 1;
+
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                fprintf(stderr, "alloc_strings: PLAINCHAR %s\n", tmp);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                fprintf(stderr, "%s: PLAINCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
+
             }
             break;
         case CHPEG_DEF_ESCCHAR:
             {
-                gp->val.cval[0] = cu->input[gp->node->offset + 1];
-                gp->value_len = 1;
-                switch (gp->val.cval[0]) {
-                    case 'n': gp->val.cval[0] = '\n'; break;
-                    case 'r': gp->val.cval[0] = '\r'; break;
-                    case 't': gp->val.cval[0] = '\t'; break;
+                cnode->val.cval[0] = cu->input[cnode->node->offset + 1];
+                cnode->value_len = 1;
+                switch (cnode->val.cval[0]) {
+                    case 'n': cnode->val.cval[0] = '\n'; break;
+                    case 'r': cnode->val.cval[0] = '\r'; break;
+                    case 't': cnode->val.cval[0] = '\t'; break;
                 }
+
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                fprintf(stderr, "alloc_strings: ESCCHAR %s\n", tmp);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                fprintf(stderr, "%s: ESCCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
+
             }
             break;
         case CHPEG_DEF_OCTCHAR:
             {
-                int val = 0; int len = gp->node->length - 1;
-                const unsigned char *ip = cu->input + gp->node->offset + 1;
+                int val = 0; int len = cnode->node->length - 1;
+                const unsigned char *ip = cu->input + cnode->node->offset + 1;
                 for (int i = 0; i < len; ++i) {
                     val = (val << 3) | (ip[i] - '0');
                 }
-                gp->val.cval[0] = val & 255;
-                gp->value_len = 1;
+                cnode->val.cval[0] = val & 255;
+                cnode->value_len = 1;
+
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(gp->val.cval, gp->value_len, 10);
-                fprintf(stderr, "alloc_strings: OCTCHAR %s\n", tmp);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                fprintf(stderr, "%s: OCTCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
+
             }
             break;
         default:
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_strings(cu, p);
             }
             break;
@@ -620,16 +675,17 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegGNode *gp)
 // Returns int reference id, or:
 // -1, if not found
 // -2, if node's first child (head) is NULL or not an identifier
-static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node)
+static int ChpegCU_find_ref(ChpegCU *cu, ChpegCNode *cnode)
 {
-    ChpegNode *ident = node->head;
+    ChpegCNode *cident = cnode->head;
 
-    if (!ident) return -2;
-    if (ident->def != CHPEG_DEF_IDENTIFIER) return -2;
+    if (!cident) { return -2; }
+    if (cident->type != CHPEG_DEF_IDENTIFIER) { return -2; }
 
     for (int i = 0; i < cu->bc->num_refs; ++i) {
-        if (ident->length == strlen(cu->bc->refs[i]) &&
-            0 == memcmp(cu->input + ident->offset, cu->bc->refs[i], ident->length))
+        if (cident->node->length == strlen(cu->bc->refs[i]) &&
+            memcmp(cu->input + cident->node->offset,
+                cu->bc->refs[i], cident->node->length) == 0)
         {
             return i;
         }
@@ -642,9 +698,9 @@ static int ChpegCU_find_ref(ChpegCU *cu, ChpegNode *node)
 // Returns int reference id; or:
 // -2, if first child is not found or not an identifier
 // -3, if unable to allocate reference string
-static int ChpegCU_alloc_ref(ChpegCU *cu, ChpegNode *node)
+static int ChpegCU_alloc_ref(ChpegCU *cu, ChpegCNode *cnode)
 {
-    int ref = ChpegCU_find_ref(cu, node);
+    int ref = ChpegCU_find_ref(cu, cnode);
     if (ref != -1) { // ref already exists or error
         return ref;
     }
@@ -661,7 +717,10 @@ static int ChpegCU_alloc_ref(ChpegCU *cu, ChpegNode *node)
         cu->bc->refs = (char **)CHPEG_REALLOC(cu->bc->refs, cu->refs_allocated * sizeof(char *));
     }
 
-    ChpegNode *ident = node->head;
+    assert (cnode->head && cnode->head->node);
+    ChpegNode *ident = cnode->head->node;
+    assert (ident->def == CHPEG_DEF_IDENTIFIER);
+
     int ref_id = cu->bc->num_refs++;
 
     // allocate reference string
@@ -676,24 +735,28 @@ static int ChpegCU_alloc_ref(ChpegCU *cu, ChpegNode *node)
     return ref_id;
 }
 
-static int ChpegCU_alloc_refs(ChpegCU *cu, ChpegGNode *gp)
+static int ChpegCU_alloc_refs(ChpegCU *cu, ChpegCNode *cnode)
 {
+    if (!cnode) { cnode = cu->root; }
+
     int err = 0;
-    switch (gp->type) {
+    switch (cnode->type) {
         case CHPEG_DEF_MARK:
         case CHPEG_DEF_REFERENCE:
             {
-                int ref_id = ChpegCU_alloc_ref(cu, gp->node);
+                int ref_id = ChpegCU_alloc_ref(cu, cnode);
+
 #if CHPEG_DEBUG_COMPILER
-                const char *def_name = ChpegByteCode_def_name(chpeg_default_bytecode(), gp->type);
-                fprintf(stderr, "alloc_refs: (via %s) refs[%d]=\"%s\"\n", def_name,
+                const char *def_name = ChpegByteCode_def_name(chpeg_default_bytecode(), cnode->type);
+                fprintf(stderr, "%s: (via %s) refs[%d]=\"%s\"\n", __func__, def_name,
                     ref_id, ref_id >= 0 ? cu->bc->refs[ref_id] : "<ERROR>");
 #endif
+
                 err = (ref_id < 0) ? ref_id : 0;
                 goto done;
             }
         default:
-            for (ChpegGNode *p = gp->head; p; p = p->next) {
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 if ((err = ChpegCU_alloc_refs(cu, p)) != 0) {
                     goto done;
                 }
@@ -822,30 +885,38 @@ int chpeg_compile(const unsigned char *input, size_t length,
     }
 
     cu.bc = ChpegByteCode_new();
-    ChpegCU_setup_defs(&cu);
 
-    cu.root = ChpegGNode_new();
+    cu.root = ChpegCNode_new();
 
     ChpegCU_build_tree(&cu, NULL, NULL);
-    ChpegGNode_reverse(cu.root);
+    ChpegCNode_reverse(cu.root);
 
-    ChpegCU_alloc_strings(&cu, cu.root);
+    ChpegCU_setup_defs(&cu);
+
+    ChpegCU_alloc_strings(&cu, NULL);
 
 #if CHPEG_EXTENSION_REFS
-    if ((err = ChpegCU_alloc_refs(&cu, cu.root)) != 0) {
+    if ((err = ChpegCU_alloc_refs(&cu, NULL)) != 0) {
         err = CHPEG_ERR_COMPILE;
         goto done;
     }
 #endif
 
+#if CHPEG_EXTENSION_TRIM
+    ChpegCU_auto_leaf(&cu);
+#endif
+
     ChpegCU_alloc_instructions(&cu, cu.root);
+
 #if CHPEG_DEBUG_COMPILER
     fprintf(stderr, "instructions alloc'd: %d\n", cu.bc->num_instructions);
 #endif
+
     cu.bc->instructions = (int *)CHPEG_CALLOC(cu.bc->num_instructions, sizeof(int));
 
     cu.bc->num_instructions = 0;
     ChpegCU_add_instructions(&cu, cu.root);
+
 #if CHPEG_DEBUG_COMPILER
     fprintf(stderr, "instructions after add: %d\n", cu.bc->num_instructions);
 #endif
@@ -858,7 +929,7 @@ int chpeg_compile(const unsigned char *input, size_t length,
 
 done:
     if (cu.parser) { ChpegParser_free(cu.parser); }
-    if (cu.root) { ChpegGNode_free(cu.root); }
+    if (cu.root) { ChpegCNode_free(cu.root); }
     if (bytecode_return) {
         *bytecode_return = cu.bc;
     }

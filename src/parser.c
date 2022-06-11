@@ -1904,7 +1904,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
                             offset += ref->length;
                             pc += 2;
-                            goto op_matchs_done;
+                            goto op_ref_done; // need to break 2 levels
                         }
                         else {
                             break;
@@ -1929,7 +1929,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
 #endif
                 ++pc; // failed match, go to next instruction
-op_matchs_done:
+op_ref_done:
                 break;
 #endif // #if CHPEG_EXTENSION_REFS
 
