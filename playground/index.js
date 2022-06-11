@@ -20,6 +20,7 @@ function setupEditorArea(id, lsKey) {
 }
 
 const grammar = setupEditorArea("grammar-editor", "grammarText");
+grammar.getSession().setMode("ace/mode/yaml");
 const code = setupEditorArea("code-editor", "codeText");
 
 const codeAst = setupInfoArea("code-ast");
