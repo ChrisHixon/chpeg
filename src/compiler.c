@@ -132,7 +132,7 @@ typedef struct _ChpegCU
     int refs_allocated;
 } ChpegCU;
 
-static int ChpegCU_find_def(ChpegCU *cu, ChpegNode *ident);
+static int ChpegCU_find_def(ChpegCU *cu, ChpegCNode *ident);
 
 #if CHPEG_EXTENSION_TRIM
 static ChpegCNode *ChpegCU_find_def_node(ChpegCU *cu, ChpegCNode *cnode)
@@ -226,33 +226,47 @@ static void ChpegCU_print(ChpegCU *cu, ChpegCNode *cnode, const unsigned char *i
 }
 #endif
 
-static void ChpegCU_setup_defs(ChpegCU *cu)
+static int ChpegCU_setup_defs(ChpegCU *cu)
 {
-    cu->bc->num_defs = cu->root->num_children;
+    int err = 0;
+
+    int num_defs = cu->root->num_children; // number of defs we supposedly have
 
 #if CHPEG_DEBUG_COMPILER
-    fprintf(stderr, "%s: num_defs=%d\n", __func__, cu->bc->num_defs);
+    fprintf(stderr, "%s: num_defs=%d\n", __func__, num_defs);
 #endif
 
-    cu->bc->def_names = (char **)CHPEG_MALLOC(cu->bc->num_defs * sizeof(char *));
-    cu->bc->def_flags = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
-    cu->bc->def_addrs = (int *)CHPEG_MALLOC(cu->bc->num_defs * sizeof(int));
+    // cu->bc should be kept in a state we can clean up if we encounter an error
+    cu->bc->num_defs = 0; // increment as valid defs are added
+    cu->bc->def_names = (char **)CHPEG_MALLOC(num_defs * sizeof(char *));
+    cu->bc->def_flags = (int *)CHPEG_MALLOC(num_defs * sizeof(int));
+    cu->bc->def_addrs = (int *)CHPEG_MALLOC(num_defs * sizeof(int));
 
     ChpegCNode *cdef = cu->root->head;
     for (int def_id = 0; cdef; cdef = cdef->next, ++def_id) {
-        assert (cdef->node->def == CHPEG_DEF_DEFINITION);
-
-        ChpegCNode *cident = cdef->head; // Identifier: definition name
-        assert (cident->node->def == CHPEG_DEF_IDENTIFIER);
+        assert (cdef->type == CHPEG_DEF_DEFINITION);
 
         // stash the def_id in the DEFINITION cnode
         cdef->val.ival = def_id;
 
+        ChpegCNode *cident = cdef->head; // first child: Identifier: definition name
+        assert (cident->type == CHPEG_DEF_IDENTIFIER);
+
+        if (ChpegCU_find_def(cu, cident) >= 0) {
+            char *tmp = chpeg_esc_bytes(cu->input + cident->node->offset, cident->node->length, 0);
+            fprintf(stderr, "Definition '%s' is already defined.\n", tmp);
+            CHPEG_FREE(tmp);
+            err = 1;
+            goto done;
+        }
+
         cu->bc->def_names[def_id] = (char *)CHPEG_MALLOC(1 + cident->node->length);
+        ++cu->bc->num_defs;
+
         memcpy(cu->bc->def_names[def_id], &cu->input[cident->node->offset], cident->node->length);
         cu->bc->def_names[def_id][cident->node->length] = '\0';
 
-        // Options, flags
+        // second child: Options / a.k.a. flags
         int flags = 0;
         if (cident->next->node->def == CHPEG_DEF_OPTIONS) {
             ChpegCNode *coptions = cident->next;
@@ -273,7 +287,7 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
                         flags |= CHPEG_FLAG_REFSCOPE; break;
                 }
             }
-            // eliminate OPTIONS node
+            // eliminate Options node
             cident->node->next = coptions->node->next;
             cident->next = coptions->next;
             ChpegNode_free(coptions->node);
@@ -281,11 +295,16 @@ static void ChpegCU_setup_defs(ChpegCU *cu)
         }
 
         cu->bc->def_flags[def_id] = flags;
+
 #if CHPEG_DEBUG_COMPILER
         fprintf(stderr, "%s: def[%i]: name=%s flags=%d\n", __func__,
             def_id, cu->bc->def_names[def_id], cu->bc->def_flags[def_id]);
 #endif
+
     }
+
+done:
+    return err;
 }
 
 static void ChpegCU_setup_def_addrs(ChpegCU *cu)
@@ -297,11 +316,12 @@ static void ChpegCU_setup_def_addrs(ChpegCU *cu)
     }
 }
 
-static int ChpegCU_find_def(ChpegCU *cu, ChpegNode *ident)
+static int ChpegCU_find_def(ChpegCU *cu, ChpegCNode *cident)
 {
     for (int i = 0; i < cu->bc->num_defs; ++i) {
-        if (ident->length == strlen(cu->bc->def_names[i]) &&
-            0 == memcmp(cu->input + ident->offset, cu->bc->def_names[i], ident->length))
+        if (cident->node->length == strlen(cu->bc->def_names[i]) &&
+            memcmp(cu->input + cident->node->offset,
+                cu->bc->def_names[i], cident->node->length) == 0)
         {
             return i;
         }
@@ -428,7 +448,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             }
             break;
         case CHPEG_DEF_DEFINITION:
-            def_id = ChpegCU_find_def(cu, cnode->head->node);
+            def_id = ChpegCU_find_def(cu, cnode->head);
             ChpegCU_add_instructions(cu, cnode->head->next);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def_id));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def_id));
@@ -523,7 +543,7 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_IDENTIFIER:
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, cnode->node)));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, cnode)));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
         case CHPEG_DEF_CHARCLASS:
@@ -891,7 +911,10 @@ int chpeg_compile(const unsigned char *input, size_t length,
     ChpegCU_build_tree(&cu, NULL, NULL);
     ChpegCNode_reverse(cu.root);
 
-    ChpegCU_setup_defs(&cu);
+    if ((err = ChpegCU_setup_defs(&cu)) != 0) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
 
     ChpegCU_alloc_strings(&cu, NULL);
 
@@ -928,8 +951,13 @@ int chpeg_compile(const unsigned char *input, size_t length,
 #endif
 
 done:
+    if (err || !bytecode_return) {
+        ChpegByteCode_free(cu.bc);
+        cu.bc = NULL;
+    }
     if (cu.parser) { ChpegParser_free(cu.parser); }
     if (cu.root) { ChpegCNode_free(cu.root); }
+
     if (bytecode_return) {
         *bytecode_return = cu.bc;
     }
