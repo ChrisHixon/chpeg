@@ -80,9 +80,8 @@ function parse() {
   codeAst.setValue('');
   codeProfile.setValue('');
 
-  if (grammarText.length === 0) {
-   return;
-  }
+  // When grammar is empty we parse the input as a grammar with the default parser
+  //if (grammarText.length === 0) return;
 
   $('#overlay').css({
     'z-index': '1',

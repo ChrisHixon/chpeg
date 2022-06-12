@@ -1,8 +1,13 @@
 extern "C" {
-    //#include "../include/chpeg.h"
+    /*
+    #define WITHOUT_MAIN
+    #define CHPEG_PACKRAT 1
+    #include "../examples/chpeg_nocase.c"
+    */
+
     #define CHPEG_EXTENSION_ALL
     #define CHPEG_DEFINITION_TRACE
-    #define CHPEG_PACKRAT 1
+    //#include "../include/chpeg.h"
     #include "../include/chpeg_ext.h"
 }
 #include <cstdio>
@@ -279,20 +284,28 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
 
   ChpegByteCode *byte_code = NULL;
   auto is_source_valid = false;
+  auto is_grammar_valid = false;
   char log_grammar_buf[1024];
   char log_code_buf[1024];
   log_code_buf[0] = '[';
   log_code_buf[1] = ']';
   log_code_buf[2] = '\0';
-  int parse_result = chpeg_compile((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 0);
-  if (!byte_code) {
+  int parse_result;
+  if(grammarText.size() > 0) {
+      parse_result = chpeg_compile((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 0);
+      is_grammar_valid = byte_code != NULL;
+  }
+  else {
+      is_grammar_valid = true;
+  }
+  if (!is_grammar_valid) {
     snprintf(log_grammar_buf, sizeof(log_grammar_buf), "[\"Grammar file failed to compile. Parser returned: %d\"]", parse_result);
   }
   else {
     //snprintf(log_grammar_buf, sizeof(log_grammar_buf), "[\"Grammar file compiled successfully. Parser returned: %d\"]", parse_result);
     snprintf(log_grammar_buf, sizeof(log_grammar_buf), "[]");
     // Parse the data file with the compiled bytecode
-    parser = ChpegParser_new(byte_code);
+    parser = ChpegParser_new(byte_code ? byte_code : chpeg_default_bytecode());
     parser->simplification = opt_simplification;
     if(packrat) {
 #if CHPEG_PACKRAT
@@ -310,13 +323,13 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
     else {
       snprintf(log_code_buf, sizeof(log_code_buf), "[\"parse succeeded but consumed %d bytes out of %d\"]", parse_result, (int)codeText.size());
     }
-    ChpegByteCode_free(byte_code);
+    if(byte_code) ChpegByteCode_free(byte_code);
     ChpegParser_free(parser);
   }
 
   std::string json;
   json += "{";
-  json += std::string("\"grammar_valid\":") + (byte_code ? "true" : "false");
+  json += std::string("\"grammar_valid\":") + (is_grammar_valid ? "true" : "false");
   json += ",\"grammar\":";
   json += log_grammar_buf;
   json += std::string(",\"source_valid\":") + (is_source_valid ? "true" : "false");
