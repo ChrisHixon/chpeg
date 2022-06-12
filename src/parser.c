@@ -1157,7 +1157,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             window_end = length + 1;
         }
         packrat = (ChpegPNode **)CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
-        packrat_no_match = NULL;
+        packrat_no_match = (ChpegPNode*)CHPEG_CALLOC(1, sizeof(ChpegPNode));
         assert(packrat_no_match != NULL);
     }
 
@@ -2042,7 +2042,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #endif
                             offset += ref->length;
                             pc += 2;
-                            goto op_matchs_done;
+                            goto op_ref_done; // need to break 2 levels
                         }
                         else {
                             break;
@@ -2067,7 +2067,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 }
 #endif
                 ++pc; // failed match, go to next instruction
-op_matchs_done:
+op_ref_done:
                 break;
 #endif // #if CHPEG_EXTENSION_REFS
 
