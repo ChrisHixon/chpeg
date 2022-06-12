@@ -31,8 +31,21 @@ cat \
     ../src/bytecode.c \
     ../src/compiler.c \
     ../src/parser.c \
-    parse_file.c \
     >> $out_bfn.c
+
+cat <<EOS >> $out_bfn.c
+
+#ifndef WITHOUT_MAIN
+
+EOS
+
+cat parse_file.c >> $out_bfn.c
+
+cat <<EOS >> $out_bfn.c
+
+#endif //WITHOUT_MAIN
+
+EOS
 
 #gcc -g -Wall -DCHPEG_AMALGAMATION -DCHPEG_API=static -o chpeg-hex chpeg-hex.c
 gcc -g -Wall -o $out_bfn $out_bfn.c
