@@ -1,4 +1,4 @@
-# src: https://github-wiki-see.page/m/PhilippeSigaud/Pegged/wiki/Left-Recursion#
+# src: https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
 # Another example: two rules that are mutually left-recursive.
 
     M <- L eoi

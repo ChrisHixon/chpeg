@@ -1,4 +1,4 @@
-# src: https://github-wiki-see.page/m/PhilippeSigaud/Pegged/wiki/Left-Recursion#
+# src: https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
 #
 #Interlocking cycles
 #It can yet be more complicated. For inputs like nlm-n+(aaa)n, this grammar has several interlocking left-recursive cycles:

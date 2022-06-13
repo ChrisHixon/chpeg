@@ -1,4 +1,4 @@
-# src: https://github-wiki-see.page/m/PhilippeSigaud/Pegged/wiki/Left-Recursion
+# src: https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
 # A more subtle form of the same problem is that the recursive element is hidden behind other elements that can succeed without consuming input, like an optional:
 
     E <- F? E '+n' / 'n'
