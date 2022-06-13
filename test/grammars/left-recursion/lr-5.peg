@@ -1,0 +1,15 @@
+# src: https://github-wiki-see.page/m/PhilippeSigaud/Pegged/wiki/Left-Recursion#
+#
+#Indirect Left-Recursion
+#We've seen that direct left-recursion happens when E calls into itself on the same input. Indirect left-recursion happens when E as its first step calls any number of other rules, that at one or more points call back into E with the same input. For example:
+
+    E <- F '+n' / 'n'
+    F <- G H / J
+    J <- K / E L
+
+# additional defs needed
+
+    G <- 'g'
+    H <- 'h'
+    K <- 'k'
+    L <- 'l'
