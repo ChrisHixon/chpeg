@@ -1034,7 +1034,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             window_end = length + 1;
         }
         packrat = CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
-        packrat_no_match = CHPEG_MALLOC(0);
+
+        // packrat_no_match is a negative cache meaning match failure (attempted match, but match failed)
+        packrat_no_match = (ChpegPNode *)&packrat_no_match; // need a unique, non-valid PNode pointer
         assert(packrat_no_match != NULL);
     }
 
@@ -2182,9 +2184,6 @@ done:
             }
         }
         CHPEG_FREE(packrat);
-    }
-    if (packrat_no_match) {
-        CHPEG_FREE(packrat_no_match);
     }
 #endif
 

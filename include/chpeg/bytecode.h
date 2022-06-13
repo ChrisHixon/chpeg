@@ -54,18 +54,25 @@ CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
 
 // node flags
 enum ChpegFlags {
-    // These flags correspond to Options used in the Definition:
+
+    // The following flags correspond to Options used in a Definition:
+
     CHPEG_FLAG_STOP     = 1<<0,  // {C|S} stop automatic unwrapping, forcing this node to be a container
     CHPEG_FLAG_IGNORE   = 1<<1,  // {I} deletes nodes matching this identifier
     CHPEG_FLAG_LEAF     = 1<<2,  // {L|T} collects this node and anything underneath as a final leaf (text) node
     CHPEG_FLAG_PACKRAT  = 1<<3,  // {P} add resulting node to packrat cache
     CHPEG_FLAG_REFSCOPE = 1<<4,  // {R} make resulting node a reference scope
 
+    // Internal use
+
 #ifdef CHPEG_EXTENSION_TRIM
-    // These flags are used internally
     CHPEG_FLAG_TRIMMED_LEFT  = 1<<5, // node has been 'trimmed left': offset has been adjusted
     CHPEG_FLAG_TRIMMED_RIGHT = 1<<6, // node has been 'trimmed right': length has been adjusted
 #endif
+
+    CHPEG_FLAG_CONSUMES         = 1<<7,
+    CHPEG_FLAG_CONSUME_RESOLVED = 1<<8,
+
 
 };
 
