@@ -72,7 +72,7 @@ enum ChpegFlags {
 
     CHPEG_FLAG_CONSUMES         = 1<<7,
     CHPEG_FLAG_CONSUME_RESOLVED = 1<<8,
-
+    CHPEG_FLAG_REFERENCED       = 1<<9,
 
 };
 
