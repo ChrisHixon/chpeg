@@ -1170,8 +1170,12 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_DEF_DOT:
         case CHPEG_DEF_CHARCLASS:
-        case CHPEG_DEF_LITERAL:
             consumes = 1;
+            break;
+
+        case CHPEG_DEF_LITERAL:
+            // we haven't processed strings yet... but an empty string has no child nodes
+            consumes = cnode->node->num_children > 1;
             break;
 
         default:
