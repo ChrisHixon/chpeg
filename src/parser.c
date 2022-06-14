@@ -970,7 +970,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
 {
 #if ERRORS
     if (self->errors_size == 0) {
-        chpeg_show_message(1, "No errors detected / tracked.\n");
+        chpeg_show_message(self, 1, "No errors detected / tracked.\n");
         return;
     }
 
@@ -981,6 +981,9 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         int inst = self->bc->instructions[error->pc];
         int op = CHPEG_INST_OP(inst);
         int arg = CHPEG_INST_ARG(inst);
+
+        isz_t line, col;
+        chpeg_line_col(input, self->error_offset, &line, &col);
 
         char *esc = NULL;
         const char *str = NULL;
@@ -1009,8 +1012,8 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         switch (op) {
             case CHPEG_OP_IDENT:
                 str = ChpegByteCode_def_name(self->bc, arg);
-                chpeg_show_message(1, "%11s %*s%s in %s at offset " ISZ_FMT "\n",
-                    expected,
+                chpeg_show_message(self, 1, "input:%d:%d %11s %*s%s in %s at offset " ISZ_FMT "\n",
+                    line, col, expected,
                     depth_indent, "",
                     str ? str : "<N/A>>",
                     def_name ? def_name : "<N/A>",
@@ -1019,8 +1022,8 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
             case CHPEG_OP_LIT:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                chpeg_show_message(1, "%11s %*s\"%s\" in %s at offset " ISZ_FMT "\n",
-                    expected,
+                chpeg_show_message(self, 1, "input:%d:%d %11s %*s\"%s\" in %s at offset " ISZ_FMT "\n",
+                    line, col, expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
                     def_name ? def_name : "<N/A>",
@@ -1030,8 +1033,8 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
             case CHPEG_OP_CHRCLS:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                chpeg_show_message(1, "%11s %*s[%s] in %s at offset " ISZ_FMT "\n",
-                    expected,
+                chpeg_show_message(self, 1, "input:%d:%d %11s %*s[%s] in %s at offset " ISZ_FMT "\n",
+                    line, col, expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
                     def_name ? def_name : "<N/A>",
@@ -1039,15 +1042,15 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
                 CHPEG_FREE(esc); esc = NULL;
                 break;
             case CHPEG_OP_DOT:
-                chpeg_show_message(1, "%11s %*scharacter in %s at offset " ISZ_FMT "\n",
-                    expected,
+                chpeg_show_message(self, 1, "input:%d:%d %11s %*scharacter in %s at offset " ISZ_FMT "\n",
+                    line, col, expected,
                     depth_indent, "",
                     def_name ? def_name : "<N/A>",
                     self->error_offset);
                 break;
             default: // unhandled op, show instruction in <> for debugging
-                chpeg_show_message(1, "%11s %*sSyntax error in %s at offset " ISZ_FMT " <%s,%d>\n",
-                    "Error:",
+                chpeg_show_message(self, 1, "input:%d:%d %11s %*sSyntax error in %s at offset " ISZ_FMT " <%s,%d>\n",
+                    line, col, "Error:",
                     depth_indent, "",
                     def_name ? def_name : "<N/A>",
                     self->error_offset,
@@ -1056,7 +1059,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         }
     }
 #else
-    chpeg_show_message(1, "Error tracking disabled at compile time.\n");
+    chpeg_show_message(self, 1, "Error tracking disabled at compile time.\n");
 #endif
 }
 

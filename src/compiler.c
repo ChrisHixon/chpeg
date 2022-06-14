@@ -267,7 +267,7 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
             isz_t line, col;
             chpeg_line_col(cu->input, cident->node->offset, &line, &col);
             char *tmp = chpeg_esc_bytes(cu->input + cident->node->offset, cident->node->length, 0);
-            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Definition '%s' is already defined.\n",
+            chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Definition '%s' is already defined.\n",
                 line, col, tmp);
             CHPEG_FREE(tmp);
             err = 1;
@@ -951,7 +951,7 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
                         cnode->node->length, 0);
                     isz_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                    chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Identifier '%s' is not defined.\n",
+                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Identifier '%s' is not defined.\n",
                         line, col, tmp);
                     CHPEG_FREE(tmp);
                     cu->undefined_identifiers++;
@@ -994,7 +994,7 @@ static int ChpegCU_warn_unreferenced(ChpegCU *cu)
         if (!(cdef->bits & CHPEG_CNODE_REFERENCED)) {
             isz_t line, col;
             chpeg_line_col(cu->input, cdef->node->offset, &line, &col);
-            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Definition '%s' is not referenced.\n",
+            chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Definition '%s' is not referenced.\n",
                 line, col, ChpegByteCode_def_name(cu->bc, cdef->val.ival));
         }
     }
@@ -1120,7 +1120,7 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                         if (consumed == 0) {
                             isz_t line, col;
                             chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Left recursion detected in '%s'.\n",
+                            chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Left recursion detected in '%s'.\n",
                                 line, col, ChpegByteCode_def_name(cu->bc, def_id));
                             lr->errors++;
 #if CHPEG_DEBUG_LR >= 1
@@ -1214,7 +1214,7 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 if (!consumes) {
                     isz_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                    chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
+                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
                         line, col);
                     lr->errors++;
                     consumes = 0;
@@ -1335,7 +1335,7 @@ CHPEG_API void chpeg_sanity_check()
 // I need a better way to deal with errors. Should be dealt with when creating a better API.
 // For now I'm just using CHPEG_ERR_COMPILE, added into the parser error codes (ChpegErrorCodes)
 CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
-    ChpegByteCode **bytecode_return, int verbose, const ChpegByteCode *bytecode_parser)
+    ChpegByteCode **bytecode_return, int verbose, ChpegParser *parser)
 {
     if (verbose & 3) {
 #if CHPEG_USES_EXTENSIONS
@@ -1357,7 +1357,7 @@ CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
 
     int err = 0;
     ChpegCU cu = {
-        .parser = ChpegParser_new(bytecode_parser),
+        .parser = parser,
         .input = input,
     };
 
@@ -1367,7 +1367,7 @@ CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
 
     if (parse_result == 0) {
         if (verbose & 1) {
-            chpeg_show_message(1, "chpeg_compile: Parse successful.\n");
+            chpeg_show_message(cu.parser, 1, "chpeg_compile: Parse successful.\n");
         }
         if (verbose & 2) {
             ChpegParser_print_tree(cu.parser, input, length, stderr);
@@ -1376,11 +1376,11 @@ CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
     else {
         if ((verbose & (1<<15)) == 0) {
             if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                chpeg_show_message(1, "chpeg_compile: Extraneous input: "
+                chpeg_show_message(cu.parser, 1, "chpeg_compile: Extraneous input: "
                     "parse consumed " ISZ_FMT " bytes out of " ISZ_FMT "\n", consumed, length);
             }
             else {
-                chpeg_show_message(1, "chpeg_compile: Parse failed with result: %d\n",
+                chpeg_show_message(cu.parser, 1, "chpeg_compile: Parse failed with result: %d\n",
                     parse_result);
             }
             ChpegParser_print_error(cu.parser, input);
@@ -1481,7 +1481,8 @@ done:
 CHPEG_API int chpeg_compile(const unsigned char *input, isz_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
-    return chpeg_compile2(input, length, bytecode_return, verbose, chpeg_default_bytecode());
+    return chpeg_compile2(input, length, bytecode_return, verbose,
+	ChpegParser_new(chpeg_default_bytecode()));
 }
 
 #ifndef CHPEG_DEFAULT_BYTECODE

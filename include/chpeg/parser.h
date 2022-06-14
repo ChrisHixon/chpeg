@@ -225,6 +225,7 @@ typedef struct _ChpegParser
     int *def_fail_count;
 #endif
 
+    void *udata; /* user data */
 } ChpegParser;
 
 #ifndef CHPEG_PARSER_MAX_STACK_SIZE

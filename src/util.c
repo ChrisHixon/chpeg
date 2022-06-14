@@ -214,7 +214,7 @@ void chpeg_line_col(const unsigned char *input, isz_t offset, isz_t *line_out, i
 }
 
 #ifndef CHPEG_CUSTOM_SHOW_MESSAGE
-CHPEG_API int chpeg_show_message(int msg_type, const char *fmt, ...) {
+CHPEG_API int chpeg_show_message(ChpegParserPtr parser, int msg_type, const char *fmt, ...) {
 	va_list argp;
 	int rc;
 	va_start(argp, fmt);

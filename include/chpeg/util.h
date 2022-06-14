@@ -69,9 +69,9 @@ CHPEG_API void chpeg_line_col(const unsigned char *input, isz_t offset,
     } while(0)
 #endif
 
-#ifndef CHPEG_CUSTOM_SHOW_MESSAGE
-CHPEG_API int chpeg_show_message(int msg_type, const char *fmt, ...);
-#endif
+typedef struct _ChpegParser *ChpegParserPtr;
+/* define CHPEG_CUSTOM_SHOW_MESSAGE macro to use your supplied function */
+CHPEG_API int chpeg_show_message(ChpegParserPtr parser, int msg_type, const char *fmt, ...);
 
 #endif // #ifndef CHPEG_UTIL_H
 

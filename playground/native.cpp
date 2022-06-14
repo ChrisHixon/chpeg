@@ -1,14 +1,16 @@
 extern "C" {
-    /*
+#define WITH_CHPEG_NOCASE2
+#define CHPEG_CUSTOM_SHOW_MESSAGE
+#ifdef WITH_CHPEG_NOCASE
     #define WITHOUT_MAIN
     #define CHPEG_PACKRAT 1
     #include "../examples/chpeg_nocase.c"
-    */
-
+#else
     #define CHPEG_EXTENSION_ALL
     #define CHPEG_DEFINITION_TRACE
     //#include "../include/chpeg.h"
     #include "../include/chpeg_ext.h"
+#endif
 }
 #include <cstdio>
 #ifndef MAIN_CMD
@@ -68,6 +70,32 @@ bool parse_code(const std::string &text, peg::parser &peg, std::string &json,
 }
 */
 
+CHPEG_API int chpeg_show_message(ChpegParserPtr parser, int msg_type, const char *fmt, ...) {
+
+#define MSG_INPUT_STR "input:"
+    if(parser->udata && strncmp(MSG_INPUT_STR, fmt, sizeof(MSG_INPUT_STR)-1) == 0) {
+        std::string &json = *((std::string *)parser->udata);
+        char buf[2048];
+        
+        va_list argp1, argp2;
+        int rc;
+        va_start(argp1, fmt);
+        va_copy(argp2, argp1);
+        rc = vsnprintf(buf, sizeof(buf), fmt, argp1);
+        va_end(argp1);
+        isz_t line = va_arg(argp2, isz_t);
+        isz_t col = va_arg(argp2, isz_t);
+        va_end(argp2);
+        json += "{";
+        json += R"("ln":)" + std::to_string(line) + ",";
+        json += R"("col":)" + std::to_string(col) + ",";
+        json += R"("msg":")" + escape_json(buf) + R"(")";
+        json += "},";
+        return rc;
+    }
+    return 0;
+}
+
 void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *input, int depth, std::string &output)
 {
     char buf[2048];
@@ -92,7 +120,7 @@ void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsigned char *
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
         "%4d "
 #endif
-        "%6zu %6zu %6d %2d %3s %*s%s \"%s\"\n",
+        "%6" ISZ_FMT2 " %6" ISZ_FMT2 " %6d %2d %3s %*s%s \"%s\"\n",
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
         self->ref_count,
 #endif
@@ -273,12 +301,17 @@ void ChpegParser_print_trace(ChpegParser *self, const unsigned char *input, size
 #endif
 }
 
+static void addResult(std::string &json, std::string& result) {
+    if(result.size() > 1) result.resize(result.size()-1); //erase last comma
+    json += result + "]";
+} 
+
 std::string lint(const std::string &grammarText, const std::string &codeText, int opt_simplification, bool packrat) {
   ChpegParser *parser = NULL;
   int ret = 0;
 
-  std::string grammarResult;
-  std::string codeResult;
+  std::string grammarResult = "[";
+  std::string codeResult = "[";
   std::string astResult;
   std::string profileResult;
 
@@ -292,7 +325,9 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
   log_code_buf[2] = '\0';
   int parse_result;
   if(grammarText.size() > 0) {
-      parse_result = chpeg_compile((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 0);
+      ChpegParser *gparser = ChpegParser_new(chpeg_default_bytecode());
+      gparser->udata = &grammarResult;
+      parse_result = chpeg_compile2((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 0, gparser);
       is_grammar_valid = byte_code != NULL;
   }
   else {
@@ -306,13 +341,14 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
     snprintf(log_grammar_buf, sizeof(log_grammar_buf), "[]");
     // Parse the data file with the compiled bytecode
     parser = ChpegParser_new(byte_code ? byte_code : chpeg_default_bytecode());
+    parser->udata = &codeResult;
     parser->simplification = opt_simplification;
     if(packrat) {
 #if CHPEG_PACKRAT
         parser->packrat = 1;
 #endif
     }
-    size_t consumed;
+    isz_t consumed;
     parse_result = ChpegParser_parse(parser, (const unsigned char*)codeText.c_str(), (int) codeText.size(), &consumed);
     if (consumed == codeText.size()) {
       snprintf(log_code_buf, sizeof(log_code_buf), "[]");
@@ -322,6 +358,7 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
     }
     else {
       snprintf(log_code_buf, sizeof(log_code_buf), "[\"parse succeeded but consumed %d bytes out of %d\"]", parse_result, (int)codeText.size());
+      ChpegParser_print_error(parser, (const unsigned char*)codeText.c_str());
     }
     if(byte_code) ChpegByteCode_free(byte_code);
     ChpegParser_free(parser);
@@ -330,12 +367,10 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
   std::string json;
   json += "{";
   json += std::string("\"grammar_valid\":") + (is_grammar_valid ? "true" : "false");
-  json += ",\"grammar\":";
-  json += log_grammar_buf;
+  json += ",\"grammar\":"; addResult(json, grammarResult);
   json += std::string(",\"source_valid\":") + (is_source_valid ? "true" : "false");
+  json += ",\"code\":"; addResult(json, codeResult);
   if (!astResult.empty()) {
-    json += ",\"code\":";
-    json += log_code_buf;
     //json += ",\"ast\":\"" + astResult + "\"";
     json += ",\"ast\":\"" + escape_json(astResult) + "\"";
     json += ",\"profile\":\"" + escape_json(profileResult) + "\"";
@@ -355,11 +390,17 @@ void usage(const char *prog) {
     fprintf(stderr, "   or: %s --cbytecode basename <grammar>\n", prog);
 }
 
+static int ud_show_message(void *udata, int error_type, isz_t line, isz_t col, isz_t offset,
+        const char *fmt, ...) {
+    fprintf(stderr, "message:" ISZ_FMT ":" ISZ_FMT " " ISZ_FMT " %d  %s\n", line, col, offset, error_type, fmt);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     unsigned char *input_grammar = NULL;
-    size_t length_grammar = 0;
+    isz_t length_grammar = 0;
     unsigned char *input = NULL;
-    size_t length = 0;
+    isz_t length = 0;
     ChpegByteCode *byte_code = NULL;
     ChpegParser *parser = NULL;
     int parse_result = 0;
@@ -368,7 +409,7 @@ int main(int argc, char *argv[]) {
     char *input_filename = NULL;
     char *base_filename = NULL;
     int gen_cbytecode = 0;
-    size_t consumed = 0;
+    isz_t consumed = 0;
 
 #ifdef DEBUG_MEM
     mtrace();
@@ -481,7 +522,7 @@ int main(int argc, char *argv[]) {
     }
     else {
         if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-            printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
+            printf("Extraneous input: parse consumed " ISZ_FMT " bytes out of " ISZ_FMT "\n", consumed, length);
         }
         else {
             printf("Parse failed with result: %d\n", parse_result);
@@ -494,7 +535,7 @@ int main(int argc, char *argv[]) {
     ret = 0;
 done:
         
-    if(ret == 0 && input_grammar && input) {
+    if(/*ret == 0 &&*/ input_grammar && input) {
       std::string grammarText = (char*)input_grammar;
       std::string codeText = (char*)input;
       std::string json = lint(grammarText, codeText, 2, false);

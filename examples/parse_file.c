@@ -10,8 +10,8 @@
 #endif
 
 void usage(const char *prog) {
-    chpeg_show_message(1, "usage: %s [-s [0 1 2]] [<grammar>] <input>\n", prog);
-    chpeg_show_message(1, "   or: %s [-s [0 1 2]] --cbytecode basename <grammar>\n", prog);
+    fprintf(stderr, "usage: %s [-s [0 1 2]] [<grammar>] <input>\n", prog);
+    fprintf(stderr, "   or: %s [-s [0 1 2]] --cbytecode basename <grammar>\n", prog);
 }
 
 int main(int argc, char *argv[])
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 
         // Read the grammar file into input
         if (chpeg_read_file(grammar_filename, &input, &length) != 0) {
-            chpeg_show_message(1, "Could not read grammar file: %s\n", grammar_filename);
+            fprintf(stderr, "Could not read grammar file: %s\n", grammar_filename);
             ret = 2;
             goto done;
         }
@@ -69,12 +69,12 @@ int main(int argc, char *argv[])
         // Compile the grammar file into byte_code
         parse_result = chpeg_compile(input, length, &byte_code, 1);
         if (parse_result != 0) {
-            chpeg_show_message(1, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
+            fprintf(stderr, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
             ret = 3;
             goto done;
         }
         else {
-            chpeg_show_message(1, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
+            fprintf(stderr, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
         }
 
         // uncomment to print a dump of the byte code (defs, instructions, and strings)
@@ -108,12 +108,12 @@ int main(int argc, char *argv[])
     }
     // Otherwise, use default chpeg grammar
     else {
-        chpeg_show_message(1, "Using default chpeg grammar\n");
+        fprintf(stderr, "Using default chpeg grammar\n");
     }
 
     // Read the file to parse into input
     if (chpeg_read_file(input_filename, &input, &length) != 0) {
-        chpeg_show_message(1, "Could not read file: %s\n", input_filename);
+        fprintf(stderr, "Could not read file: %s\n", input_filename);
         ret = 4;
         goto done;
     }

@@ -8,6 +8,7 @@
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/util.h"
 #include "chpeg/bytecode.h"
+#include "chpeg/parser.h"
 #endif
 
 #ifndef DEBUG_COMPILER
@@ -22,8 +23,7 @@ CHPEG_API int chpeg_compile(const unsigned char *input, isz_t length,
     ChpegByteCode **bytecode_return, int verbose);
 
 CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
-    ChpegByteCode **bytecode_return, int verbose,
-    const ChpegByteCode *bytecode_parser);
+    ChpegByteCode **bytecode_return, int verbose, ChpegParser *parser);
 
 CHPEG_API const ChpegByteCode *chpeg_default_bytecode();
 
