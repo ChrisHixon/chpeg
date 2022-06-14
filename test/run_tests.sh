@@ -8,11 +8,15 @@ compare_bytecode_with_internal() {
     ./compare_bytecode_with_internal ../grammars/chpeg-ext.chpeg
 }
 
+line_col() {
+    ./line_col
+}
+
 count=0
 fail=0
 pass=0
 
-tests="bytecode_output_c_pt2_compare compare_bytecode_with_internal"
+tests="bytecode_output_c_pt2_compare compare_bytecode_with_internal line_col"
 
 for test in $tests; do
     if $test; then

@@ -215,6 +215,27 @@ char *chpeg_flags(char *buf, int flags)
     return buf;
 }
 
+void chpeg_line_col(const unsigned char *input, size_t offset, size_t *line_out, size_t *col_out)
+{
+    size_t i, line = 1;
+
+    for (i = 0; i <= offset; ++i) {
+        if(input[i] == '\n') {
+            ++line;
+        }
+    }
+
+    while (i > 0) {
+        if(input[--i] == '\n') {
+            ++i;
+            break;
+        }
+    }
+
+    *line_out = line;
+    *col_out = 1 + offset - i;
+}
+
 
 // } chpeg: util.c
 
