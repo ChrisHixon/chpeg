@@ -18,8 +18,12 @@
 // Compiler
 //
 
-CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
+CHPEG_API int chpeg_compile(const unsigned char *input, isz_t length,
     ChpegByteCode **bytecode_return, int verbose);
+
+CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
+    ChpegByteCode **bytecode_return, int verbose,
+    const ChpegByteCode *bytecode_parser);
 
 CHPEG_API const ChpegByteCode *chpeg_default_bytecode();
 

@@ -28,42 +28,44 @@ CHPEG_API void ChpegByteCode_free(ChpegByteCode *self)
 
     int i;
 
-    if (self->num_defs > 0) {
+    if (self->def_names && self->num_defs > 0) {
         for (i = 0; i < self->num_defs; ++i) {
             CHPEG_FREE(self->def_names[i]);
         }
-        if (self->def_names) {
-            CHPEG_FREE(self->def_names);
-            self->def_names = NULL;
-        }
-        if (self->def_flags) {
-            CHPEG_FREE(self->def_flags);
-            self->def_flags = NULL;
-        }
-        if (self->def_addrs) {
-            CHPEG_FREE(self->def_addrs);
-            self->def_addrs = NULL;
-        }
-        self->num_defs = 0;
+    }
+    self->num_defs = 0;
+    if (self->def_names) {
+        CHPEG_FREE(self->def_names);
+        self->def_names = NULL;
+    }
+    if (self->def_flags) {
+        CHPEG_FREE(self->def_flags);
+        self->def_flags = NULL;
+    }
+    if (self->def_addrs) {
+        CHPEG_FREE(self->def_addrs);
+        self->def_addrs = NULL;
     }
 
-    if (self->num_instructions > 0) {
-        if (self->instructions) {
-            CHPEG_FREE(self->instructions);
-            self->instructions = NULL;
-        }
-        self->num_instructions = 0;
+    if (self->instructions) {
+        CHPEG_FREE(self->instructions);
+        self->instructions = NULL;
     }
+    self->num_instructions = 0;
 
-    if (self->num_strings > 0) {
+    if (self->strings && self->num_strings > 0) {
         for (i = 0; i < self->num_strings; ++i) {
             CHPEG_FREE(self->strings[i]);
         }
+    }
+    self->num_strings = 0;
+    if (self->strings) {
         CHPEG_FREE(self->strings);
         self->strings = NULL;
+    }
+    if (self->str_len) {
         CHPEG_FREE(self->str_len);
         self->str_len = NULL;
-        self->num_strings = 0;
     }
 
 #if CHPEG_EXTENSION_REFS

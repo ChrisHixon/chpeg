@@ -80,7 +80,7 @@ CHPEG_API void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsig
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
         "%4d "
 #endif
-        "%6zu %6zu %6d %2d %3s %*s%s \"%s\"\n",
+        "%6" ISZ_FMT2 " %6" ISZ_FMT2 " %6d %2d %3s %*s%s \"%s\"\n",
 #if CHPEG_NODE_REF_COUNT && CHPEG_DEBUG_REFS
         self->ref_count,
 #endif
@@ -105,7 +105,7 @@ CHPEG_API void ChpegNode_print(ChpegNode *self, ChpegParser *parser, const unsig
     }
 }
 
-CHPEG_API ChpegNode *ChpegNode_new(ChpegOp def, size_t offset, size_t length, ChpegFlags flags)
+CHPEG_API ChpegNode *ChpegNode_new(ChpegOp def, isz_t offset, isz_t length, ChpegFlags flags)
 {
     ChpegNode *self = (ChpegNode *)CHPEG_CALLOC(1, sizeof(ChpegNode));
     self->def = def;
@@ -262,7 +262,7 @@ CHPEG_API void ChpegNode_pop_child(ChpegNode *self)
 
 #if CHPEG_UNDO
 CHPEG_API void ChpegNode_add_undo(ChpegNode *self, ChpegUndoFunction func,
-    void *data, size_t data_size)
+    void *data, isz_t data_size)
 {
     ChpegUndoAction *action = (ChpegUndoAction*)CHPEG_MALLOC(sizeof(ChpegUndoAction));
     assert(func);
@@ -289,7 +289,7 @@ CHPEG_API void ChpegNode_undo_free(ChpegNode *self, int depth)
         self->head = NULL;
 
 #if 0
-        fprintf(stderr, "ChpegNode_undo_free: UNDO depth=%d <d:%d o:%zu l:%zu f:%d>\n",
+        fprintf(stderr, "ChpegNode_undo_free: UNDO depth=%d <d:%d o:" ISZ_FMT " l:" ISZ_FMT " f:%d>\n",
             depth, self->def, self->offset, self->length, self->flags);
 #endif
 
@@ -355,13 +355,13 @@ CHPEG_API int ChpegNode_can_simplify(ChpegNode *self)
 
     ChpegNode *p = NULL;
 
-    size_t pos = self->offset + self->length; // start at end this node
+    isz_t pos = self->offset + self->length; // start at end this node
     // scanning goes backwards since child order is reversed in tree as build while parsing
 
     int cnt = 0, text = 0;
     for (p = self->head; p;) {
 #ifdef CHPEG_DEBUG_CAN_SIMPLIFY
-        fprintf(stderr, "node: <d:%d o:%zu l:%zu f:%d>, pos=%zu, cnt=%d, text=%d\n",
+        fprintf(stderr, "node: <d:%d o:" ISZ_FMT " l:" ISZ_FMT " f:%d>, pos=" ISZ_FMT ", cnt=%d, text=%d\n",
             p->def, p->offset, p->length, p->flags, pos, cnt, text);
 #endif
         assert(p->offset + p->length <= pos);
@@ -381,14 +381,14 @@ CHPEG_API int ChpegNode_can_simplify(ChpegNode *self)
     // if we have one candidate node and no text nodes, we can simplify
     if (cnt == 1 && !text) {
 #ifdef CHPEG_DEBUG_CAN_SIMPLIFY
-        fprintf(stderr, "can simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+        fprintf(stderr, "can simplify node: <d:%d o:" ISZ_FMT " l:" ISZ_FMT " f:%d>, cnt=%d, text=%d\n",
             self->def, self->offset, self->length, self->flags,
             cnt, text);
 #endif
         return 1;
     }
 #ifdef CHPEG_DEBUG_CAN_SIMPLIFY
-    fprintf(stderr, "can't simplify node: <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+    fprintf(stderr, "can't simplify node: <d:%d o:" ISZ_FMT " l:" ISZ_FMT " f:%d>, cnt=%d, text=%d\n",
         self->def, self->offset, self->length, self->flags,
         cnt, text);
 #endif
@@ -629,7 +629,7 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
         fprintf(fp, " OFFSET   LEN     ID NC DP FLG IDENT \"DATA\"\n");
     }
 
-    fprintf(fp, "%6zu %6zu %6d %2d %2d %3s %*s%s \"%s\"\n",
+    fprintf(fp, "%6" ISZ_FMT2 " %6" ISZ_FMT2 " %6d %2d %2d %3s %*s%s \"%s\"\n",
         self->node->offset,
         self->node->length,
         self->node->def,
@@ -666,7 +666,7 @@ CHPEG_API void chpeg_undo_mark(ChpegNode *node, void *_data)
 {
     ChpegUndoMarkData *data = (ChpegUndoMarkData *)_data;
 #if 0
-    fprintf(stderr, "chpeg_undo_mark: <o:%zu l:%zu f:%d>\n",
+    fprintf(stderr, "chpeg_undo_mark: <o:" ISZ_FMT " l:" ISZ_FMT " f:%d>\n",
         data->value.offset, data->value.length, data->value.flags);
 #endif
     for (ChpegNode *p = node; p; p = p->parent) {
@@ -773,7 +773,7 @@ CHPEG_API void ChpegParser_free(ChpegParser *self)
     }
 }
 
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, size_t input_length, FILE *fp)
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, isz_t input_length, FILE *fp)
 {
 #ifdef CHPEG_DEFINITION_TRACE
     int itotal_def_count = 0, itotal_def_succ_count = 0, itotal_def_fail_count = 0;
@@ -798,7 +798,7 @@ CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *in
 
 #if CHPEG_VM_PROFILE
 CHPEG_API void ChpegParser_print_profile(ChpegParser *self,
-    const unsigned char *input, size_t length, FILE *fp)
+    const unsigned char *input, isz_t length, FILE *fp)
 {
     fprintf(fp, "Instructions executed:\n");
     fprintf(fp, "%6s %8s %11s %6s\n", "OP-", "opcode", "count", "%");
@@ -845,14 +845,14 @@ CHPEG_API void ChpegParser_print_profile(ChpegParser *self,
     fprintf(fp, "%9s %4s %11d %6.2f %11d %11d  %s\n", "CHOICE=", "--",
         total_choice, 100.0, total_cisucc, total_cifail, "--");
 
-    fprintf(fp, "\nFarthest backtrack: %zu\n", self->farthest_backtrack);
+    fprintf(fp, "\nFarthest backtrack: " ISZ_FMT "\n", self->farthest_backtrack);
 
     fprintf(fp, "\nInstructions executed: %d, instructions per input byte: %.2f\n",
         self->prof_inst_cnt, (float)self->prof_inst_cnt / (float)length);
 }
 #endif
 
-CHPEG_API void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc)
+CHPEG_API void ChpegParser_expected(ChpegParser *self, isz_t offset, int depth, int def, int pc)
 {
     if (offset >= self->error_offset) {
         if (offset > self->error_offset) {
@@ -932,7 +932,7 @@ CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *
                     str = buf;
                     break;
             }
-            fprintf(stderr, "%s \"%s\" in %s at:%d:%d offset %lu\n",
+            fprintf(stderr, "%s \"%s\" in %s at:%d:%d offset " ISZ_FMT "\n",
                     self->error_expected ? "Expected" : "Unexpected",
                     str ? str : (esc ? esc : "<NULL>"),
                     def_name ? def_name : "<N/A>",
@@ -944,14 +944,14 @@ CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *
         }
         else {
             if (parent_def_name) {
-                fprintf(stderr, "%s %s in %s at:%d:%d offset %lu\n",
+                fprintf(stderr, "%s %s in %s at:%d:%d offset " ISZ_FMT "\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         parent_def_name ? parent_def_name : "<N/A>",
                         line, col, self->error_offset);
             }
             else {
-                fprintf(stderr, "%s %s at:%d:%d offset %lu\n",
+                fprintf(stderr, "%s %s at:%d:%d offset " ISZ_FMT "\n",
                         self->error_expected ? "Expected" : "Unexpected",
                         def_name ? def_name : "<N/A>",
                         line, col, self->error_offset);
@@ -970,7 +970,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
 {
 #if ERRORS
     if (self->errors_size == 0) {
-        fprintf(stderr, "No errors detected / tracked.\n");
+        chpeg_show_message(1, "No errors detected / tracked.\n");
         return;
     }
 
@@ -1009,7 +1009,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         switch (op) {
             case CHPEG_OP_IDENT:
                 str = ChpegByteCode_def_name(self->bc, arg);
-                fprintf(stderr, "%11s %*s%s in %s at offset %lu\n",
+                chpeg_show_message(1, "%11s %*s%s in %s at offset " ISZ_FMT "\n",
                     expected,
                     depth_indent, "",
                     str ? str : "<N/A>>",
@@ -1019,7 +1019,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
             case CHPEG_OP_LIT:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                fprintf(stderr, "%11s %*s\"%s\" in %s at offset %lu\n",
+                chpeg_show_message(1, "%11s %*s\"%s\" in %s at offset " ISZ_FMT "\n",
                     expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
@@ -1030,7 +1030,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
             case CHPEG_OP_CHRCLS:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                fprintf(stderr, "%11s %*s[%s] in %s at offset %lu\n",
+                chpeg_show_message(1, "%11s %*s[%s] in %s at offset " ISZ_FMT "\n",
                     expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
@@ -1039,14 +1039,14 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
                 CHPEG_FREE(esc); esc = NULL;
                 break;
             case CHPEG_OP_DOT:
-                fprintf(stderr, "%11s %*scharacter in %s at offset %lu\n",
+                chpeg_show_message(1, "%11s %*scharacter in %s at offset " ISZ_FMT "\n",
                     expected,
                     depth_indent, "",
                     def_name ? def_name : "<N/A>",
                     self->error_offset);
                 break;
             default: // unhandled op, show instruction in <> for debugging
-                fprintf(stderr, "%11s %*sSyntax error in %s at offset %lu <%s,%d>\n",
+                chpeg_show_message(1, "%11s %*sSyntax error in %s at offset " ISZ_FMT " <%s,%d>\n",
                     "Error:",
                     depth_indent, "",
                     def_name ? def_name : "<N/A>",
@@ -1056,7 +1056,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         }
     }
 #else
-    fprintf(stderr, "Error tracking disabled at compile time.\n");
+    chpeg_show_message(1, "Error tracking disabled at compile time.\n");
 #endif
 }
 
@@ -1095,7 +1095,7 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 #define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
 #define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
 
-CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
+CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, isz_t length, isz_t *consumed)
 {
     int locked = 0, cur_def = -1, retval = 0, i = 0;
 
@@ -1144,7 +1144,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     int packrat_index = 0;
     int packrat_flags = 0;
     int window_size = 0;
-    size_t window_end = 0;
+    isz_t window_end = 0;
     int poffset = 0, plen = 0, loop_end = 0;
 
     if (self->packrat) {
@@ -1156,8 +1156,10 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
             window_size = length + 1;
             window_end = length + 1;
         }
-        packrat = (ChpegPNode **)CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
-        packrat_no_match = (ChpegPNode*)CHPEG_CALLOC(1, sizeof(ChpegPNode));
+        packrat = CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
+
+        // packrat_no_match is a negative cache meaning match failure (attempted match, but match failed)
+        packrat_no_match = (ChpegPNode *)&packrat_no_match; // need a unique, non-valid PNode pointer
         assert(packrat_no_match != NULL);
     }
 
@@ -1175,7 +1177,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     const char *def_name = NULL;
 #endif
 
-    size_t offset = 0;
+    isz_t offset = 0;
     int op = 0, arg = 0, pc = 0, top = 0, tree_top = 0;
 #if SANITY_CHECKS || CHPEG_VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
@@ -1183,7 +1185,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
 #endif
 
-    size_t stack[max_stack_size];
+    isz_t stack[max_stack_size];
     ChpegNode *tree_stack[max_tree_depth];
 
     if (CHPEG_CHECK_STACK_OVERFLOW(1)) {
@@ -1214,7 +1216,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
     memset(self->prof_cisucc_cnt, 0, self->bc->num_defs * sizeof(int));
     memset(self->prof_cifail_cnt, 0, self->bc->num_defs * sizeof(int));
     self->farthest_backtrack = 0;
-    size_t max_offset = 0;
+    isz_t max_offset = 0;
 #endif
 
 #if SANITY_CHECKS || CHPEG_VM_TRACE
@@ -1265,7 +1267,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 case CHPEG_OP_TRIM:
 #endif
                     def_name = ChpegByteCode_def_name(self->bc, arg);
-                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s%s\n",
+                    fprintf(stderr, "=%8llu %8" ISZ_FMT2 " %8d %12s %5d %*s%s\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         def_name ? def_name : "<INVALID>");
                     def_name = NULL;
@@ -1274,13 +1276,13 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 case CHPEG_OP_CHRCLS:
                     esc_str = chpeg_esc_bytes(
                         strings[arg], str_len[arg], 28);
-                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s\"%s\"\n",
+                    fprintf(stderr, "=%8llu %8" ISZ_FMT2 " %8d %12s %5d %*s\"%s\"\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "",
                         esc_str ? esc_str : "<NULL>");
                     if (esc_str) { CHPEG_FREE(esc_str); esc_str = NULL; }
                     break;
                 default:
-                    fprintf(stderr, "=%8llu %8lu %8d %12s %5d %*s-\n",
+                    fprintf(stderr, "=%8llu %8" ISZ_FMT2 " %8d %12s %5d %*s-\n",
                         cnt, offset, pc, Chpeg_op_name(op), arg, tree_top*2, "");
             }
         }
@@ -1316,7 +1318,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                         if (offset - window_end >= window_size) {
 #if CHPEG_VM_TRACE
                             if (self->vm_trace & 2) {
-                                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
+                                fprintf(stderr, "packrat MOVE WINDOW END from " ISZ_FMT " to " ISZ_FMT " "
                                     "(CLEAR ENTIRE WINDOW)\n", window_end, offset);
                             }
 #endif
@@ -1332,8 +1334,8 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                         else {
 #if CHPEG_VM_TRACE
                             if (self->vm_trace & 2) {
-                                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
-                                    "(CLEAR WINDOW from %zu to %zu)\n",
+                                fprintf(stderr, "packrat MOVE WINDOW END from " ISZ_FMT " to " ISZ_FMT " "
+                                    "(CLEAR WINDOW from " ISZ_FMT " to " ISZ_FMT ")\n",
                                     window_end, offset,
                                     (window_end + 1) % window_size, offset % window_size);
                             }
@@ -1906,7 +1908,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
-                    fprintf(stderr, "+    MARK: START  ref %d (%12s) offset=%zu\n",
+                    fprintf(stderr, "+    MARK: START  ref %d (%12s) offset=" ISZ_FMT "\n",
                         arg, ChpegByteCode_ref_name(self->bc, arg), offset);
                 }
 #endif
@@ -1951,7 +1953,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                 if (self->vm_trace & 8) {
                     char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
                     fprintf(stderr, "+   MARKS: SET    ref %d (%12s) "
-                        "tlevel=%d <offset:%zu length:%zu data:\"%s\">\n",
+                        "tlevel=%d <offset:" ISZ_FMT " length:" ISZ_FMT " data:\"%s\">\n",
                         (int)stack[top], ChpegByteCode_ref_name(self->bc, stack[top]), i,
                         ref->offset, ref->length, esc);
                     CHPEG_FREE(esc);
@@ -2013,7 +2015,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
-                    fprintf(stderr, "+     REF: LOOKUP ref %d (%12s) offset=%zu\n",
+                    fprintf(stderr, "+     REF: LOOKUP ref %d (%12s) offset=" ISZ_FMT "\n",
                         arg, ChpegByteCode_ref_name(self->bc, arg), offset);
                 }
 #endif
@@ -2021,7 +2023,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                     ref = &tree_stack[i]->refs[arg];
 #if CHPEG_VM_TRACE
                     if (self->vm_trace & 8) {
-                        fprintf(stderr, "+     REF: SEARCH ref %d (%12s) tlevel=%d <f:%d o:%zu l:%zu>\n",
+                        fprintf(stderr, "+     REF: SEARCH ref %d (%12s) tlevel=%d <f:%d o:" ISZ_FMT " l:" ISZ_FMT ">\n",
                             arg, ChpegByteCode_ref_name(self->bc, arg), i,
                             ref->flags, ref->offset, ref->length);
                     }
@@ -2034,7 +2036,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
                             if (self->vm_trace & 8) {
                                 char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
                                 fprintf(stderr, "+     REF: MATCH  ref %d (%12s) tlevel=%d "
-                                    "<f:%d o:%zu l:%zu> data:\"%s\"\n",
+                                    "<f:%d o:" ISZ_FMT " l:" ISZ_FMT "> data:\"%s\"\n",
                                     arg, ChpegByteCode_ref_name(self->bc, arg), i,
                                     ref->flags, ref->offset, ref->length, esc);
                                 CHPEG_FREE(esc);
@@ -2052,7 +2054,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, s
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
                     char *esc = chpeg_esc_bytes(input + ref->offset, ref->length, 40);
-                    fprintf(stderr, "+     REF: NOMAT  ref %d (%12s) offset=%zu\n",
+                    fprintf(stderr, "+     REF: NOMAT  ref %d (%12s) offset=" ISZ_FMT "\n",
                         arg, ChpegByteCode_ref_name(self->bc, arg), offset);
                     CHPEG_FREE(esc);
                 }
@@ -2327,9 +2329,6 @@ done:
             }
         }
         CHPEG_FREE(packrat);
-    }
-    if (packrat_no_match) {
-        CHPEG_FREE(packrat_no_match);
     }
 #endif
 

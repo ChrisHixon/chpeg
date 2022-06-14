@@ -10,14 +10,14 @@
 #endif
 
 void usage(const char *prog) {
-    fprintf(stderr, "usage: %s [-s [0 1 2]] [<grammar>] <input>\n", prog);
-    fprintf(stderr, "   or: %s [-s [0 1 2]] --cbytecode basename <grammar>\n", prog);
+    chpeg_show_message(1, "usage: %s [-s [0 1 2]] [<grammar>] <input>\n", prog);
+    chpeg_show_message(1, "   or: %s [-s [0 1 2]] --cbytecode basename <grammar>\n", prog);
 }
 
 int main(int argc, char *argv[])
 {
     unsigned char *input = NULL;
-    size_t length = 0;
+    isz_t length = 0;
     ChpegByteCode *byte_code = NULL;
     ChpegParser *parser = NULL;
     int parse_result = 0;
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 
         // Read the grammar file into input
         if (chpeg_read_file(grammar_filename, &input, &length) != 0) {
-            fprintf(stderr, "Could not read grammar file: %s\n", grammar_filename);
+            chpeg_show_message(1, "Could not read grammar file: %s\n", grammar_filename);
             ret = 2;
             goto done;
         }
@@ -69,12 +69,12 @@ int main(int argc, char *argv[])
         // Compile the grammar file into byte_code
         parse_result = chpeg_compile(input, length, &byte_code, 1);
         if (parse_result != 0) {
-            fprintf(stderr, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
+            chpeg_show_message(1, "Grammar file failed to compile. Parser returned: %d\n", parse_result);
             ret = 3;
             goto done;
         }
         else {
-            fprintf(stderr, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
+            chpeg_show_message(1, "Grammar file compiled successfully. Parser returned: %d\n", parse_result);
         }
 
         // uncomment to print a dump of the byte code (defs, instructions, and strings)
@@ -108,12 +108,12 @@ int main(int argc, char *argv[])
     }
     // Otherwise, use default chpeg grammar
     else {
-        fprintf(stderr, "Using default chpeg grammar\n");
+        chpeg_show_message(1, "Using default chpeg grammar\n");
     }
 
     // Read the file to parse into input
     if (chpeg_read_file(input_filename, &input, &length) != 0) {
-        fprintf(stderr, "Could not read file: %s\n", input_filename);
+        chpeg_show_message(1, "Could not read file: %s\n", input_filename);
         ret = 4;
         goto done;
     }
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
     parser->vm_print_tree = 0;
 #endif
 
-    size_t consumed = 0;
+    isz_t consumed = 0;
     parse_result = ChpegParser_parse(parser, input, length, &consumed);
     if (parse_result == 0) {
         if (consumed == length) {
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     }
     else {
         if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-            printf("Extraneous input: parse consumed %lu bytes out of %lu\n", consumed, length);
+            printf("Extraneous input: parse consumed " ISZ_FMT " bytes out of " ISZ_FMT "\n", consumed, length);
         }
         else {
             printf("Parse failed with result: %d\n", parse_result);

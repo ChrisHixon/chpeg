@@ -31,6 +31,13 @@
 // CNode: compilation unit node
 //
 
+enum ChpegCNodeBits
+{
+    CHPEG_CNODE_CONSUMES            = 1<<1,
+    CHPEG_CNODE_CONSUME_RESOLVED    = 1<<2,
+    CHPEG_CNODE_REFERENCED          = 1<<3,
+};
+
 typedef struct _ChpegCNode
 {
     ChpegNode *node;
@@ -40,11 +47,14 @@ typedef struct _ChpegCNode
     int parent_next_state;
     int parent_fail_state;
 
+    // various use
     union {
         unsigned char cval[4];
         int ival;
     } val;
     int value_len;
+
+    int bits; // various use
 
     int num_children;
     struct _ChpegCNode *head;
@@ -125,12 +135,13 @@ typedef struct _ChpegCU
     ChpegCNode *root;
     int strings_allocated;
     int refs_allocated;
+    int undefined_identifiers;
 } ChpegCU;
 
 static int ChpegCU_find_def(ChpegCU *cu, ChpegCNode *ident);
 
 #if CHPEG_EXTENSION_TRIM
-static ChpegCNode *ChpegCU_find_def_node(ChpegCU *cu, ChpegCNode *cnode)
+static ChpegCNode *ChpegCU_find_parent_def_node(ChpegCU *cu, ChpegCNode *cnode)
 {
     ChpegCNode *parent = cnode;
     for (; parent && parent != cu->root; parent = parent->parent) {
@@ -201,7 +212,7 @@ static void ChpegCU_print(ChpegCU *cu, ChpegCNode *cnode, const unsigned char *i
         fprintf(stderr, " Begin    Len  DefID    Parse  PNext  PFail  Flags  Def. Name / Data\n");
         fprintf(stderr, "---------------------------------------------------------------------------------\n");
     }
-    fprintf(stderr, "%6zu %6zu %6d | %6d %6d %6d | %3s | %*s%s \"%s\"\n",
+    fprintf(stderr, "%6" ISZ_FMT2 " %6" ISZ_FMT2 " %6d | %6d %6d %6d | %3s | %*s%s \"%s\"\n",
         node ? node->offset : -1,
         node ? node->length : -1,
         cnode->type,
@@ -241,6 +252,11 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
     for (int def_id = 0; cdef; cdef = cdef->next, ++def_id) {
         assert (cdef->type == CHPEG_BC(DEFINITION));
 
+        // mark def_id as referenced, as it is 'referenced' as the start rule
+        if (def_id == 0) {
+            cdef->bits |= CHPEG_CNODE_REFERENCED;
+        }
+
         // stash the def_id in the DEFINITION cnode
         cdef->val.ival = def_id;
 
@@ -248,12 +264,18 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
         assert (cident->type == CHPEG_BC(IDENTIFIER));
 
         if (ChpegCU_find_def(cu, cident) >= 0) {
+            isz_t line, col;
+            chpeg_line_col(cu->input, cident->node->offset, &line, &col);
             char *tmp = chpeg_esc_bytes(cu->input + cident->node->offset, cident->node->length, 0);
-            fprintf(stderr, "Definition '%s' is already defined.\n", tmp);
+            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Definition '%s' is already defined.\n",
+                line, col, tmp);
             CHPEG_FREE(tmp);
             err = 1;
             goto done;
         }
+
+        // also store the def_id in the identifier node
+        cident->val.ival = def_id;
 
         cu->bc->def_names[def_id] = (char *)CHPEG_MALLOC(1 + cident->node->length);
         ++cu->bc->num_defs;
@@ -431,8 +453,10 @@ static inline void ChpegCU_add_inst(ChpegCU *cu, int inst)
     cu->bc->instructions[cu->bc->num_instructions++] = inst;
 }
 
-static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
+static int ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
 {
+    int err = 0;
+
     int def_id = 0;
 #if CHPEG_EXTENSION_REFS
     int ref_id = 0;
@@ -443,19 +467,26 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_FAIL, 0));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_SUCC, 0));
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
-                ChpegCU_add_instructions(cu, p);
+                if ((err = ChpegCU_add_instructions(cu, p)) != 0) {
+                    goto done;
+                }
             }
             break;
         case CHPEG_BC(DEFINITION):
-            def_id = ChpegCU_find_def(cu, cnode->head);
-            ChpegCU_add_instructions(cu, cnode->head->next);
+            def_id = cnode->val.ival;
+            assert(def_id >= 0 && def_id < cu->bc->num_defs);
+            if ((err = ChpegCU_add_instructions(cu, cnode->head->next)) != 0) {
+                goto done;
+            }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_ISUCC, def_id));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IFAIL, def_id));
             break;
         case CHPEG_BC(CHOICE):
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHOICE, 0));
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
-                ChpegCU_add_instructions(cu, p);
+                if ((err = ChpegCU_add_instructions(cu, p)) != 0) {
+                    goto done;
+                }
                 ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CISUCC, cnode->parent_next_state));
                 ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CIFAIL, 0));
             }
@@ -465,17 +496,24 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 p->parent_next_state = p->next ? p->next->parse_state : cnode->parent_next_state;
                 p->parent_fail_state = cnode->parent_fail_state;
-                ChpegCU_add_instructions(cu, p);
+                if ((err = ChpegCU_add_instructions(cu, p)) != 0) {
+                    goto done;
+                }
+
             }
             break;
 #if CHPEG_EXTENSION_TRIM
         case CHPEG_BC(TRIM):
             {
-                ChpegCNode *def_node = ChpegCU_find_def_node(cu, cnode);
-                def_id = def_node ? def_node->val.ival : 0;
+                ChpegCNode *def_node = ChpegCU_find_parent_def_node(cu, cnode);
+                assert(def_node);
+                def_id = def_node->val.ival;
+                assert(def_id >= 0 && def_id < cu->bc->num_defs);
             }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIM, def_id)); // def_id is informational only
-            ChpegCU_add_instructions(cu, cnode->head);
+            if ((err = ChpegCU_add_instructions(cu, cnode->head)) != 0) {
+                goto done;
+            }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMS, cnode->parent_next_state));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_TRIMF, cnode->parent_fail_state));
             break;
@@ -484,7 +522,9 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
         case CHPEG_BC(MARK):
             ref_id = ChpegCU_find_ref(cu, cnode);
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARK, ref_id));
-            ChpegCU_add_instructions(cu, cnode->head->next);
+            if ((err = ChpegCU_add_instructions(cu, cnode->head->next)) != 0) {
+                goto done;
+            }
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKS, cnode->parent_next_state));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_MARKF, cnode->parent_fail_state));
             break;
@@ -500,19 +540,25 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
                 switch (op) {
                     case '+':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPBEG, 0));
-                        ChpegCU_add_instructions(cu, cnode->head);
+                        if ((err = ChpegCU_add_instructions(cu, cnode->head)) != 0) {
+                            goto done;
+                        }
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPMAT, cnode->head->parse_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RPDONE, cnode->parent_fail_state));
                         break;
                     case '*':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSBEG, 0));
-                        ChpegCU_add_instructions(cu, cnode->head);
+                        if ((err = ChpegCU_add_instructions(cu, cnode->head)) != 0) {
+                            goto done;
+                        }
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSMAT, cnode->head->parse_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RSDONE, 0));
                         break;
                     case '?':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQBEG, 0));
-                        ChpegCU_add_instructions(cu, cnode->head);
+                        if ((err = ChpegCU_add_instructions(cu, cnode->head)) != 0) {
+                            goto done;
+                        }
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQMAT, 0));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RQDONE, 0));
                         break;
@@ -525,13 +571,17 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
                 switch (op) {
                     case '&':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDA, 0));
-                        ChpegCU_add_instructions(cu, cnode->head->next);
+                        if ((err = ChpegCU_add_instructions(cu, cnode->head->next)) != 0) {
+                            goto done;
+                        }
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHS, cnode->parent_fail_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATF, cnode->parent_fail_state));
                         break;
                     case '!':
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PREDN, 0));
-                        ChpegCU_add_instructions(cu, cnode->head->next);
+                        if ((err = ChpegCU_add_instructions(cu, cnode->head->next)) != 0) {
+                            goto done;
+                        }
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PMATCHF, cnode->parent_fail_state));
                         ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_PNOMATS, cnode->parent_fail_state));
                         break;
@@ -542,7 +592,9 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_DOT, cnode->parent_fail_state));
             break;
         case CHPEG_BC(IDENTIFIER):
-            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, ChpegCU_find_def(cu, cnode)));
+            def_id = cnode->val.ival;
+            assert(def_id >= 0 && def_id < cu->bc->num_defs);
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_IDENT, def_id));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
         case CHPEG_BC(CHARCLASS):
@@ -565,6 +617,9 @@ static void ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             }
             break;
     }
+
+done:
+    return err;
 }
 
 static int ChpegCU_alloc_string(ChpegCU *cu, const unsigned char *str, int len)
@@ -860,6 +915,367 @@ done:
 
 #endif
 
+static ChpegCNode *ChpegCU_find_def_node(ChpegCU *cu, int def_id)
+{
+    for (ChpegCNode *cdef = cu->root->head; cdef; cdef = cdef->next) {
+        if (cdef->val.ival == def_id) {
+            return cdef;
+        }
+    }
+    return NULL;
+}
+
+// marks identifiers with the definition id they refer to
+// detects undefined identifiers
+// marks definitions as referenced
+static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
+{
+    int err = 0;
+
+    if (!cnode) { cnode = cu->root; }
+
+    switch (cnode->type) {
+        case CHPEG_BC(DEFINITION):
+            // This is an override of default case that recursively explores the AST...
+            // We want to explore the rule definition (cnode->head->next), but not
+            // the definition name Identifier (cnode->head).
+            if ( (err = ChpegCU_setup_identifiers(cu, cnode->head->next)) != 0) {
+                goto done;
+            }
+            break;
+        case CHPEG_BC(IDENTIFIER):
+            {
+                int def_id = ChpegCU_find_def(cu, cnode);
+                if (def_id < 0) {
+                    char *tmp = chpeg_esc_bytes(cu->input + cnode->node->offset,
+                        cnode->node->length, 0);
+                    isz_t line, col;
+                    chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                    chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Identifier '%s' is not defined.\n",
+                        line, col, tmp);
+                    CHPEG_FREE(tmp);
+                    cu->undefined_identifiers++;
+                    break;
+                }
+
+                // store the def_id in the identifier node
+                assert(def_id < cu->bc->num_defs);
+                cnode->val.ival = def_id;
+
+                // mark the definition as referenced
+                ChpegCNode *cdef = ChpegCU_find_def_node(cu, def_id);
+                assert(cdef);
+                cdef->bits |= CHPEG_CNODE_REFERENCED;
+            }
+            break;
+#if CHPEG_EXTENSION_REFS
+// these IDENTIFIER refer to references not definitions
+        case CHPEG_BC(MARK):
+        case CHPEG_BC(REFERENCE):
+            break;
+#endif
+        default:
+            for (ChpegCNode *p = cnode->head; p; p = p->next) {
+                if ( (err = ChpegCU_setup_identifiers(cu, p)) != 0) {
+                    goto done;
+                }
+            }
+            break;
+    }
+
+done:
+    return err;
+}
+
+static int ChpegCU_warn_unreferenced(ChpegCU *cu)
+{
+    for (ChpegCNode *cdef = cu->root->head; cdef; cdef = cdef->next) {
+        assert(cdef->type == CHPEG_BC(DEFINITION));
+        if (!(cdef->bits & CHPEG_CNODE_REFERENCED)) {
+            isz_t line, col;
+            chpeg_line_col(cu->input, cdef->node->offset, &line, &col);
+            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Definition '%s' is not referenced.\n",
+                line, col, ChpegByteCode_def_name(cu->bc, cdef->val.ival));
+        }
+    }
+    return 0;
+}
+
+
+// TODO: clean up left recursion stuff, refactor, deal with errors in a better way.
+// We could easily show the whole ident path that led to left recursion using the stack.
+#define CHPEG_LR_STACK_SIZE 4096
+typedef struct _ChpegLR {
+    ChpegByteCode *bc; // for debugging print
+    ChpegCNode *cnodes[CHPEG_LR_STACK_SIZE];
+    int consumes[CHPEG_LR_STACK_SIZE];
+    int top;
+    int errors;
+} ChpegLR;
+
+#if CHPEG_DEBUG_LR
+static void ChpegLR_show(ChpegLR *lr)
+{
+    fprintf(stderr, "LR: ");
+    for (int i = 1; i <= lr->top; ++i) {
+        if (lr->cnodes[i]->type == CHPEG_BC(IDENTIFIER)) {
+            fprintf(stderr, "| %s:%s %d ",
+                ChpegByteCode_def_name(chpeg_default_bytecode(), lr->cnodes[i]->type),
+                ChpegByteCode_def_name(lr->bc, lr->cnodes[i]->val.ival),
+                lr->consumes[i]);
+        }
+        else {
+            fprintf(stderr, "| %s %d ",
+                ChpegByteCode_def_name(chpeg_default_bytecode(), lr->cnodes[i]->type),
+                lr->consumes[i]);
+        }
+    }
+    fprintf(stderr, "\n");
+}
+#endif
+
+static void ChpegLR_push(ChpegLR *lr, ChpegCNode *cnode, int consumes)
+{
+    ++lr->top;
+    assert(lr->top >= 0 && lr->top < CHPEG_LR_STACK_SIZE);
+    lr->cnodes[lr->top] = cnode;
+    lr->consumes[lr->top] = consumes;
+#if CHPEG_DEBUG_LR >= 3
+    ChpegLR_show(lr);
+#endif
+}
+
+static void ChpegLR_pop(ChpegLR *lr)
+{
+    --lr->top;
+    assert(lr->top >= 0 && lr->top < CHPEG_LR_STACK_SIZE);
+#if CHPEG_DEBUG_LR >= 3
+    ChpegLR_show(lr);
+#endif
+}
+
+// Does cnode consume, in all cases? Detects left recursion and infinite loops.
+// Note: we need to visit all child nodes even if we know whether or not something consumes.
+// returns: 1 if consumes, 0 if doesn't consume
+static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
+{
+#if CHPEG_DEBUG_LR >= 2
+    fprintf(stderr, "%s: %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
+            chpeg_default_bytecode(), cnode->type),
+            !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
+#endif
+
+    // Have we already resolved whether or not this consumes?
+    // If so, return result. This is necessary on complex grammars, or we'll spend
+    // all day trying every possible choice combo/path.
+    if (cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED) {
+        return !!(cnode->bits & CHPEG_CNODE_CONSUMES);
+    }
+
+    int consumes = 0, def_id = 0;
+
+    switch (cnode->type) {
+        case CHPEG_BC(IDENTIFIER):
+            {
+                def_id = cnode->val.ival;
+                assert(def_id >= 0 && def_id < cu->bc->num_defs);
+
+                // check if RESOLVED already, via the def node
+                ChpegCNode *cdef = ChpegCU_find_def_node(cu, def_id);
+                assert(cdef);
+
+                if (cdef->bits & CHPEG_CNODE_CONSUME_RESOLVED) {
+#if CHPEG_DEBUG_LR >= 1
+                    fprintf(stderr, "IDENTIFIER %s(%d) RESOLVED\n",
+                        ChpegByteCode_def_name(cu->bc, def_id), def_id);
+#endif
+                    return !!(cdef->bits & CHPEG_CNODE_CONSUMES);
+                }
+
+#if CHPEG_DEBUG_LR >= 1
+                fprintf(stderr, "IDENTIFIER %s(%d)\n",
+                    ChpegByteCode_def_name(cu->bc, def_id), def_id);
+#if CHPEG_DEBUG_LR >= 3
+                ChpegLR_show(lr);
+#endif
+#endif
+
+                // Look back into the stack and see if this ident exists.
+                // If so, and there was no consumption between that point and now,
+                // we have left recursion.
+                int consumed = 0;
+                // scan backwards
+                for (int i = lr->top; i > 0; --i) {
+                    assert(lr->cnodes[i]);
+                    // found matching IDENT
+                    if (lr->cnodes[i]->type == CHPEG_BC(IDENTIFIER) &&
+                        lr->cnodes[i]->val.ival == def_id)
+                    {
+                        // scan forward looking for consuming
+                        for (int j = i; j <= lr->top; ++j) {
+                            if (lr->consumes[j] > 0) {
+                                consumed = 1; break;
+                            }
+                        }
+                        if (consumed == 0) {
+                            isz_t line, col;
+                            chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                            chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Left recursion detected in '%s'.\n",
+                                line, col, ChpegByteCode_def_name(cu->bc, def_id));
+                            lr->errors++;
+#if CHPEG_DEBUG_LR >= 1
+                            ChpegLR_show(lr);
+#endif
+
+                            consumes = 0;
+                        }
+                        else {
+#if CHPEG_DEBUG_LR >= 1
+                            // not an error
+                            fprintf(stderr, "recursion with consume detected in %s at offset " ISZ_FMT "\n",
+                                ChpegByteCode_def_name(cu->bc, def_id), cnode->node->offset);
+#endif
+                            consumes = 1;
+                        }
+                        goto done;
+                    }
+                }
+
+
+                ChpegLR_push(lr, cnode, 0);
+                consumes = ChpegCU_consumes(cu, cdef->head->next, lr);
+                ChpegLR_pop(lr);
+
+                // record RESOLVED state in the definition node
+                assert(!(cdef->bits & CHPEG_CNODE_CONSUME_RESOLVED));
+                cdef->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
+                cdef->bits &= ~CHPEG_CNODE_CONSUMES;
+                cdef->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
+
+#if CHPEG_DEBUG_LR >= 1
+                    fprintf(stderr, "DEF %s(%d) MARKED RESOLVED\n",
+                        ChpegByteCode_def_name(cu->bc, def_id), def_id);
+#endif
+
+            }
+            break;
+
+        case CHPEG_BC(CHOICE):
+            // if any choice branches do not consume, choice does not consume...
+            ChpegLR_push(lr, cnode, 0);
+            consumes = 1;
+            for (ChpegCNode * child = cnode->head; child; child = child->next) {
+                if (!ChpegCU_consumes(cu, child, lr)) {
+                    consumes = 0;
+                }
+                lr->consumes[lr->top] = 0; // reset consume tracking for each branch
+            }
+            ChpegLR_pop(lr);
+            break;
+
+        case CHPEG_BC(SEQUENCE):
+            // if any parts of sequence consume, sequence consumes...
+            consumes = 0;
+            for (ChpegCNode * child = cnode->head; child; child = child->next) {
+                if ( (ChpegCU_consumes(cu, child, lr)) != 0) {
+                    consumes = 1;
+                    lr->consumes[lr->top] = 1;
+                }
+            }
+            break;
+
+#if CHPEG_EXTENSION_TRIM
+        case CHPEG_BC(TRIM):
+            // is push/pop necessary in this case?
+            ChpegLR_push(lr, cnode, 0);
+            consumes = ChpegCU_consumes(cu, cnode->head, lr);
+            ChpegLR_pop(lr);
+            break;
+#endif
+
+#if CHPEG_EXTENSION_REFS
+        case CHPEG_BC(MARK):
+            // is push/pop necessary in this case?
+            ChpegLR_push(lr, cnode, 0);
+            consumes = ChpegCU_consumes(cu, cnode->head->next, lr);
+            ChpegLR_pop(lr);
+            break;
+
+        case CHPEG_BC(REFERENCE):
+            consumes = 1;
+            break;
+#endif
+
+        case CHPEG_BC(REPEAT):
+            {
+                ChpegLR_push(lr, cnode, 0);
+                consumes = ChpegCU_consumes(cu, cnode->head, lr);
+                ChpegLR_pop(lr);
+                if (!consumes) {
+                    isz_t line, col;
+                    chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                    chpeg_show_message(1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
+                        line, col);
+                    lr->errors++;
+                    consumes = 0;
+                    break;
+                }
+                unsigned char op = cu->input[cnode->head->next->node->offset];
+                switch (op) {
+                    case '+':
+                        consumes = 1;
+                        break;
+                    default:
+                        consumes = 0;
+                        break;
+                }
+                break;
+            }
+
+        case CHPEG_BC(PREDICATE):
+            ChpegLR_push(lr, cnode, 0);
+            ChpegCU_consumes(cu, cnode->head->next, lr);
+            ChpegLR_pop(lr);
+            consumes = 0;
+            break;
+
+        case CHPEG_BC(DOT):
+        case CHPEG_BC(CHARCLASS):
+        case CHPEG_BC(LITERAL):
+            consumes = 1;
+            break;
+
+        default:
+            chpeg_abort("unhandled cnode->type case");
+            break;
+    }
+
+done:
+    assert(!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
+    cnode->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
+    cnode->bits &= ~CHPEG_CNODE_CONSUMES;
+    cnode->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
+    return consumes;
+}
+
+static int ChpegCU_detect_left_recursion(ChpegCU *cu)
+{
+    ChpegLR lr = (ChpegLR) { 0 };
+
+    lr.bc = cu->bc;
+
+    for (ChpegCNode *cdef = cu->root->head; cdef; cdef = cdef->next) {
+        assert(lr.top == 0);
+#if CHPEG_DEBUG_LR >= 1
+        fprintf(stderr, "GRAMMAR DEF %s(%d)\n",
+            ChpegByteCode_def_name(cu->bc, cdef->val.ival), cdef->val.ival);
+#endif
+        ChpegCU_consumes(cu, cdef->head, &lr); // send it identifier (first child)
+    }
+
+    return lr.errors;
+}
+
 // Compiler sanity check: assert def names looked up via CHPEG_DEF_* macros
 // match what is expected. This might help detect mismatches of included
 // bytecode header vs. linked bytecode.
@@ -902,7 +1318,7 @@ CHPEG_API void chpeg_sanity_check()
 
 // int chpeg_compile(
 //    const unsigned char *input,       // grammar input
-//    size_t length,                    // input data length
+//    isz_t length,                    // input data length
 //    ChpegByteCode **bytecode_return,  // bytecode returned here
 //    int verbose                       // bitfield; see below
 //    );
@@ -918,8 +1334,8 @@ CHPEG_API void chpeg_sanity_check()
 //
 // I need a better way to deal with errors. Should be dealt with when creating a better API.
 // For now I'm just using CHPEG_ERR_COMPILE, added into the parser error codes (ChpegErrorCodes)
-CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
-    ChpegByteCode **bytecode_return, int verbose)
+CHPEG_API int chpeg_compile2(const unsigned char *input, isz_t length,
+    ChpegByteCode **bytecode_return, int verbose, const ChpegByteCode *bytecode_parser)
 {
     if (verbose & 3) {
 #if CHPEG_USES_EXTENSIONS
@@ -940,21 +1356,18 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     chpeg_sanity_check();
 
     int err = 0;
-    ChpegCU cu;
+    ChpegCU cu = {
+        .parser = ChpegParser_new(bytecode_parser),
+        .input = input,
+    };
 
-    cu.parser = ChpegParser_new(chpeg_default_bytecode());
-    cu.input = input;
-    cu.bc = NULL;
-    cu.root = NULL;
-    cu.strings_allocated = 0;
-
-    size_t consumed = 0;
+    isz_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
     err = parse_result;
 
     if (parse_result == 0) {
         if (verbose & 1) {
-            fprintf(stderr, "chpeg_compile: Parse successful.\n");
+            chpeg_show_message(1, "chpeg_compile: Parse successful.\n");
         }
         if (verbose & 2) {
             ChpegParser_print_tree(cu.parser, input, length, stderr);
@@ -963,11 +1376,11 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     else {
         if ((verbose & (1<<15)) == 0) {
             if (parse_result == CHPEG_ERR_EXTRANEOUS_INPUT) {
-                fprintf(stderr, "chpeg_compile: Extraneous input: "
-                    "parse consumed %lu bytes out of %lu\n", consumed, length);
+                chpeg_show_message(1, "chpeg_compile: Extraneous input: "
+                    "parse consumed " ISZ_FMT " bytes out of " ISZ_FMT "\n", consumed, length);
             }
             else {
-                fprintf(stderr, "chpeg_compile: Parse failed with result: %d\n",
+                chpeg_show_message(1, "chpeg_compile: Parse failed with result: %d\n",
                     parse_result);
             }
             ChpegParser_print_error(cu.parser, input);
@@ -975,14 +1388,40 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
         goto done;
     }
 
-    cu.bc = ChpegByteCode_new();
+    if (! (cu.bc = ChpegByteCode_new()) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
 
-    cu.root = ChpegCNode_new();
+    if (! (cu.root = ChpegCNode_new()) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
 
     ChpegCU_build_tree(&cu, NULL, NULL);
     ChpegCNode_reverse(cu.root);
 
-    if ((err = ChpegCU_setup_defs(&cu)) != 0) {
+    if ( (err = ChpegCU_setup_defs(&cu)) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+
+    if ( (err = ChpegCU_setup_identifiers(&cu, NULL)) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+
+    if ( (err = ChpegCU_warn_unreferenced(&cu)) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+
+    if (cu.undefined_identifiers) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+
+    if ( (err = ChpegCU_detect_left_recursion(&cu)) ) {
         err = CHPEG_ERR_COMPILE;
         goto done;
     }
@@ -990,7 +1429,7 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegCU_alloc_strings(&cu, NULL);
 
 #if CHPEG_EXTENSION_REFS
-    if ((err = ChpegCU_alloc_refs(&cu, NULL)) != 0) {
+    if ( (err = ChpegCU_alloc_refs(&cu, NULL)) ) {
         err = CHPEG_ERR_COMPILE;
         goto done;
     }
@@ -1009,7 +1448,11 @@ CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     cu.bc->instructions = (int *)CHPEG_CALLOC(cu.bc->num_instructions, sizeof(int));
 
     cu.bc->num_instructions = 0;
-    ChpegCU_add_instructions(&cu, cu.root);
+    if ( (err = ChpegCU_add_instructions(&cu, cu.root)) ) {
+        err = CHPEG_ERR_COMPILE;
+        goto done;
+    }
+
 
 #if CHPEG_DEBUG_COMPILER
     fprintf(stderr, "instructions after add: %d\n", cu.bc->num_instructions);
@@ -1033,6 +1476,12 @@ done:
         *bytecode_return = cu.bc;
     }
     return err;
+}
+
+CHPEG_API int chpeg_compile(const unsigned char *input, isz_t length,
+    ChpegByteCode **bytecode_return, int verbose)
+{
+    return chpeg_compile2(input, length, bytecode_return, verbose, chpeg_default_bytecode());
 }
 
 #ifndef CHPEG_DEFAULT_BYTECODE

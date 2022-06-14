@@ -97,8 +97,8 @@ struct _ChpegParser;
 #if CHPEG_EXTENSION_REFS
 typedef struct _ChpegReferenceInfo
 {
-    size_t offset;
-    size_t length;
+    isz_t offset;
+    isz_t length;
     int flags;
 } ChpegReferenceInfo;
 #endif
@@ -112,12 +112,12 @@ typedef struct _ChpegNode
     ChpegOp def;
     ChpegFlags flags;
 
-    size_t offset; // full match offset
-    size_t length; // full match length
+    isz_t offset; // full match offset
+    isz_t length; // full match length
 
 #if CHPEG_EXTENSION_TRIM
-    size_t token_offset; // token offset (adjusted by trim '<')
-    size_t token_length; // token length (adjusted by trim '>')
+    isz_t token_offset; // token offset (adjusted by trim '<')
+    isz_t token_length; // token length (adjusted by trim '>')
 #endif
 
     struct _ChpegNode *parent;
@@ -139,7 +139,7 @@ typedef struct _ChpegNode
 #endif
 } ChpegNode;
 
-CHPEG_API ChpegNode *ChpegNode_new(ChpegOp def, size_t offset, size_t length, ChpegFlags flags);
+CHPEG_API ChpegNode *ChpegNode_new(ChpegOp def, isz_t offset, isz_t length, ChpegFlags flags);
 CHPEG_API void ChpegNode_free(ChpegNode *self);
 CHPEG_API ChpegNode *ChpegNode_push_child(ChpegNode *self, ChpegNode *other);
 CHPEG_API void ChpegNode_pop_child(ChpegNode *self);
@@ -159,7 +159,7 @@ typedef struct _ChpegUndoAction
     struct _ChpegUndoAction *next;
     ChpegUndoFunction func;
     void *data;
-    size_t data_size;
+    isz_t data_size;
 #if CHPEG_NODE_REF_COUNT
     int ref_count;
 #endif
@@ -180,14 +180,14 @@ typedef struct _ChpegParser
     int parse_result;
 
     /*
-    size_t error_offset;
+    isz_t error_offset;
     int error_def;
     int error_parent_def;
     int error_inst;
     int error_expected;
     */
 
-    size_t error_offset;
+    isz_t error_offset;
     ChpegErrorInfo *errors;
     int errors_capacity;
     int errors_size;
@@ -210,7 +210,7 @@ typedef struct _ChpegParser
     int *prof_choice_cnt;
     int *prof_cisucc_cnt;
     int *prof_cifail_cnt;
-    size_t farthest_backtrack;
+    isz_t farthest_backtrack;
 #endif
 
 #if CHPEG_PACKRAT
@@ -234,14 +234,14 @@ typedef struct _ChpegParser
 
 CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
-CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
-CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, size_t length, FILE *fp);
-CHPEG_API void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc);
+CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, isz_t length, isz_t *consumed);
+CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, isz_t length, FILE *fp);
+CHPEG_API void ChpegParser_expected(ChpegParser *self, isz_t offset, int depth, int def, int pc);
 CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE
 CHPEG_API void ChpegParser_print_profile(ChpegParser *self,
-    const unsigned char *input, size_t length, FILE *fp);
+    const unsigned char *input, isz_t length, FILE *fp);
 #endif
 
 #endif // #ifndef CHPEG_PARSER_H

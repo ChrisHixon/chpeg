@@ -6,6 +6,7 @@
 #include "chpeg/util.h"
 #endif
 
+#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,10 +97,10 @@ CHPEG_API char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limi
 #define CHPEG_READ_FILE_INITIAL_SIZE 4096 * 4
 #endif
 
-CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
+CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, isz_t *length)
 {
     int ret = 0;
-    size_t bsize = 0, remain = 0, bytes_read = 0, len = 0;
+    isz_t bsize = 0, remain = 0, bytes_read = 0, len = 0;
     unsigned char *buf = NULL, *p = NULL;
     FILE *fp;
 
@@ -191,6 +192,38 @@ cleanup:
     return ret;
 }
 
+void chpeg_line_col(const unsigned char *input, isz_t offset, isz_t *line_out, isz_t *col_out)
+{
+    isz_t i, line = 1;
+
+    for (i = 0; i <= offset; ++i) {
+        if(input[i] == '\n') {
+            ++line;
+        }
+    }
+
+    while (i > 0) {
+        if(input[--i] == '\n') {
+            ++i;
+            break;
+        }
+    }
+
+    *line_out = line;
+    *col_out = 1 + offset - i;
+}
+
+#ifndef CHPEG_CUSTOM_SHOW_MESSAGE
+CHPEG_API int chpeg_show_message(int msg_type, const char *fmt, ...) {
+	va_list argp;
+	int rc;
+	va_start(argp, fmt);
+	rc = vfprintf(stderr, fmt, argp);
+	va_end(argp);
+	return rc;
+}
+#endif
+
 #ifndef CHPEG_NO_MALLOC_WRAPPER
 CHPEG_API void *chpeg_malloc(size_t sz) {
     void *ptr = malloc(sz);
@@ -224,3 +257,4 @@ CHPEG_API void chpeg_free(void *ptr) {
 }
 #endif /*CHPEG_NO_MALLOC_WRAPPER*/
 // } chpeg: util.c
+
