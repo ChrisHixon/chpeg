@@ -45,7 +45,7 @@ function generateErrorListHTML(errors) {
   let html = '<ul>';
 
   html += $.map(errors, function (x) {
-    return '<li data-ln="' + x.ln + '" data-col="' + x.col + '"><span>' + x.ln + ':' + x.col + '</span> <span>' + escapeHtml(x.msg) + '</span></li>';
+    return '<li data-ln="' + x.ln + '" data-col="' + x.col + '"><span>' + escapeHtml(x.msg) + '</span></li>';
   }).join('');
 
   html += '<ul>';
