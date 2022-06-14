@@ -99,7 +99,7 @@ function parse() {
     if (data.grammar_valid) {
       $grammarValidation.removeClass('validation-invalid').show();
 
-      if(data.code_valid) {
+      if(data.source_valid) {
         codeAst.insert(data.ast);
         codeProfile.insert(data.profile);
       }
