@@ -28,6 +28,13 @@
 // CNode: compilation unit node
 //
 
+enum ChpegCNodeBits
+{
+    CHPEG_CNODE_CONSUMES            = 1<<1,
+    CHPEG_CNODE_CONSUME_RESOLVED    = 1<<2,
+    CHPEG_CNODE_REFERENCED          = 1<<3,
+};
+
 typedef struct _ChpegCNode
 {
     ChpegNode *node;
@@ -37,11 +44,14 @@ typedef struct _ChpegCNode
     int parent_next_state;
     int parent_fail_state;
 
+    // various use
     union {
         unsigned char cval[4];
         int ival;
     } val;
     int value_len;
+
+    int bits; // various use
 
     int num_children;
     struct _ChpegCNode *head;
@@ -249,7 +259,7 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
 
         // mark def_id as referenced, as it is 'referenced' as the start rule
         if (def_id == 0) {
-            cdef->node->flags |= CHPEG_FLAG_REFERENCED;
+            cdef->bits |= CHPEG_CNODE_REFERENCED;
         }
 
         // stash the def_id in the DEFINITION cnode
@@ -884,7 +894,7 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
                 // mark the definition as referenced
                 ChpegCNode *cdef = ChpegCU_find_def_node(cu, def_id);
                 assert(cdef);
-                cdef->node->flags |= CHPEG_FLAG_REFERENCED;
+                cdef->bits |= CHPEG_CNODE_REFERENCED;
             }
             break;
 #if CHPEG_EXTENSION_REFS
@@ -910,7 +920,7 @@ static int ChpegCU_warn_unreferenced(ChpegCU *cu)
 {
     for (ChpegCNode *cdef = cu->root->head; cdef; cdef = cdef->next) {
         assert(cdef->type == CHPEG_DEF_DEFINITION);
-        if (!(cdef->node->flags & CHPEG_FLAG_REFERENCED)) {
+        if (!(cdef->bits & CHPEG_CNODE_REFERENCED)) {
             size_t line, col;
             chpeg_line_col(cu->input, cdef->node->offset, &line, &col);
             fprintf(stderr, "input:%zu:%zu: Warning: Definition '%s' is not referenced.\n",
@@ -973,7 +983,7 @@ static void ChpegLR_pop(ChpegLR *lr)
 #endif
 }
 
-// Does cnode consume (in all cases)? Detects left recursion and infinite loops.
+// Does cnode consume, in all cases? Detects left recursion and infinite loops.
 // Note: we need to visit all child nodes even if we know whether or not something consumes.
 // returns: 1 if consumes, 0 if doesn't consume
 static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
@@ -981,14 +991,14 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 #if CHPEG_DEBUG_LR >= 2
     fprintf(stderr, "%s: %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
             chpeg_default_bytecode(), cnode->type),
-            !!(cnode->node->flags & CHPEG_FLAG_CONSUME_RESOLVED));
+            !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
 #endif
 
     // Have we already resolved whether or not this consumes?
     // If so, return result. This is necessary on complex grammars, or we'll spend
     // all day trying every possible choice combo/path.
-    if (cnode->node->flags & CHPEG_FLAG_CONSUME_RESOLVED) {
-        return !!(cnode->node->flags & CHPEG_FLAG_CONSUMES);
+    if (cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED) {
+        return !!(cnode->bits & CHPEG_CNODE_CONSUMES);
     }
 
     int consumes = 0, def_id = 0;
@@ -1003,12 +1013,12 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 ChpegCNode *cdef = ChpegCU_find_def_node(cu, def_id);
                 assert(cdef);
 
-                if (cdef->node->flags & CHPEG_FLAG_CONSUME_RESOLVED) {
+                if (cdef->bits & CHPEG_CNODE_CONSUME_RESOLVED) {
 #if CHPEG_DEBUG_LR >= 1
                     fprintf(stderr, "IDENTIFIER %s(%d) RESOLVED\n",
                         ChpegByteCode_def_name(cu->bc, def_id), def_id);
 #endif
-                    return !!(cdef->node->flags & CHPEG_FLAG_CONSUMES);
+                    return !!(cdef->bits & CHPEG_CNODE_CONSUMES);
                 }
 
 #if CHPEG_DEBUG_LR >= 1
@@ -1066,10 +1076,10 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 ChpegLR_pop(lr);
 
                 // record RESOLVED state in the definition node
-                assert(!(cdef->node->flags & CHPEG_FLAG_CONSUME_RESOLVED));
-                cdef->node->flags |= CHPEG_FLAG_CONSUME_RESOLVED;
-                cdef->node->flags &= ~CHPEG_FLAG_CONSUMES;
-                cdef->node->flags |= (consumes ? CHPEG_FLAG_CONSUMES : 0);
+                assert(!(cdef->bits & CHPEG_CNODE_CONSUME_RESOLVED));
+                cdef->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
+                cdef->bits &= ~CHPEG_CNODE_CONSUMES;
+                cdef->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
 
 #if CHPEG_DEBUG_LR >= 1
                     fprintf(stderr, "DEF %s(%d) MARKED RESOLVED\n",
@@ -1170,10 +1180,10 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
     }
 
 done:
-    assert(!(cnode->node->flags & CHPEG_FLAG_CONSUME_RESOLVED));
-    cnode->node->flags |= CHPEG_FLAG_CONSUME_RESOLVED;
-    cnode->node->flags &= ~CHPEG_FLAG_CONSUMES;
-    cnode->node->flags |= (consumes ? CHPEG_FLAG_CONSUMES : 0);
+    assert(!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
+    cnode->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
+    cnode->bits &= ~CHPEG_CNODE_CONSUMES;
+    cnode->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
     return consumes;
 }
 
@@ -1184,6 +1194,7 @@ static int ChpegCU_detect_left_recursion(ChpegCU *cu)
     lr.bc = cu->bc;
 
     for (ChpegCNode *cdef = cu->root->head; cdef; cdef = cdef->next) {
+        assert(lr.top == 0);
 #if CHPEG_DEBUG_LR >= 1
         fprintf(stderr, "GRAMMAR DEF %s(%d)\n",
             ChpegByteCode_def_name(cu->bc, cdef->val.ival), cdef->val.ival);

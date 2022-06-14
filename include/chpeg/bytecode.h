@@ -70,10 +70,6 @@ enum ChpegFlags {
     CHPEG_FLAG_TRIMMED_RIGHT = 1<<6, // node has been 'trimmed right': length has been adjusted
 #endif
 
-    CHPEG_FLAG_CONSUMES         = 1<<7,
-    CHPEG_FLAG_CONSUME_RESOLVED = 1<<8,
-    CHPEG_FLAG_REFERENCED       = 1<<9,
-
 };
 
 #endif // #ifndef CHPEG_BYTECODE_H
