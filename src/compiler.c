@@ -1216,7 +1216,9 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                     isz_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
                     chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": %s\n",
-                        line, col, op == '?' ? "Warning: Making a zero or more optional." : "Error: Infinite loop detected.");
+                        line, col, cnode->head->type == CHPEG_BC(REPEAT) ?
+                        "Warning: Repeating a repetition." :
+                        "Error: Infinite loop detected.");
                     if(op == '!') lr->errors++;
                     consumes = 0;
                     break;
