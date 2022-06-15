@@ -989,7 +989,7 @@ static void ChpegLR_pop(ChpegLR *lr)
 static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 {
 #if CHPEG_DEBUG_LR >= 2
-    fprintf(stderr, "%s: %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
+    fprintf(stderr, "%s (BEGIN): %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
             chpeg_default_bytecode(), cnode->type),
             !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
 #endif
@@ -1175,7 +1175,7 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_DEF_LITERAL:
             // we haven't processed strings yet... but an empty string has no child nodes
-            consumes = cnode->node->num_children > 1;
+            consumes = (cnode->node->num_children > 0);
             break;
 
         default:
@@ -1188,6 +1188,12 @@ done:
     cnode->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
     cnode->bits &= ~CHPEG_CNODE_CONSUMES;
     cnode->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
+
+#if CHPEG_DEBUG_LR >= 2
+    fprintf(stderr, "%s (END) %s (resolved=%d) consumes=%d\n", __func__, ChpegByteCode_def_name(
+            chpeg_default_bytecode(), cnode->type),
+            !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED), consumes);
+#endif
     return consumes;
 }
 
