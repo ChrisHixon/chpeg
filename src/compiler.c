@@ -1060,7 +1060,7 @@ static void ChpegLR_pop(ChpegLR *lr)
 static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 {
 #if CHPEG_DEBUG_LR >= 2
-    fprintf(stderr, "%s: %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
+    fprintf(stderr, "%s (BEGIN): %s (resolved=%d)\n", __func__, ChpegByteCode_def_name(
             chpeg_default_bytecode(), cnode->type),
             !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED));
 #endif
@@ -1211,16 +1211,16 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 ChpegLR_push(lr, cnode, 0);
                 consumes = ChpegCU_consumes(cu, cnode->head, lr);
                 ChpegLR_pop(lr);
+                unsigned char op = cu->input[cnode->head->next->node->offset];
                 if (!consumes) {
                     isz_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
-                        line, col);
-                    lr->errors++;
+                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": %s\n",
+                        line, col, op == '?' ? "Warning: Making a zero or more optional." : "Error: Infinite loop detected.");
+                    if(op == '!') lr->errors++;
                     consumes = 0;
                     break;
                 }
-                unsigned char op = cu->input[cnode->head->next->node->offset];
                 switch (op) {
                     case '+':
                         consumes = 1;
@@ -1241,8 +1241,12 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_BC(DOT):
         case CHPEG_BC(CHARCLASS):
-        case CHPEG_BC(LITERAL):
             consumes = 1;
+            break;
+
+        case CHPEG_BC(LITERAL):
+            // we haven't processed strings yet... but an empty string has no child nodes
+            consumes = (cnode->node->num_children > 0);
             break;
 
         default:
@@ -1255,6 +1259,12 @@ done:
     cnode->bits |= CHPEG_CNODE_CONSUME_RESOLVED;
     cnode->bits &= ~CHPEG_CNODE_CONSUMES;
     cnode->bits |= (consumes ? CHPEG_CNODE_CONSUMES : 0);
+
+#if CHPEG_DEBUG_LR >= 2
+    fprintf(stderr, "%s (END) %s (resolved=%d) consumes=%d\n", __func__, ChpegByteCode_def_name(
+            chpeg_default_bytecode(), cnode->type),
+            !!(cnode->bits & CHPEG_CNODE_CONSUME_RESOLVED), consumes);
+#endif
     return consumes;
 }
 
