@@ -1132,7 +1132,8 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 ChpegLR_push(lr, cnode, 0);
                 consumes = ChpegCU_consumes(cu, cnode->head, lr);
                 ChpegLR_pop(lr);
-                if (!consumes) {
+                unsigned char op = cu->input[cnode->head->next->node->offset];
+                if (!consumes && op != '?') {
                     size_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
                     fprintf(stderr, "input:%zu:%zu: Error: Infinite loop detected.\n",
@@ -1141,7 +1142,6 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                     consumes = 0;
                     break;
                 }
-                unsigned char op = cu->input[cnode->head->next->node->offset];
                 switch (op) {
                     case '+':
                         consumes = 1;
