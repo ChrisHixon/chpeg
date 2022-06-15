@@ -1,9 +1,9 @@
 extern "C" {
-#define WITH_CHPEG_NOCASE2
+#define WITH_CHPEG_NOCASE
 #define CHPEG_CUSTOM_SHOW_MESSAGE
+#define CHPEG_PACKRAT 1
 #ifdef WITH_CHPEG_NOCASE
     #define WITHOUT_MAIN
-    #define CHPEG_PACKRAT 1
     #include "../examples/chpeg_nocase.c"
 #else
     #define CHPEG_EXTENSION_ALL

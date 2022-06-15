@@ -1159,7 +1159,7 @@ CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, i
             window_size = length + 1;
             window_end = length + 1;
         }
-        packrat = CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
+        packrat = (ChpegPNode **)CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
 
         // packrat_no_match is a negative cache meaning match failure (attempted match, but match failed)
         packrat_no_match = (ChpegPNode *)&packrat_no_match; // need a unique, non-valid PNode pointer
