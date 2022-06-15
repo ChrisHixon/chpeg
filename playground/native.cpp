@@ -73,22 +73,27 @@ bool parse_code(const std::string &text, peg::parser &peg, std::string &json,
 CHPEG_API int chpeg_show_message(ChpegParserPtr parser, int msg_type, const char *fmt, ...) {
 
 #define MSG_INPUT_STR "input:"
-    if(parser->udata && strncmp(MSG_INPUT_STR, fmt, sizeof(MSG_INPUT_STR)-1) == 0) {
-        std::string &json = *((std::string *)parser->udata);
+    if(parser->udata) {
+        va_list argp1;
         char buf[2048];
-        
-        va_list argp1, argp2;
+        std::string &json = *((std::string *)parser->udata);
         int rc;
         va_start(argp1, fmt);
-        va_copy(argp2, argp1);
+        json += "{";
+        if(strncmp(MSG_INPUT_STR, fmt, sizeof(MSG_INPUT_STR)-1) == 0) {
+            va_list argp2;
+            va_copy(argp2, argp1);
+            isz_t line = va_arg(argp2, isz_t);
+            isz_t col = va_arg(argp2, isz_t);
+            json += R"("ln":)" + std::to_string(line) + ",";
+            json += R"("col":)" + std::to_string(col) + ",";
+            va_end(argp2);
+        }
+        else {
+            json += R"("ln":-1,"col":-1,)";
+        }
         rc = vsnprintf(buf, sizeof(buf), fmt, argp1);
         va_end(argp1);
-        isz_t line = va_arg(argp2, isz_t);
-        isz_t col = va_arg(argp2, isz_t);
-        va_end(argp2);
-        json += "{";
-        json += R"("ln":)" + std::to_string(line) + ",";
-        json += R"("col":)" + std::to_string(col) + ",";
         json += R"("msg":")" + escape_json(buf) + R"(")";
         json += "},";
         return rc;
@@ -327,7 +332,7 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
   if(grammarText.size() > 0) {
       ChpegParser *gparser = ChpegParser_new(chpeg_default_bytecode());
       gparser->udata = &grammarResult;
-      parse_result = chpeg_compile2((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 0, gparser);
+      parse_result = chpeg_compile2((const unsigned char*)grammarText.c_str(), grammarText.size(), &byte_code, 1, gparser);
       is_grammar_valid = byte_code != NULL;
   }
   else {

@@ -143,9 +143,14 @@ code.getSession().on('change', setupTimer);
 function makeOnClickInInfo(editor) {
   return function () {
     const el = $(this);
-    editor.navigateTo(el.data('ln') - 1, el.data('col') - 1);
-    editor.scrollToLine(el.data('ln') - 1, true, false, null);
-    editor.focus();
+    let line = el.data('ln');
+    if(line > 0) {
+      --line;
+      let col = el.data('col') - 1;
+      editor.navigateTo(line, col);
+      editor.scrollToLine(line, true, false, null);
+      editor.focus();
+    }
   }
 };
 $('#grammar-info').on('click', 'li', makeOnClickInInfo(grammar));
