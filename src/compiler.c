@@ -61,22 +61,14 @@ typedef struct _ChpegCNode
 
 static ChpegCNode *ChpegCNode_new()
 {
-    ChpegCNode *self = (ChpegCNode *)CHPEG_MALLOC(sizeof(ChpegCNode));
+    ChpegCNode *self = (ChpegCNode *)CHPEG_CALLOC(1, sizeof(ChpegCNode));
 
-    self->node = NULL;
     self->type = -1;
 
     self->parse_state = -1;
     self->parent_next_state = -1;
     self->parent_fail_state = -1;
 
-    memset(self->val.cval, 0, 4);
-    self->value_len = 0;
-
-    self->num_children = 0;
-    self->head = NULL;
-    self->next = NULL;
-    self->parent = NULL;
     return self;
 }
 
