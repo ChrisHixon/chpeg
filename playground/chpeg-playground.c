@@ -12,15 +12,16 @@ EM_JS(void, set_result, (const char* which, int value), {
     result[result_name] = value;
 })
 
-int parse(const char *grammar, const char *input, int simplification, int packrat)
+int parse(const char *grammar, const char *input, int simplification, int packrat, int profile)
 {
     int err = 0; // currently, zero is always returned; result codes for each part
-                 // are sent to js vs set_result()
+                 // are sent to JS via set_result()
 
     // default result values (-1 indicates we didn't reach a part)
     int compile_result = -1;
     int parse_result = -1;
     int ast_result = -1;
+    int profile_result = -1;
 
     // baked-in verbose levels
     const int compile_verbose = 0;
@@ -68,6 +69,9 @@ int parse(const char *grammar, const char *input, int simplification, int packra
 
     parser->simplification = simplification;
     parser->packrat = packrat;
+#ifdef CHPEG_VM_PROFILE
+    parser->vm_profile = profile;
+#endif
 
     data = (unsigned char *)input;
     length = strlen(input);
@@ -99,11 +103,22 @@ int parse(const char *grammar, const char *input, int simplification, int packra
     ChpegParser_print_tree(parser, data, stdout);
     ast_result = 0; // no errors possible
 
+    //
+    // Profile
+    //
+
+#ifdef CHPEG_VM_PROFILE
+    switch_output("profile");
+    ChpegParser_print_profile(parser, data, length, stdout);
+    profile_result = 0; // no errors possible
+#endif
+
 done:
 
     set_result("compile", compile_result);
     set_result("parse", parse_result);
     set_result("ast", ast_result);
+    set_result("profile", profile_result);
 
     if (bc) {
         ChpegByteCode_free(bc);

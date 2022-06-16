@@ -30,6 +30,7 @@ const codeProfile = setupInfoArea("code-profile");
 
 $('#opt-mode').val(localStorage.getItem('optimizationMode') || '2');
 $('#packrat').prop('checked', localStorage.getItem('packrat') === 'true');
+$('#show-profile').prop('checked', localStorage.getItem('showProfile') === 'true');
 $('#auto-refresh').prop('checked', localStorage.getItem('autoRefresh') === 'true');
 $('#parse').prop('disabled', $('#auto-refresh').prop('checked'));
 
@@ -85,6 +86,7 @@ function updateLocalStorage() {
   localStorage.setItem('codeText', code.getValue());
   localStorage.setItem('optimizationMode', $('#opt-mode').val());
   localStorage.setItem('packrat', $('#packrat').prop('checked'));
+  localStorage.setItem('showProfile', $('#show-profile').prop('checked'));
   localStorage.setItem('autoRefresh', $('#auto-refresh').prop('checked'));
 }
 
@@ -99,6 +101,7 @@ function parse() {
 
   const optimizationMode = $('#opt-mode').val();
   const packrat = $('#packrat').prop('checked');
+  const profile = $('#show-profile').prop('checked');
 
   $grammarInfo.html('');
   $grammarValidation.hide();
@@ -111,6 +114,7 @@ function parse() {
   outputs.compile_status = '';
   outputs.parse_status = '';
   outputs.ast = '';
+  outputs.profile = '';
 
   if (grammarText.length === 0) {
     return;
@@ -122,8 +126,7 @@ function parse() {
     'background-color': 'rgba(0, 0, 0, 0.1)'
   });
   window.setTimeout(() => {
-    //const data = JSON.parse(Module.lint(grammarText, codeText, mode, packrat));
-    chpeg_parse(grammarText, codeText, optimizationMode, packrat);
+    chpeg_parse(grammarText, codeText, optimizationMode, packrat, profile);
 
     $('#overlay').css({
       'z-index': '-1',
@@ -136,7 +139,7 @@ function parse() {
 
       //codeAst.insert('');
       codeAstOptimized.insert(outputs.ast);
-      codeProfile.insert('');
+      codeProfile.insert(outputs.profile);
 
       if (result.parse == 0) {
         $codeValidation.removeClass('validation-invalid').show();
@@ -192,6 +195,7 @@ $('#code-info').on('click', 'li[data-ln]', makeOnClickInInfo(code));
 // Event handing in the AST optimization
 $('#opt-mode').on('change', setupTimer);
 $('#packrat').on('change', setupTimer);
+$('#show-profile').on('change', setupTimer);
 $('#auto-refresh').on('change', () => {
   updateLocalStorage();
   $('#parse').prop('disabled', $('#auto-refresh').prop('checked'));
@@ -249,6 +253,7 @@ var result = {
   'compile': 0,
   'parse': 0,
   'ast': 0,
+  'profile': 0,
 };
 
 // chpeg_parse function: initialized when emscripten runtime loads
