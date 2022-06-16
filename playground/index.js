@@ -1,6 +1,4 @@
-// vim: sw=2:sts=2
-
-// Setup editros
+// Setup editors
 function setupInfoArea(id) {
   const e = ace.edit(id);
   e.setShowPrintMargin(false);
@@ -24,13 +22,11 @@ function setupEditorArea(id, lsKey) {
 const grammar = setupEditorArea("grammar-editor", "grammarText");
 const code = setupEditorArea("code-editor", "codeText");
 
-//const codeAst = setupInfoArea("code-ast");
-const codeAstOptimized = setupInfoArea("code-ast-optimized");
+const codeAst = setupInfoArea("code-ast");
 const codeProfile = setupInfoArea("code-profile");
 
 $('#opt-mode').val(localStorage.getItem('optimizationMode') || '2');
 $('#packrat').prop('checked', localStorage.getItem('packrat') === 'true');
-$('#show-profile').prop('checked', localStorage.getItem('showProfile') === 'true');
 $('#auto-refresh').prop('checked', localStorage.getItem('autoRefresh') === 'true');
 $('#parse').prop('disabled', $('#auto-refresh').prop('checked'));
 
@@ -52,14 +48,13 @@ function textToErrors(str) {
   let errors = [];
   var regExp = /([^\n]+?)\n/g, match;
   while (match = regExp.exec(str)) {
-	let line = -1, col = -1;
-	let msg = match[1];
-	let line_info = msg.match(/^input:(\d+):(\d+):/);
-	if(line_info) {
-		line = line_info[1];
-		col = line_info[2];
-	}
-	errors.push({"ln": line, "col":col, "msg": msg});
+    let msg = match[1];
+    let line_col = msg.match(/^input:(\d+):(\d+):/);
+    if (line_col) {
+      errors.push({"ln": line_col[1], "col":line_col[2], "msg": msg});
+    } else {
+      errors.push({"msg": msg});
+    }
   }
   return errors;
 }
@@ -86,7 +81,6 @@ function updateLocalStorage() {
   localStorage.setItem('codeText', code.getValue());
   localStorage.setItem('optimizationMode', $('#opt-mode').val());
   localStorage.setItem('packrat', $('#packrat').prop('checked'));
-  localStorage.setItem('showProfile', $('#show-profile').prop('checked'));
   localStorage.setItem('autoRefresh', $('#auto-refresh').prop('checked'));
 }
 
@@ -107,8 +101,7 @@ function parse() {
   $grammarValidation.hide();
   $codeInfo.html('');
   $codeValidation.hide();
-  //codeAst.setValue('');
-  codeAstOptimized.setValue('');
+  codeAst.setValue('');
   codeProfile.setValue('');
 
   outputs.compile_status = '';
@@ -125,6 +118,7 @@ function parse() {
     'display': 'block',
     'background-color': 'rgba(0, 0, 0, 0.1)'
   });
+
   window.setTimeout(() => {
     chpeg_parse(grammarText, codeText, optimizationMode, packrat, profile);
 
@@ -137,8 +131,7 @@ function parse() {
     if (result.compile == 0) {
       $grammarValidation.removeClass('validation-invalid').show();
 
-      //codeAst.insert('');
-      codeAstOptimized.insert(outputs.ast);
+      codeAst.insert(outputs.ast);
       codeProfile.insert(outputs.profile);
 
       if (result.parse == 0) {
@@ -164,7 +157,7 @@ function parse() {
   }, 0);
 }
 
-// Event handing for text editiing
+// Event handing for text editing
 let timer;
 function setupTimer() {
   clearTimeout(timer);
@@ -207,17 +200,20 @@ $('#parse').on('click', parse);
 function resizeEditorsToParent() {
   code.resize();
   code.renderer.updateFull();
-  //codeAst.resize();
-  //codeAst.renderer.updateFull();
-  codeAstOptimized.resize();
-  codeAstOptimized.renderer.updateFull();
+  codeAst.resize();
+  codeAst.renderer.updateFull();
   codeProfile.resize();
   codeProfile.renderer.updateFull();
 }
 
 // Show windows
-function setupToolWindow(lsKeyName, buttonSel, codeSel) {
-  let show = localStorage.getItem(lsKeyName) === 'true';
+function setupToolWindow(lsKeyName, buttonSel, codeSel, showDefault) {
+  let storedValue = localStorage.getItem(lsKeyName);
+  if (!storedValue) {
+    localStorage.setItem(lsKeyName, showDefault);
+    storedValue = localStorage.getItem(lsKeyName);
+  }
+  let show = storedValue === 'true';
   $(buttonSel).prop('checked', show);
   $(codeSel).css({ 'display': show ? 'block' : 'none' });
 
@@ -228,9 +224,9 @@ function setupToolWindow(lsKeyName, buttonSel, codeSel) {
     resizeEditorsToParent();
   });
 }
-//setupToolWindow('show-ast', '#show-ast', '#code-ast');
-setupToolWindow('show-ast-optimized', '#show-ast-optimized', '#code-ast-optimized');
-setupToolWindow('show-profile', '#show-profile', '#code-profile');
+
+setupToolWindow('show-ast', '#show-ast', '#code-ast', true);
+setupToolWindow('show-profile', '#show-profile', '#code-profile', false);
 
 // Show page
 $('#main').css({
@@ -283,3 +279,4 @@ var Module = {
   },
 };
 
+// vim: sw=2:sts=2
