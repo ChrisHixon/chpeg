@@ -1214,14 +1214,19 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                 unsigned char op = cu->input[cnode->head->next->node->offset];
                 if (!consumes) {
                     isz_t line, col;
-                    chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": %s\n",
-                        line, col, cnode->head->type == CHPEG_BC(REPEAT) ?
-                        "Warning: Repeating a repetition." :
-                        "Error: Infinite loop detected.");
-                    if(op == '!') lr->errors++;
-                    consumes = 0;
-                    break;
+                    if(op != '?') {
+                        chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                        chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
+                            line, col);
+                        lr->errors++;
+                        consumes = 0;
+                        break;
+                    }
+                    else if(cnode->head->type == CHPEG_BC(REPEAT)) {
+                        chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                        chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Repeating over repetition.\n",
+                            line, col);
+                    }
                 }
                 switch (op) {
                     case '+':
