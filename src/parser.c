@@ -866,6 +866,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         int op = inst & 0xff;
         int arg = inst >> 8;
 
+        size_t line, col;
         char *esc = NULL;
         const char *str = NULL;
         int depth_indent = (error->depth - 1) *2;
@@ -890,51 +891,53 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
             }
         }
 
+        chpeg_line_col(input, self->error_offset, &line, &col);
+
         switch (op) {
             case CHPEG_OP_IDENT:
                 str = ChpegByteCode_def_name(self->bc, arg);
-                fprintf(stderr, "%11s %*s%s in %s at offset %lu\n",
+                fprintf(stderr, "input:%zu:%zu: %11s %*s%s in %s\n",
+                    line, col,
                     expected,
                     depth_indent, "",
                     str ? str : "<N/A>>",
-                    def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    def_name ? def_name : "<N/A>");
                 break;
             case CHPEG_OP_LIT:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                fprintf(stderr, "%11s %*s\"%s\" in %s at offset %lu\n",
+                fprintf(stderr, "input:%zu:%zu: %11s %*s\"%s\" in %s\n",
+                    line, col,
                     expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
-                    def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    def_name ? def_name : "<N/A>");
                 CHPEG_FREE(esc); esc = NULL;
                 break;
             case CHPEG_OP_CHRCLS:
                 esc = chpeg_esc_bytes((unsigned char *)self->bc->strings[arg],
                     self->bc->str_len[arg], 20);
-                fprintf(stderr, "%11s %*s[%s] in %s at offset %lu\n",
+                fprintf(stderr, "input:%zu:%zu: %11s %*s[%s] in %s\n",
+                    line, col,
                     expected,
                     depth_indent, "",
                     esc ? esc : "<NULL>",
-                    def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    def_name ? def_name : "<N/A>");
                 CHPEG_FREE(esc); esc = NULL;
                 break;
             case CHPEG_OP_DOT:
-                fprintf(stderr, "%11s %*scharacter in %s at offset %lu\n",
+                fprintf(stderr, "input:%zu:%zu: %11s %*scharacter in %s\n",
+                    line, col,
                     expected,
                     depth_indent, "",
-                    def_name ? def_name : "<N/A>",
-                    self->error_offset);
+                    def_name ? def_name : "<N/A>");
                 break;
             default: // unhandled op, show instruction in <> for debugging
-                fprintf(stderr, "%11s %*sSyntax error in %s at offset %lu <%s,%d>\n",
+                fprintf(stderr, "input:%zu:%zu: %11s %*sSyntax error in %s <%s,%d>\n",
+                    line, col,
                     "Error:",
                     depth_indent, "",
                     def_name ? def_name : "<N/A>",
-                    self->error_offset,
                     Chpeg_op_name(op), arg);
                 break;
         }
