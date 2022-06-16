@@ -79,10 +79,10 @@ body {
   padding: 8px;
   overflow-y: auto;
 }
-.editor-info li {
+.editor-info li[data-ln] {
   cursor: pointer;
 }
-.editor-info li:hover{
+.editor-info li[data-ln]:hover{
   background-color: lightyellow;
 }
 .editor-sub-header {

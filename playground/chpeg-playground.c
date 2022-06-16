@@ -47,7 +47,6 @@ int parse(const char *grammar, const char *input, int simplification, int packra
     if (compile_result != 0) {
         fprintf(stderr, "Error compiling grammar. "
             "Parser returned: %d\n", compile_result);
-        err = compile_result;
         goto done;
     }
     else {
@@ -89,7 +88,6 @@ int parse(const char *grammar, const char *input, int simplification, int packra
             fprintf(stderr, "Parse failed with result: %d\n", parse_result);
         }
         ChpegParser_print_errors(parser, data, 0);
-        err = parse_result;
         goto done;
     }
 

@@ -47,11 +47,32 @@ function nl2br(str) {
   return str.replace(/\n/g, '<br>\n')
 }
 
+function textToErrors(str) {
+  let errors = [];
+  var regExp = /([^\n]+?)\n/g, match;
+  while (match = regExp.exec(str)) {
+	let line = -1, col = -1;
+	let msg = match[1];
+	let line_info = msg.match(/^input:(\d+):(\d+):/);
+	if(line_info) {
+		line = line_info[1];
+		col = line_info[2];
+	}
+	errors.push({"ln": line, "col":col, "msg": msg});
+  }
+  return errors;
+}
+
 function generateErrorListHTML(errors) {
   let html = '<ul>';
 
   html += $.map(errors, function (x) {
-    return '<li data-ln="' + x.ln + '" data-col="' + x.col + '"><span>' + x.ln + ':' + x.col + '</span> <span>' + escapeHtml(x.msg) + '</span></li>';
+    if (x.ln > 0) {
+      return '<li data-ln="' + x.ln + '" data-col="' + x.col +
+        '"><span>' + escapeHtml(x.msg) + '</span></li>';
+    } else {
+      return '<li><span>' + escapeHtml(x.msg) + '</span></li>';
+    }
   }).join('');
 
   html += '<ul>';
@@ -124,7 +145,8 @@ function parse() {
       }
 
       if (outputs.parse_status.length > 0) {
-        const html = nl2br(escapeHtml(outputs.parse_status));
+        const errors = textToErrors(outputs.parse_status);
+        const html = generateErrorListHTML(errors);
         $codeInfo.html(html);
       }
     } else {
@@ -132,7 +154,8 @@ function parse() {
     }
 
     if (outputs.compile_status.length > 0) {
-      const html = nl2br(escapeHtml(outputs.compile_status));
+      const errors = textToErrors(outputs.compile_status);
+      const html = generateErrorListHTML(errors);
       $grammarInfo.html(html);
     }
   }, 0);
@@ -147,7 +170,7 @@ function setupTimer() {
     if ($('#auto-refresh').prop('checked')) {
       parse();
     }
-  }, 100);
+  }, 200);
 };
 grammar.getSession().on('change', setupTimer);
 code.getSession().on('change', setupTimer);
@@ -156,13 +179,15 @@ code.getSession().on('change', setupTimer);
 function makeOnClickInInfo(editor) {
   return function () {
     const el = $(this);
-    editor.navigateTo(el.data('ln') - 1, el.data('col') - 1);
-    editor.scrollToLine(el.data('ln') - 1, true, false, null);
+    let line = el.data('ln') - 1;
+    let col = el.data('col') - 1;
+    editor.navigateTo(line, col);
+    editor.scrollToLine(line, true, false, null);
     editor.focus();
   }
 };
-$('#grammar-info').on('click', 'li', makeOnClickInInfo(grammar));
-$('#code-info').on('click', 'li', makeOnClickInInfo(code));
+$('#grammar-info').on('click', 'li[data-ln]', makeOnClickInInfo(grammar));
+$('#code-info').on('click', 'li[data-ln]', makeOnClickInInfo(code));
 
 // Event handing in the AST optimization
 $('#opt-mode').on('change', setupTimer);
