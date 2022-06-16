@@ -1208,12 +1208,12 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_BC(REPEAT):
             {
+                isz_t line, col;
                 ChpegLR_push(lr, cnode, 0);
                 consumes = ChpegCU_consumes(cu, cnode->head, lr);
                 ChpegLR_pop(lr);
                 unsigned char op = cu->input[cnode->head->next->node->offset];
                 if (!consumes) {
-                    isz_t line, col;
                     if(op != '?') {
                         chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
                         chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Error: Infinite loop detected.\n",
@@ -1222,11 +1222,11 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                         consumes = 0;
                         break;
                     }
-                    else if(cnode->head->type == CHPEG_BC(REPEAT)) {
-                        chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
-                        chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Repeating over repetition.\n",
-                            line, col);
-                    }
+                }
+                if(cnode->head->type == CHPEG_BC(REPEAT)) {
+                    chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                    chpeg_show_message(cu->parser, 1, "input:" ISZ_FMT ":" ISZ_FMT ": Warning: Repeating over repetition.\n",
+                        line, col);
                 }
                 switch (op) {
                     case '+':
