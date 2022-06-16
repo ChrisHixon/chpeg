@@ -260,7 +260,7 @@ void ChpegNode_pop_child(ChpegNode *self)
 void ChpegNode_add_undo(ChpegNode *self, ChpegUndoFunction func,
     void *data, size_t data_size)
 {
-    ChpegUndoAction *action = CHPEG_MALLOC(sizeof(ChpegUndoAction));
+    ChpegUndoAction *action = CHPEG_CALLOC(1, sizeof(ChpegUndoAction));
     assert(func);
 #if CHPEG_NODE_REF_COUNT
     action->ref_count = 1;

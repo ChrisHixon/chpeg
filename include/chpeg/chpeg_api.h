@@ -6,8 +6,8 @@
 #define CHPEG_API_H
 
 #ifdef CHPEG_AMALGAMATION
-#define CHPEG_API
-#define CHPEG_DEF
+#define CHPEG_API static
+#define CHPEG_DEF static
 #endif
 
 #ifndef CHPEG_API

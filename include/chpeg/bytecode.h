@@ -36,7 +36,7 @@ typedef struct _ChpegByteCode
 
 } ChpegByteCode;
 
-CHPEG_API ChpegByteCode *ChpegByteCode_new();
+CHPEG_API ChpegByteCode *ChpegByteCode_new(void);
 CHPEG_API void ChpegByteCode_free(ChpegByteCode *self);
 
 CHPEG_API const char *ChpegByteCode_def_name(const ChpegByteCode *self, int index);

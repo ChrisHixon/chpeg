@@ -17,7 +17,7 @@
 // ByteCode
 //
 
-ChpegByteCode *ChpegByteCode_new()
+ChpegByteCode *ChpegByteCode_new(void)
 {
     ChpegByteCode *self = (ChpegByteCode *)CHPEG_CALLOC(1, sizeof(ChpegByteCode));
     return self;

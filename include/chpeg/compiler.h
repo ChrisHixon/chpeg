@@ -21,7 +21,7 @@
 CHPEG_API int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose);
 
-CHPEG_API const ChpegByteCode *chpeg_default_bytecode();
+CHPEG_API const ChpegByteCode *chpeg_default_bytecode(void);
 
 #endif // #ifndef CHPEG_COMPILER_H
 

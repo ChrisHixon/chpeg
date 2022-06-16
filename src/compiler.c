@@ -59,7 +59,7 @@ typedef struct _ChpegCNode
     struct _ChpegCNode *parent;
 } ChpegCNode;
 
-static ChpegCNode *ChpegCNode_new()
+static ChpegCNode *ChpegCNode_new(void)
 {
     ChpegCNode *self = (ChpegCNode *)CHPEG_CALLOC(1, sizeof(ChpegCNode));
 
@@ -1210,7 +1210,7 @@ static int ChpegCU_detect_left_recursion(ChpegCU *cu)
 // Compiler sanity check: assert def names looked up via CHPEG_DEF_* macros
 // match what is expected. This might help detect mismatches of included
 // bytecode header vs. linked bytecode.
-void chpeg_sanity_check()
+static void chpeg_sanity_check(void)
 {
     const ChpegByteCode *bc = chpeg_default_bytecode();
 
@@ -1265,7 +1265,7 @@ void chpeg_sanity_check()
 //
 // I need a better way to deal with errors. Should be dealt with when creating a better API.
 // For now I'm just using CHPEG_ERR_COMPILE, added into the parser error codes (ChpegErrorCodes)
-int chpeg_compile(const unsigned char *input, size_t length,
+CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
     if (verbose & 3) {
@@ -1409,7 +1409,7 @@ done:
     return err;
 }
 
-const ChpegByteCode *chpeg_default_bytecode()
+CHPEG_DEF const ChpegByteCode *chpeg_default_bytecode(void)
 {
     return &chpeg_bytecode;
 }
