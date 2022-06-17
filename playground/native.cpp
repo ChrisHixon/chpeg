@@ -309,7 +309,16 @@ void ChpegParser_print_trace(ChpegParser *self, const unsigned char *input, size
 static void addResult(std::string &json, std::string& result) {
     if(result.size() > 1) result.resize(result.size()-1); //erase last comma
     json += result + "]";
-} 
+}
+
+static double get_time_as_ms(void) {
+   return ((double)(clock() * 1000) / CLOCKS_PER_SEC);
+}
+
+static double duration_as_ms(clock_t start, clock_t end) {
+    return ((double)(end - start) * 1000) / CLOCKS_PER_SEC;
+
+}
 
 std::string lint(const std::string &grammarText, const std::string &codeText, int opt_simplification, bool packrat) {
   ChpegParser *parser = NULL;
@@ -354,15 +363,20 @@ std::string lint(const std::string &grammarText, const std::string &codeText, in
 #endif
     }
     isz_t consumed;
+    clock_t start = clock(); /* start of program */
     parse_result = ChpegParser_parse(parser, (const unsigned char*)codeText.c_str(), (int) codeText.size(), &consumed);
+    clock_t end = clock(); /* end of program */
     if (consumed == codeText.size()) {
-      snprintf(log_code_buf, sizeof(log_code_buf), "[]");
+      //snprintf(log_code_buf, sizeof(log_code_buf), "[]");
       is_source_valid = true;
       ChpegNode_print(parser->tree_root, parser, (const unsigned char*)codeText.c_str(), 0, astResult);
       ChpegParser_print_trace(parser, (const unsigned char*)codeText.c_str(), codeText.size(), profileResult);
+      //printf("Duration: %fms\n", duration_as_ms(start, end));
+      snprintf(log_code_buf, sizeof(log_code_buf), "Duration: %fms, ", duration_as_ms(start, end));
+      profileResult = log_code_buf + profileResult;
     }
     else {
-      snprintf(log_code_buf, sizeof(log_code_buf), "[\"parse succeeded but consumed %d bytes out of %d\"]", parse_result, (int)codeText.size());
+      //snprintf(log_code_buf, sizeof(log_code_buf), "[\"parse succeeded but consumed %d bytes out of %d\"]", parse_result, (int)codeText.size());
       ChpegParser_print_error(parser, (const unsigned char*)codeText.c_str());
     }
     if(byte_code) ChpegByteCode_free(byte_code);
@@ -539,7 +553,7 @@ int main(int argc, char *argv[]) {
 
     ret = 0;
 done:
-        
+
     if(/*ret == 0 &&*/ input_grammar && input) {
       std::string grammarText = (char*)input_grammar;
       std::string codeText = (char*)input;
