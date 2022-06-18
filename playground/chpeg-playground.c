@@ -1,7 +1,7 @@
 #include <emscripten.h>
 #include <stdio.h>
 #include <string.h>
-#include "../include/chpeg_ext.h"
+#include "../build/chpeg_all.h"
 
 EM_JS(void, switch_output, (const char* which), {
     output = UTF8ToString(which);
