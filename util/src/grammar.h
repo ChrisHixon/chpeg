@@ -8,12 +8,17 @@
 typedef struct _App App;
 #endif
 
+enum GrammarTypes {
+    GRAMMAR_FILE = 1,
+    GRAMMAR_STRING = 2,
+};
+
 typedef struct _Grammar {
-    int which;
+    int type;
     union {
         const char *filename;
         const char *str;
-    };
+    } src;
     ChpegByteCode *bc;
     unsigned char *data;
     size_t length;

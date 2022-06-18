@@ -5,6 +5,10 @@
 #ifndef CHPEG_UTIL_H
 #define CHPEG_UTIL_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #endif
@@ -24,6 +28,10 @@ CHPEG_API char *chpeg_flags(char *buf, int flags);
         fprintf(stderr, "%s:%d: %s: %s\n", __FILE__, __LINE__, __func__, msg); \
         abort(); \
     } while(0)
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
 #endif
 
 #endif // #ifndef CHPEG_UTIL_H

@@ -14,32 +14,32 @@
 
 void Parse_init_file(Parse *p, const char *filename)
 {
-    *p = (Parse) {
-        .which = 1,
-        .filename = filename,
-        .parse_result = -1,
-    };
+    memset(p, 0, sizeof(Parse));
+    p->type = PARSE_FILE;
+    p->src.filename = filename;
+    p->parse_result = -1;
 }
 
 void Parse_init_str(Parse *p, const char *str)
 {
-    *p = (Parse) {
-        .which = 2,
-        .str = str,
-        .parse_result = -1,
-    };
+    memset(p, 0, sizeof(Parse));
+    p->type = PARSE_STRING;
+    p->src.str = str;
+    p->parse_result = -1;
 }
 
 int Parse_cleanup(Parse *p)
 {
     if (p) {
-        if (p->parser != NULL) {
+        if (p->parser) {
             ChpegParser_free(p->parser);
         }
-        if (p->which == 1) { // file
-            free(p->data);
+        if (p->type == PARSE_FILE) {
+            if (p->data) {
+                free(p->data);
+            }
         }
-        *p = (Parse) { 0 };
+        memset(p, 0, sizeof(Parse));
     }
     return 0;
 }
@@ -52,28 +52,30 @@ int Parse_parse(Parse *p, App *app)
     size_t length = 0;
     ChpegByteCode *bc = NULL;
     int parse_result = -1;
+    size_t consumed = 0;
 
     // refuse to do anything if parser exists (indicating a parse has happened)
     if (p->parser != NULL) {
         return 1;
     }
 
-    assert(p->which >= 1 && p->which <= 2);
-    if (p->which == 1) { // file
+    assert(p->type >= PARSE_FILE && p->type <= PARSE_STRING);
+    if (p->type == PARSE_FILE) {
         if (app->verbose >= 1) {
-            fprintf(stderr, "Parsing file: '%s'\n", p->filename);
+            fprintf(stderr, "Parsing file: '%s'\n", p->src.filename);
         }
-        if (chpeg_read_file(p->filename, &file_data, &length) != 0) {
+        if (chpeg_read_file(p->src.filename, &file_data, &length) != 0) {
             // chpeg_read_file() will print any errors
             err = 1;
             goto done;
         }
         data = file_data;
     }
-    else if (p->which == 2) { // string
-        data = (unsigned char *)p->str;
-        length = strlen(p->str);
-        char *esc = chpeg_esc_bytes((const unsigned char *)p->str, strlen(p->str), 40);
+    else if (p->type == PARSE_STRING) {
+        data = (unsigned char *)p->src.str;
+        length = strlen(p->src.str);
+        char *esc = chpeg_esc_bytes((const unsigned char *)p->src.str,
+            strlen(p->src.str), 40);
         if (app->verbose >= 1) {
             fprintf(stderr, "Parsing string: \"%s\"\n", esc);
         }
@@ -113,7 +115,7 @@ int Parse_parse(Parse *p, App *app)
     p->parser->packrat_window_size = app->packrat_window_size;
 #endif
 
-    size_t consumed = 0;
+    consumed = 0;
     parse_result = ChpegParser_parse(p->parser, data, length, &consumed);
     if (parse_result == 0) {
         if (consumed == length) {

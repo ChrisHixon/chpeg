@@ -5,6 +5,10 @@
 #ifndef CHPEG_BYTECODE_H
 #define CHPEG_BYTECODE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #endif
@@ -50,7 +54,7 @@ CHPEG_API void ChpegByteCode_print(const ChpegByteCode *self);
 CHPEG_API void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     const char *basename, const char *varname, const char *prefix, const char *opcodes);
 CHPEG_API void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
-    const char *basename, const char *varname);
+    const char *basename, const char *varname, const char *prefix, const char *opcodes);
 
 // node flags
 enum ChpegFlags {
@@ -71,6 +75,10 @@ enum ChpegFlags {
 #endif
 
 };
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif // #ifndef CHPEG_BYTECODE_H
 

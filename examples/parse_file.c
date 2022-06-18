@@ -1,11 +1,6 @@
 #include <stdio.h>
 
-#ifdef USE_EXTENSIONS
-#define CHPEG_EXTENSION_ALL
-#include "chpeg_ext.h"
-#else
-#include "chpeg.h"
-#endif
+#include "chpeg_all.h"
 
 int main(int argc, char *argv[])
 {

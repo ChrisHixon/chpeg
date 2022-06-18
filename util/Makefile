@@ -8,10 +8,15 @@ EXTENSIONS = ALL
 # current features: PACKRAT
 FEATURES = PACKRAT
 
+# set to non-empty value to use the chpeg.c amalgamation instead of separate chpeg library sources
+USE_AMALGAMATION = true
+
 CC=gcc
+#CC=g++
 EXTENSION_DEFS = $(EXTENSIONS:%=-DCHPEG_EXTENSION_%)
 FEATURE_DEFS = $(FEATURES:%=-DCHPEG_%)
-CFLAGS_COMMON = -Wall -std=c17 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
+CFLAGS_COMMON = -Wall -std=c99 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
+#CFLAGS_COMMON = -Wall -std=c++11 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
 CFLAGS = $(CFLAGS_COMMON) -O3
 CFLAGS_TRACE = $(CFLAGS_COMMON) -g -DCHPEG_VM_TRACE -DCHPEG_VM_PRINT_TREE -DCHPEG_VM_PROFILE
 INCLUDES=-I$(INCLUDE) -I./src
@@ -19,10 +24,16 @@ LDFLAGS=
 
 INCLUDE=../include
 
-BYTECODE_C=$(if $(EXTENSIONS), chpeg_ext_bytecode.c, chpeg_bytecode.c)
+BYTECODE_C=$(if $(EXTENSIONS),chpeg_ext_bytecode.c,chpeg_bytecode.c)
 
-CHPEG_SOURCE_FILES=mem.c opcodes.c bytecode.c util.c parser.c compiler.c $(BYTECODE_C)
-CHPEG_SRC=../src
+CHPEG_LIB_SOURCE_FILES=mem.c opcodes.c bytecode.c util.c parser.c compiler.c $(BYTECODE_C)
+CHPEG_LIB_SRC_DIR=../src
+
+CHPEG_AMALGAMATION_SOURCE=chpeg.c
+CHPEG_AMALGAMATION_SRC_DIR=../build
+
+CHPEG_SOURCE_FILES=$(if $(USE_AMALGAMATION),$(CHPEG_AMALGAMATION_SOURCE),$(CHPEG_LIB_SOURCE_FILES))
+CHPEG_SRC=$(if $(USE_AMALGAMATION),$(CHPEG_AMALGAMATION_SRC_DIR),$(CHPEG_LIB_SRC_DIR))
 
 SRC = $(wildcard src/*.c) $(wildcard src/actions/*.c)
 
@@ -54,21 +65,31 @@ $(BIN_TRACE): $(OBJ_TRACE) $(CHPEG_TRACE_OBJ)
 -include $(DEP_TRACE)
 -include $(CHPEG_TRACE_DEP)
 
-$(BUILD)/%.o : %.c
-	-mkdir -p $(@D)
+$(BUILD)/%.o : %.c | $(BUILD)/src/actions
 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -c $< -o $@
 
-$(BUILD)/chpeg/%.o : $(CHPEG_SRC)/%.c
-	-mkdir -p $(@D)
+$(BUILD)/chpeg/%.o : $(CHPEG_SRC)/%.c | $(BUILD)/chpeg
 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -c $< -o $@
 
-$(BUILD_TRACE)/%.o : %.c
-	-mkdir -p $(@D)
+$(BUILD_TRACE)/%.o : %.c | $(BUILD_TRACE)/src/actions
 	$(CC) $(CFLAGS_TRACE) $(INCLUDES) -MMD -c $< -o $@
 
-$(BUILD_TRACE)/chpeg/%.o : $(CHPEG_SRC)/%.c
-	-mkdir -p $(@D)
+$(BUILD_TRACE)/chpeg/%.o : $(CHPEG_SRC)/%.c | $(BUILD_TRACE)/chpeg
 	$(CC) $(CFLAGS_TRACE) $(INCLUDES) -MMD -c $< -o $@
+
+# directories
+
+$(BUILD)/src/actions:
+	-mkdir -p $(BUILD)/src/actions
+
+$(BUILD)/chpeg:
+	-mkdir -p $(BUILD)/chpeg
+
+$(BUILD_TRACE)/src/actions:
+	-mkdir -p $(BUILD_TRACE)/src/actions
+
+$(BUILD_TRACE)/chpeg:
+	-mkdir -p $(BUILD_TRACE)/chpeg
 
 .PHONY: clean
 clean:

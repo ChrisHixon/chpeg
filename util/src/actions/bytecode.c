@@ -10,16 +10,16 @@
 
 // Helper function to get the bytecode from the last grammar specified with -g/-G;
 // if nothing is on grammar stack, return the default chpeg bytecode.
-static int get_bytecode(App *app, const ChpegByteCode **bc)
+static int get_bytecode(App *app, const ChpegByteCode **bc_out)
 {
-    assert(bc);
+    assert(bc_out);
     if (app->grammars.size > 0) {
-        *bc = app->grammars.data[app->grammars.size - 1].bc;
-        assert(*bc);
+        *bc_out = app->grammars.data[app->grammars.size - 1].bc;
+        assert(*bc_out);
         return 0;
     }
-    *bc = chpeg_default_bytecode();
-    assert(*bc);
+    *bc_out = chpeg_default_bytecode();
+    assert(*bc_out);
     return 0;
 }
 
@@ -55,9 +55,15 @@ done:
 }
 
 Action bytecode_action = {
-    .name = "bytecode",
-    .description = "print bytecode",
-    .run = ByteCodeAction_run,
-    .usage = ByteCodeAction_usage,
+    "bytecode", // name
+    "print bytecode", // description
+    NULL, // create
+    NULL, // free
+    NULL, // init
+    NULL, // cleanup
+    NULL, // arg
+    ByteCodeAction_run, // run
+    NULL, // help
+    ByteCodeAction_usage, // usage
 };
 

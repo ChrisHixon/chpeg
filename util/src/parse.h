@@ -8,12 +8,17 @@
 typedef struct _App App;
 #endif
 
+enum ParseTypes {
+    PARSE_FILE = 1,
+    PARSE_STRING = 2,
+};
+
 typedef struct _Parse {
-    int which;
+    int type;
     union {
         const char *filename;
         const char *str;
-    };
+    } src;
     ChpegParser *parser;
     unsigned char *data;
     size_t length;

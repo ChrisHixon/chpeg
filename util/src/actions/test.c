@@ -1,5 +1,6 @@
 //
 // TestAction: example action that implements all Action methods
+// (except help, usage, description, to keep it hidden)
 //
 
 #include <stdio.h>
@@ -84,12 +85,16 @@ void TestAction_free(void *data)
 }
 
 Action test_action = {
-    .name = "test",
-    .create = TestAction_create,
-    .init = TestAction_init,
-    .arg = TestAction_arg,
-    .run = TestAction_run,
-    .cleanup = TestAction_cleanup,
-    .free = TestAction_free,
+
+    "test", // name
+    NULL, // description
+    TestAction_create, // create
+    TestAction_free, // free
+    TestAction_init, // init
+    TestAction_cleanup, // cleanup
+    TestAction_arg, // arg
+    TestAction_run, // run
+    NULL, // help
+    NULL, // usage
 };
 

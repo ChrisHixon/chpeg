@@ -1,14 +1,21 @@
+#ifndef CHPEG_CHPEG_BYTECODE_C
+#define CHPEG_CHPEG_BYTECODE_C
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_bytecode.h"
 #endif
 
-CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
-  .num_defs = 20,
-  .def_names = (char*[20]) {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"},
-  .def_flags = (int[20]) {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE},
-  .def_addrs = (int[20]) {3, 16, 43, 56, 63, 74, 85, 130, 137, 146, 182, 198, 219, 235, 241, 266, 274, 278, 282, 286},
-  .num_instructions = 318,
-  .instructions = (int[318]) {
+const char *chpeg_bytecode_def_names[20] = {"Grammar", "Definition", "Choice", "Sequence", "Predicate", "Repeat", "Primary", "Options", "Identifier", "Literal", "CharClass", "CharRange", "Char", "EscChar", "OctChar", "PlainChar", "PredOp", "RepOp", "Dot", "S"};
+
+int chpeg_bytecode_def_flags[20] = {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE};
+
+int chpeg_bytecode_def_addrs[20] = {3, 16, 43, 56, 63, 74, 85, 130, 137, 146, 182, 198, 219, 235, 241, 266, 274, 278, 282, 286};
+
+int chpeg_bytecode_instructions[318] = {
   /*      0 */ CHPEG_INST(CHPEG_OP_IDENT,           0), // Grammar
   /*      1 */ CHPEG_INST(CHPEG_OP_FAIL,            0),
   /*      2 */ CHPEG_INST(CHPEG_OP_SUCC,            0),
@@ -327,8 +334,31 @@ CHPEG_DEF const ChpegByteCode chpeg_bytecode = {
   /*    315 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
   /*    316 */ CHPEG_INST(CHPEG_OP_ISUCC,          19), // S
   /*    317 */ CHPEG_INST(CHPEG_OP_IFAIL,          19), // S
-  },
-  .num_strings = 25,
-  .strings = (unsigned char**)(char*[25]) {"{", "}", "<-", "/", "{<", "(", ")", "A-Za-z", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"},
-  .str_len = (int[25]) {1, 1, 2, 1, 2, 1, 1, 6, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2},
+  };
+
+const char *chpeg_bytecode_strings[25] = {"{", "}", "<-", "/", "{<", "(", ")", "A-Za-z", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "]", "-", "\\", "nrt'\"[]\\", "0-3", "0-7", "&!", "*+?", ".", " \t\r\n", "#", "\r\n"};
+
+int chpeg_bytecode_str_len[25] = {1, 1, 2, 1, 2, 1, 1, 6, 7, 10, 1, 1, 1, 1, 1, 1, 8, 3, 3, 2, 3, 1, 4, 1, 2};
+
+const ChpegByteCode chpeg_bytecode = {
+  20, // num_defs
+  (char **)chpeg_bytecode_def_names,
+  chpeg_bytecode_def_flags,
+  chpeg_bytecode_def_addrs,
+  318, // num_instructions
+  chpeg_bytecode_instructions,
+  25, // num_strings
+  (unsigned char **)chpeg_bytecode_strings,
+  chpeg_bytecode_str_len,
+#if CHPEG_EXTENSION_REFS
+  0, // num_refs
+  NULL, // refs,
+#endif
+
 };
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // #ifndef CHPEG_CHPEG_BYTECODE_C

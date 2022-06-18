@@ -2,6 +2,10 @@
 // chpeg: util.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/mem.h"
 #include "chpeg/util.h"
@@ -115,7 +119,7 @@ int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
     }
 
     // initial allocation
-    buf = malloc(CHPEG_READ_FILE_INITIAL_SIZE);
+    buf = (unsigned char *)CHPEG_MALLOC(CHPEG_READ_FILE_INITIAL_SIZE);
     if (buf == NULL) {
         perror("malloc");
         ret = 1;
@@ -132,7 +136,7 @@ int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
             p += bytes_read;
             len += bytes_read;
             if (remain == 0) {
-                buf = realloc(buf, bsize * 2);
+                buf = (unsigned char *)CHPEG_REALLOC(buf, bsize * 2);
                 if (buf == NULL) {
                     perror("realloc");
                     ret = 1;
@@ -174,7 +178,7 @@ cleanup:
     }
     else {
         if (len > CHPEG_READ_FILE_INITIAL_SIZE) {
-            buf = realloc(buf, len);
+            buf = (unsigned char *)CHPEG_REALLOC(buf, len);
         }
         *data = buf;
         *length = len;
@@ -236,6 +240,9 @@ void chpeg_line_col(const unsigned char *input, size_t offset, size_t *line_out,
     *col_out = 1 + offset - i;
 }
 
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // } chpeg: util.c
 

@@ -2,6 +2,10 @@
 // chpeg: mem.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -42,6 +46,10 @@ CHPEG_DEF void chpeg_free(void *ptr) {
     free(ptr);
 }
 
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
 #endif
 
 // } chpeg: mem.c

@@ -1,5 +1,9 @@
-#ifndef CHPEG_CHPEG_BYTECODE_H
-#define CHPEG_CHPEG_BYTECODE_H
+#ifndef CHPEG_CHPEG_EXT_BYTECODE_H
+#define CHPEG_CHPEG_EXT_BYTECODE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
@@ -32,6 +36,10 @@
 #define CHPEG_DEF_DOT 22
 #define CHPEG_DEF_S 23
 
-CHPEG_API const ChpegByteCode chpeg_bytecode;
+extern const ChpegByteCode chpeg_ext_bytecode;
 
-#endif // #ifndef CHPEG_CHPEG_BYTECODE_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // #ifndef CHPEG_CHPEG_EXT_BYTECODE_H

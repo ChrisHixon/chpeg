@@ -104,10 +104,16 @@ int ProfileAction_run(void *_, App *app)
 }
 
 Action profile_action = {
-    .name = "profile",
-    .description = "print parse profile information",
-    .init = ProfileAction_init,
-    .run = ProfileAction_run,
-    .usage = ProfileAction_usage,
+
+    "profile", // name
+    "print parse profile information", // description
+    NULL, // create
+    NULL, // free
+    ProfileAction_init, // init
+    NULL, // cleanup
+    NULL, // arg
+    ProfileAction_run, // run
+    NULL, // help
+    ProfileAction_usage, // usage
 };
 

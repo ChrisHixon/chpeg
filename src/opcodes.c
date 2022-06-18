@@ -2,11 +2,15 @@
 // chpeg: opcodes.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/opcodes.h"
 #endif
 
-CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
+const char *Chpeg_op_names[CHPEG_NUM_OPS] =
 {
     "GOTO",
     "IDENT",
@@ -51,6 +55,10 @@ CHPEG_DEF const char *Chpeg_op_names[CHPEG_NUM_OPS] =
 #endif
 
 };
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // } chpeg: opcodes.c
 

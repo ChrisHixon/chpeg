@@ -2,6 +2,10 @@
 // chpeg: parser.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,13 +17,14 @@
 #include "chpeg/parser.h"
 #endif
 
-#ifndef CHPEG_MAX_TREE_DEPTH
-#define CHPEG_MAX_TREE_DEPTH 256
-#endif
-
 #ifndef CHPEG_STACK_SIZE
 #define CHPEG_STACK_SIZE 1024
 #endif
+
+#ifndef CHPEG_TSTACK_SIZE
+#define CHPEG_TSTACK_SIZE 256
+#endif
+
 
 #ifndef SANITY_CHECKS
 #define SANITY_CHECKS 1
@@ -118,7 +123,7 @@ ChpegNode *ChpegNode_new(int def, size_t offset, size_t length, int flags)
 static inline ChpegReferenceInfo *ChpegNode_alloc_refs(ChpegNode *self, int num_refs)
 {
     if (num_refs) {
-        self->refs = CHPEG_CALLOC(num_refs, sizeof(ChpegReferenceInfo));
+        self->refs = (ChpegReferenceInfo *)CHPEG_CALLOC(num_refs, sizeof(ChpegReferenceInfo));
         return self->refs;
     }
     return NULL;
@@ -260,7 +265,7 @@ void ChpegNode_pop_child(ChpegNode *self)
 void ChpegNode_add_undo(ChpegNode *self, ChpegUndoFunction func,
     void *data, size_t data_size)
 {
-    ChpegUndoAction *action = CHPEG_CALLOC(1, sizeof(ChpegUndoAction));
+    ChpegUndoAction *action = (ChpegUndoAction *)CHPEG_CALLOC(1, sizeof(ChpegUndoAction));
     assert(func);
 #if CHPEG_NODE_REF_COUNT
     action->ref_count = 1;
@@ -560,20 +565,20 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
     }
 
     if (!pnode) {
-        pnode = CHPEG_CALLOC(1, sizeof(ChpegPNode));
+        pnode = (ChpegPNode *)CHPEG_CALLOC(1, sizeof(ChpegPNode));
     }
 
     pnode->node = node;
     ++node->ref_count;
     for (ChpegNode *p = node->head; p; p = p->next) {
-        ChpegPNode *pchild = CHPEG_CALLOC(1, sizeof(ChpegPNode));
+        ChpegPNode *pchild = (ChpegPNode *)CHPEG_CALLOC(1, sizeof(ChpegPNode));
         ChpegPNode_from_node(pchild, p, depth + 1, parser);
         ChpegPNode_push_child(pnode, pchild);
     }
 
 #if CHPEG_UNDO
     for (ChpegUndoAction *action = node->undo_action; action; action = action->next) {
-        ChpegPUndoNode *pu = CHPEG_CALLOC(1, sizeof(ChpegPUndoNode));
+        ChpegPUndoNode *pu = (ChpegPUndoNode *)CHPEG_CALLOC(1, sizeof(ChpegPUndoNode));
         pu->undo_action = action;
         ++action->ref_count;
         ChpegPNode_push_undo(pnode, pu);
@@ -586,7 +591,7 @@ static ChpegPNode *ChpegPNode_from_node(ChpegPNode *pnode, ChpegNode *node, int 
 static ChpegNode *ChpegPNode_export(ChpegParser *parser, ChpegPNode *pnode)
 {
     assert(pnode);
-    ChpegNode *node = CHPEG_MALLOC(sizeof(ChpegNode));
+    ChpegNode *node = (ChpegNode *)CHPEG_MALLOC(sizeof(ChpegNode));
     memcpy(node, pnode->node, sizeof(ChpegNode));
     node->next = NULL;
     node->head = NULL;
@@ -598,13 +603,13 @@ static ChpegNode *ChpegPNode_export(ChpegParser *parser, ChpegPNode *pnode)
     }
 #if CHPEG_UNDO
     for (ChpegPUndoNode *pu = pnode->undo; pu; pu = pu->next) {
-        void *action_data = CHPEG_MALLOC(pu->undo_action->data_size);
+        void *action_data = (void *)CHPEG_MALLOC(pu->undo_action->data_size);
         memcpy(action_data, pu->undo_action->data, pu->undo_action->data_size);
         ChpegNode_add_undo(node, pu->undo_action->func, action_data, pu->undo_action->data_size);
     }
 #endif
 #if CHPEG_EXTENSION_REFS
-    node->refs = CHPEG_MALLOC(parser->bc->num_refs * sizeof(ChpegReferenceInfo));
+    node->refs = (ChpegReferenceInfo *)CHPEG_MALLOC(parser->bc->num_refs * sizeof(ChpegReferenceInfo));
     memcpy(node->refs, pnode->node->refs, parser->bc->num_refs * sizeof(ChpegReferenceInfo));
 #endif
     return node;
@@ -687,8 +692,6 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->bc = bc;
     self->tree_root = NULL;
     self->simplification = 1;
-    self->max_tree_depth = CHPEG_MAX_TREE_DEPTH;
-    self->max_stack_size = CHPEG_STACK_SIZE;
     self->error_offset = 0;
     self->errors = NULL;
     self->errors_size = 0;
@@ -703,12 +706,12 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 #if CHPEG_VM_PROFILE
     self->vm_profile = 0;
     self->prof_inst_cnt = 0;
-    self->prof_ident_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
-    self->prof_isucc_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
-    self->prof_ifail_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
-    self->prof_choice_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
-    self->prof_cisucc_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
-    self->prof_cifail_cnt = CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_ident_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_isucc_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_ifail_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_choice_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_cisucc_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
+    self->prof_cifail_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
     self->farthest_backtrack = 0;
 #endif
 #if CHPEG_PACKRAT
@@ -824,8 +827,9 @@ void ChpegParser_print_profile(ChpegParser *self,
 }
 #endif
 
-void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc)
+static inline void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc)
 {
+    ChpegErrorInfo *error = NULL; 
     if (offset >= self->error_offset) {
         if (offset > self->error_offset) {
             self->error_offset = offset;
@@ -834,19 +838,19 @@ void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, 
         if (self->errors_size + 1 > self->errors_capacity) {
             if (!self->errors) {
                 self->errors_capacity = 1;
-                self->errors = CHPEG_MALLOC(self->errors_capacity * sizeof(ChpegErrorInfo));
+                self->errors = (ChpegErrorInfo *)CHPEG_MALLOC(
+                    self->errors_capacity * sizeof(ChpegErrorInfo));
             }
             else {
                 self->errors_capacity *= 2;
             }
-            self->errors = CHPEG_REALLOC(self->errors, self->errors_capacity * sizeof(ChpegErrorInfo));
+            self->errors = (ChpegErrorInfo *)CHPEG_REALLOC(
+                self->errors, self->errors_capacity * sizeof(ChpegErrorInfo));
         }
-        self->errors[self->errors_size++] = (ChpegErrorInfo)
-        {
-            .depth = depth,
-            .def = def,
-            .pc = pc,
-        };
+        error = &self->errors[self->errors_size++];
+        error->depth = depth;
+        error->def = def;
+        error->pc = pc;
     }
 }
 
@@ -977,9 +981,9 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 // TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal
 // with things this is meant to detect)
 
-#define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= max_stack_size)
+#define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= CHPEG_STACK_SIZE)
 #define CHPEG_CHECK_STACK_UNDERFLOW(size) (top - (size) < 0)
-#define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= max_tree_depth)
+#define CHPEG_CHECK_TSTACK_OVERFLOW(size) (tree_top + (size) >= CHPEG_TSTACK_SIZE)
 #define CHPEG_CHECK_TSTACK_UNDERFLOW(size) (tree_top - (size) < 0)
 
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
@@ -990,6 +994,16 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     int err_locked = 0;
 #endif
 
+#if SANITY_CHECKS || CHPEG_VM_TRACE
+    unsigned long long cnt = 0, cnt_max = 0;
+    const int num_instructions = self->bc->num_instructions;
+#endif
+
+#if CHPEG_VM_TRACE
+    char *esc_str = NULL;
+    const char *def_name = NULL;
+#endif
+
 #if CHPEG_VM_PRINT_TREE
     int tree_changed = 0;
 #endif
@@ -997,6 +1011,16 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if CHPEG_PACKRAT
     const int num_defs = self->bc->num_defs;
 #endif
+
+#if CHPEG_EXTENSION_REFS
+    const int num_refs = self->bc->num_refs;
+    assert(num_refs >= 0);
+    ChpegReferenceInfo *ref = NULL;
+#if CHPEG_UNDO
+    ChpegUndoMarkData *undo_mark = NULL;
+#endif
+#endif
+
     //const char **def_names = (const char **)self->bc->def_names;
     const int *def_flags = self->bc->def_flags;
     const int *def_addrs = self->bc->def_addrs;
@@ -1004,18 +1028,6 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     //const int num_strings = self->bc->num_strings;
     const unsigned char **strings = (const unsigned char **)self->bc->strings;
     const int *str_len = self->bc->str_len;
-#if CHPEG_EXTENSION_REFS
-    const int num_refs = self->bc->num_refs;
-    assert(num_refs >= 0);
-    ChpegReferenceInfo *ref = NULL;
-#if CHPEG_UNDO
-    ChpegUndoMarkData *undo_mark = NULL; 
-#endif
-#endif
-
-    const int max_stack_size = self->max_stack_size;
-    const int max_tree_depth = self->max_tree_depth;
-
 
 #if CHPEG_PACKRAT
     ChpegPNode **packrat = NULL;
@@ -1023,9 +1035,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     ChpegPNode *packrat_lookup = NULL;
     int packrat_index = 0;
     int packrat_flags = 0;
-    int window_size = 0;
+    size_t window_size = 0;
     size_t window_end = 0;
-    int poffset = 0, plen = 0, loop_end = 0;
+    size_t poffset = 0, plen = 0, loop_end = 0, z = 0;
 
     if (self->packrat) {
         if (self->packrat_window_size) {
@@ -1036,7 +1048,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             window_size = length + 1;
             window_end = length + 1;
         }
-        packrat = CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
+        packrat = (ChpegPNode **)CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
 
         // packrat_no_match is a negative cache meaning match failure (attempted match, but match failed)
         packrat_no_match = (ChpegPNode *)&packrat_no_match; // need a unique, non-valid PNode pointer
@@ -1049,37 +1061,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             break;
         }
     }
-
 #endif
-
-#if CHPEG_VM_TRACE
-    char *esc_str = NULL;
-    const char *def_name = NULL;
-#endif
-
-    size_t offset = 0;
-    int op = 0, arg = 0, pc = 0, top = 0, tree_top = 0;
-
-    size_t stack[max_stack_size];
-    ChpegNode *tree_stack[max_tree_depth];
-
-    if (CHPEG_CHECK_STACK_OVERFLOW(1)) {
-        retval = CHPEG_ERR_STACK_OVERFLOW;
-        goto done;
-    }
-    stack[top] = 0; // to make life easier, put a zero on the stack;
-                    // top is then always in range [0, max_stack_size)
-                    // top is incremented before push, so first real element is stack[1]
-
-    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) {
-        retval = CHPEG_ERR_TSTACK_OVERFLOW;
-        goto done;
-    }
-    self->tree_root = ChpegNode_new(0, 0, 0, 0);
-#if CHPEG_EXTENSION_REFS
-    ChpegNode_alloc_refs(self->tree_root, num_refs);
-#endif
-    tree_stack[tree_top] = self->tree_root;
 
 #if CHPEG_VM_PROFILE
     self->prof_inst_cnt = 0;
@@ -1094,9 +1076,34 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     size_t max_offset = 0;
 #endif
 
+    size_t offset = 0;
+    int op = 0, arg = 0, pc = 0, top = 0, tree_top = 0;
+
+    size_t stack[CHPEG_STACK_SIZE];
+    ChpegNode *tree_stack[CHPEG_TSTACK_SIZE];
+
+    if (CHPEG_CHECK_STACK_OVERFLOW(1)) {
+        retval = CHPEG_ERR_STACK_OVERFLOW;
+        goto done;
+    }
+    stack[top] = 0; // to make life easier, put a zero on the stack;
+                    // top is then always in range [0, CHPEG_STACK_SIZE)
+                    // top is incremented before push, so first real element is stack[1]
+
+    if (CHPEG_CHECK_TSTACK_OVERFLOW(1)) {
+        retval = CHPEG_ERR_TSTACK_OVERFLOW;
+        goto done;
+    }
+
+    self->tree_root = ChpegNode_new(0, 0, 0, 0);
+
+#if CHPEG_EXTENSION_REFS
+    ChpegNode_alloc_refs(self->tree_root, num_refs);
+#endif
+
+    tree_stack[tree_top] = self->tree_root;
+
 #if SANITY_CHECKS || CHPEG_VM_TRACE
-    unsigned long long cnt = 0, cnt_max = 0;
-    const int num_instructions = self->bc->num_instructions;
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
     for(cnt = 0; cnt < cnt_max; ++cnt)
 #else
@@ -1107,9 +1114,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if SANITY_CHECKS
         if (offset > length) { retval = CHPEG_ERR_INVALID_OFFSET; goto done; }
         if (pc < 0 || pc > num_instructions) { retval = CHPEG_ERR_INVALID_PC; goto done; }
-        if (top >= max_stack_size) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
+        if (top >= CHPEG_STACK_SIZE) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
         if (top < 0) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
-        if (tree_top >= max_tree_depth) { retval = CHPEG_ERR_TSTACK_RANGE; goto done; }
+        if (tree_top >= CHPEG_TSTACK_SIZE) { retval = CHPEG_ERR_TSTACK_RANGE; goto done; }
         if (tree_top < 0) { retval = CHPEG_ERR_TSTACK_RANGE; goto done; }
 #endif
         op = instructions[pc] & 0xff;
@@ -1197,8 +1204,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                             }
 #endif
                             loop_end = window_size * num_defs;
-                            for (i = 0; i < loop_end; ++i) {
-                                ChpegPNode *pnode = packrat[i];
+                            for (z = 0; z < loop_end; ++z) {
+                                ChpegPNode *pnode = packrat[z];
                                 if (pnode && pnode != packrat_no_match) {
                                     ChpegPNode_free(pnode);
                                 }
@@ -1215,8 +1222,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                             }
 #endif
                             loop_end = (offset + 1) * num_defs;
-                            for (i = (window_end + 1) * num_defs; i < loop_end; ++i) {
-                                packrat_index = i % (window_size * num_defs);
+                            for (z = (window_end + 1) * num_defs; z < loop_end; ++z) {
+                                packrat_index = z % (window_size * num_defs);
                                 ChpegPNode *pnode = packrat[packrat_index];
                                 if (pnode && pnode != packrat_no_match) {
                                     ChpegPNode_free(pnode);
@@ -1376,7 +1383,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if CHPEG_VM_TRACE
                         if (self->vm_trace & 2) {
                             esc_str = chpeg_esc_bytes(input + poffset, plen, 40);
-                            fprintf(stderr, "packrat ISUCC %6d %4d %12s \"%s\" %s\n",
+                            fprintf(stderr, "packrat ISUCC %6zu %4d %12s \"%s\" %s\n",
                                 poffset, arg,
                                 ChpegByteCode_def_name(self->bc, arg), esc_str,
                                 packrat_index ? "CACHE" : "NOCACHE");
@@ -1789,7 +1796,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                assert(num_refs && stack[top] < num_refs);
+                assert(num_refs && (int)stack[top] < num_refs);
 
                 // find the ref in nearest reference scope
                 ref = NULL;
@@ -1802,7 +1809,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 assert(ref);
 
 #if CHPEG_UNDO
-                undo_mark = CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
+                undo_mark = (ChpegUndoMarkData *)CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
                 undo_mark->ref_id = stack[top];
                 undo_mark->value = *ref;
                 ChpegNode_add_undo(tree_stack[tree_top],
@@ -1837,7 +1844,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-                assert(num_refs && stack[top] < num_refs);
+                assert(num_refs && (int)stack[top] < num_refs);
 
                 // find the ref in nearest reference scope
                 ref = NULL;
@@ -1850,7 +1857,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 assert(ref);
 
 #if CHPEG_UNDO
-                undo_mark = CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
+                undo_mark = (ChpegUndoMarkData *)CHPEG_MALLOC(sizeof(ChpegUndoMarkData));
                 undo_mark->ref_id = stack[top];
                 undo_mark->value = *ref;
                 ChpegNode_add_undo(tree_stack[tree_top],
@@ -1859,7 +1866,9 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
 
                 // unset the reference (flags=0)
-                *ref = (ChpegReferenceInfo) { 0 };
+                ref->offset = 0;
+                ref->length = 0;
+                ref->flags = 0;
 
 #if CHPEG_VM_TRACE
                 if (self->vm_trace & 8) {
@@ -2179,7 +2188,7 @@ done:
 #if CHPEG_PACKRAT
     if (packrat) {
         loop_end = num_defs * window_size;
-        for (i = 0; i < loop_end; ++i) {
+        for (z = 0; z < loop_end; ++z) {
             ChpegPNode *pnode = packrat[i];
             if (pnode && pnode != packrat_no_match) {
                 assert(pnode->node->ref_count > 0);
@@ -2200,6 +2209,9 @@ done:
 #undef CHPEG_CHECK_TSTACK_OVERFLOW
 #undef CHPEG_CHECK_TSTACK_UNDERFLOW
 
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // } chpeg: parser.c
 

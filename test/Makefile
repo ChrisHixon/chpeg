@@ -12,19 +12,25 @@ CC=gcc
 EXTENSION_DEFS = $(EXTENSIONS:%=-DCHPEG_EXTENSION_%)
 FEATURE_DEFS = $(FEATURES:%=-DCHPEG_%)
 CFLAGS=-Wall -std=c99 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
+CPPFLAGS=-Wall -std=c++17 -pedantic $(EXTENSION_DEFS) $(FEATURE_DEFS)
 INCLUDES=-I$(INCLUDE)
 LDFLAGS=
 INCLUDE=../include
 BUILD=build
 
 # chpeg lib vars
-BYTECODE_C=$(if $(EXTENSIONS), chpeg_ext_bytecode.c, chpeg_bytecode.c)
+BYTECODE_C=$(if $(EXTENSIONS),chpeg_ext_bytecode.c,chpeg_bytecode.c)
 CHPEG_SOURCE_FILES=mem.c opcodes.c bytecode.c util.c parser.c compiler.c $(BYTECODE_C)
 CHPEG_SRC=../src
+CHPEG_BUILD=../build
 CHPEG_OBJ = $(CHPEG_SOURCE_FILES:%.c=$(BUILD)/chpeg/%.o)
-CHPEG_DEP = $(CHPEG_OBJ:%.o=%.d)
+CHPEG_DEP = $(CHPEG_OBJ:%.o=%.d) $(BUILD)/chpeg.d
 
 # test vars
+TESTS_EXT=$(if $(EXTENSIONS),1,0)
+TESTS_EXT_DEF=-DUSE_EXTENSIONS=$(TESTS_EXT)
+TEST_CFLAGS=$(CFLAGS) $(TESTS_EXT_DEF)
+TEST_CPPFLAGS=$(CPPFLAGS) $(TESTS_EXT_DEF)
 TESTS_OBJDIR=$(BUILD)
 GENERATED=generated
 TESTS=bytecode_output_c_pt1_output \
@@ -34,6 +40,7 @@ TESTS=bytecode_output_c_pt1_output \
 TESTS_SOURCES=$(patsubst %,%.c,$(TESTS))
 TESTS_OBJECTS=$(patsubst %.c,$(TESTS_OBJDIR)/%.o,$(TESTS_SOURCES))
 TESTS_DEP = $(TESTS_OBJECTS:%.o=%.d)
+AMALGAMATIONS=parse_file_amalg_c parse_file_amalg_o parse_file_amalg_all parse_file_cpp_amalg_all parse_file_cpp_amalg_o
 
 TEST_BYTECODE=$(GENERATED)/test_bytecode.c $(GENERATED)/test_bytecode.h
 
@@ -41,13 +48,19 @@ TEST_BYTECODE=$(GENERATED)/test_bytecode.c $(GENERATED)/test_bytecode.h
 # rules
 #
 
-all: $(TESTS)
+all: $(TESTS) $(AMALGAMATIONS)
 
 #
-# chpeg lib
+# chpeg lib / object files
 #
 
-$(BUILD)/chpeg/%.o : $(CHPEG_SRC)/%.c
+# separate object files for each source
+$(BUILD)/chpeg/%.o: $(CHPEG_SRC)/%.c
+	-mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -MMD -c $< -o $@
+
+# one object file from amalgamation .c file
+$(BUILD)/chpeg.o: $(CHPEG_BUILD)/chpeg.c
 	-mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -c $< -o $@
 
@@ -59,7 +72,7 @@ $(BUILD)/chpeg/%.o : $(CHPEG_SRC)/%.c
 
 $(TESTS_OBJDIR)/%.o: %.c
 	-mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -MMD -c $< -o $@
+	$(CC) $(TEST_CFLAGS) $(INCLUDES) -MMD -c $< -o $@
 
 -include $(TESTS_DEP)
 
@@ -76,6 +89,32 @@ bytecode_output_c_pt1_output: %: $(TESTS_OBJDIR)/%.o $(CHPEG_OBJ)
 
 bytecode_output_c_pt2_compare: %: $(TESTS_OBJDIR)/%.o $(CHPEG_OBJ)
 	$(CC) $(LDFLAGS) $< $(GENERATED)/test_bytecode.o $(CHPEG_OBJ) -o $@
+
+# various amalgamation / linking tests
+# (currently these are just tests to see if they build, not tested in `make test`)
+
+# .c amalgamation, include .h, .c file added directly
+parse_file_amalg_c: ../build/chpeg.c ../build/chpeg.h
+	$(CC) $(TEST_CFLAGS) $(LDFLAGS) -DAMALG $< parse_file.c -o $@
+
+# .c amalgamation, include .h, link with .o file compiled separately
+parse_file_amalg_o: $(BUILD)/chpeg.o
+	$(CC) $(TEST_CFLAGS) $(LDFLAGS) -DAMALG $< parse_file.c -o $@
+
+# all-in-one amalgamation, .h included in source code
+parse_file_amalg_all: ../build/chpeg_all.h
+	$(CC) $(TEST_CFLAGS) $(LDFLAGS) -Wno-unused-function \
+		-DAMALG -DAMALG_ONE_FILE parse_file.c -o $@
+
+# CPP: all-in-one amalgamation, .h included in source code
+parse_file_cpp_amalg_all: ../build/chpeg_all.h
+	$(CXX) $(TEST_CPPFLAGS) $(LDFLAGS) -Wno-unused-function \
+		-DAMALG -DAMALG_ONE_FILE parse_file.cpp -o $@
+
+# CPP: include .h amalgamation, link with chpeg.o
+parse_file_cpp_amalg_o: $(BUILD)/chpeg.o
+	$(CXX) $(TEST_CPPFLAGS) $(LDFLAGS) -Wno-unused-function \
+		-DAMALG $< parse_file.cpp -o $@
 
 # generated
 
@@ -104,5 +143,5 @@ test:
 clean:
 	-rm -rf $(BUILD)
 	-rm -rf $(GENERATED)
-	-rm -f $(TESTS)
+	-rm -f $(TESTS) $(AMALGAMATIONS)
 

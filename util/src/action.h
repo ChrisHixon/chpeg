@@ -18,12 +18,6 @@ typedef struct _Action {
     int (*init) (void *data, struct _App *app);
     int (*cleanup) (void *data, struct _App *app);
 
-    // If template is non-NULL, the app will allocate data of size 'template_size' in bytes,
-    // and initialize it with a copy of of 'template'. The data will be automatically freed.
-    // The create, init, cleanup, and free functions will not be called.
-    void *template; // pre-initialized data template
-    size_t template_size; // size of template in bytes
-
     int (*arg) (void *data, struct _App *app); // handle arguments
     int (*run) (void *data, struct _App *app); // run action
 

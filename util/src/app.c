@@ -19,7 +19,7 @@
 #include "actions/bytecode.h"
 #include "actions/bytecodec.h"
 #include "actions/test.h"
-#include "actions/test2.h"
+
 #if CHPEG_VM_PROFILE
 #include "actions/profile.h"
 #endif
@@ -134,30 +134,30 @@ int init(App *app, int argc, const char **argv,
     assert(num_actions > 0 && actions);
     if (!(num_actions > 0 && actions)) return -1;
 
-    *app = (App) {
-        .argc = argc,
-        .argv = argv,
-        .num_actions = num_actions,
-        .actions = actions,
-        .simplification = 1,
-    };
+    memset(app, 0, sizeof(App));
+    app->argc = argc;
+    app->argv = argv;
+    app->num_actions = num_actions;
+    app->actions = actions;
+    app->simplification = 2;
+
     return 0;
 }
 
 void cleanup_grammars(App *app)
 {
-    for (int i = 0; i < app->grammars.size; i++) {
-        assert(&app->grammars.data[i]);
-        Grammar_cleanup(&app->grammars.data[i]);
+    for (size_t z = 0; z < app->grammars.size; z++) {
+        assert(&app->grammars.data[z]);
+        Grammar_cleanup(&app->grammars.data[z]);
     }
     GrammarArray_cleanup(&app->grammars);
 }
 
 void cleanup_parses(App *app)
 {
-    for (int i = 0; i < app->parses.size; i++) {
-        assert(&app->parses.data[i]);
-        Parse_cleanup(&app->parses.data[i]);
+    for (size_t z = 0; z < app->parses.size; z++) {
+        assert(&app->parses.data[z]);
+        Parse_cleanup(&app->parses.data[z]);
     }
     ParseArray_cleanup(&app->parses);
 }
@@ -190,41 +190,41 @@ void print_state(App *app, FILE *fp)
         app->arg, app->argc
         );
     char *esc = NULL;
-    for (int i = 0; i < app->grammars.size; i++) {
-        switch (app->grammars.data[i].which) {
-            case 1:
-                fprintf(stderr, "GRAMMAR[%d]: filename=\"%s\", bc=%p\n",
-                    i, app->grammars.data[i].filename,
-                    (void *)app->grammars.data[i].bc);
+    for (size_t z = 0; z < app->grammars.size; z++) {
+        switch (app->grammars.data[z].type) {
+            case GRAMMAR_FILE:
+                fprintf(stderr, "GRAMMAR[%zu]: filename=\"%s\", bc=%p\n",
+                    z, app->grammars.data[z].src.filename,
+                    (void *)app->grammars.data[z].bc);
                 break;
-            case 2:
-                esc = chpeg_esc_bytes((unsigned char *)app->grammars.data[i].str,
-                    strlen(app->grammars.data[i].str), 40);
-                fprintf(stderr, "GRAMMAR[%d]: str=\"%s\", bc=%p\n",
-                    i, esc, (void *)app->grammars.data[i].bc);
+            case GRAMMAR_STRING:
+                esc = chpeg_esc_bytes((unsigned char *)app->grammars.data[z].src.str,
+                    strlen(app->grammars.data[z].src.str), 40);
+                fprintf(stderr, "GRAMMAR[%zu]: str=\"%s\", bc=%p\n",
+                    z, esc, (void *)app->grammars.data[z].bc);
                 CHPEG_FREE(esc);
                 break;
         }
     }
-    for (int i = 0; i < app->parses.size; i++) {
-        switch (app->parses.data[i].which) {
-            case 1:
-                fprintf(stderr, "PARSE[%d]: filename=\"%s\", parser=%p\n",
-                    i, app->parses.data[i].filename,
-                    (void *)app->parses.data[i].parser);
+    for (size_t z = 0; z < app->parses.size; z++) {
+        switch (app->parses.data[z].type) {
+            case PARSE_FILE:
+                fprintf(stderr, "PARSE[%zu]: filename=\"%s\", parser=%p\n",
+                    z, app->parses.data[z].src.filename,
+                    (void *)app->parses.data[z].parser);
                 break;
-            case 2:
-                esc = chpeg_esc_bytes((unsigned char *)app->parses.data[i].str,
-                    strlen(app->parses.data[i].str), 40);
-                fprintf(stderr, "PARSE[%d]: str=\"%s\", parser=%p\n",
-                    i, esc, (void *)app->parses.data[i].parser);
+            case PARSE_STRING:
+                esc = chpeg_esc_bytes((unsigned char *)app->parses.data[z].src.str,
+                    strlen(app->parses.data[z].src.str), 40);
+                fprintf(stderr, "PARSE[%zu]: str=\"%s\", parser=%p\n",
+                    z, esc, (void *)app->parses.data[z].parser);
                 CHPEG_FREE(esc);
                 break;
         }
     }
-    for (int i = 0; i < app->files.size; i++) {
-        fprintf(stderr, "FILE[%d]: filename=\"%s\"\n",
-            i, app->files.data[i]);
+    for (size_t z = 0; z < app->files.size; z++) {
+        fprintf(stderr, "FILE[%zu]: filename=\"%s\"\n",
+            z, app->files.data[z]);
     }
 }
 
@@ -331,7 +331,7 @@ static inline int arg_int(App *app, const char *prefix, int *value)
 {
     const char *arg = app->argv[app->arg];
     char *end = NULL;
-    int plen = strlen(prefix);
+    size_t plen = strlen(prefix);
 
     if (strlen(arg) <= plen || strncmp(arg, prefix, plen) != 0) return 1;
     arg += plen;
@@ -356,24 +356,14 @@ static int have_arg(App *app)
     return 0;
 }
 
-// init action (create/init/template)
+// init action (create/init)
 static int init_action(App *app)
 {
     int err = 0;
 
     assert(app->action);
 
-    // create from template...
-    if (app->action->template) {
-        assert(app->action->template_size);
-        app->action_data = malloc(app->action->template_size);
-        if (!app->action_data) {
-            err = 1; goto done;
-        }
-        memcpy(app->action_data, app->action->template, app->action->template_size);
-    }
-    // or create using create callback
-    else if (app->action->create) {
+    if (app->action->create) {
         app->action_data = app->action->create();
     }
     else {
@@ -393,24 +383,16 @@ done:
 // helper to clean up after an action has run
 static int cleanup_action(App *app)
 {
-    if (app->action->template) {
-        if (app->action_data) {
-            free(app->action_data);
-            app->action_data = NULL;
-        }
+    if (app->action->cleanup) {
+        app->action->cleanup(app->action_data, app);
     }
-    else {
-        if (app->action->cleanup) {
-            app->action->cleanup(app->action_data, app);
+    if (app->action_data) {
+        // if action has created data, it should also free it
+        assert(app->action->free);
+        if (app->action->free) {
+            app->action->free(app->action_data);
         }
-        if (app->action_data) {
-            // if action has created data, it should also free it
-            assert(app->action->free);
-            if (app->action->free) {
-                app->action->free(app->action_data);
-            }
-            app->action_data = NULL;
-        }
+        app->action_data = NULL;
     }
 
     // Clear file list
@@ -425,7 +407,8 @@ static int run(App *app)
     int err = 0, value = 0;
 
     // reset arg processing / run state
-    app->action = app->action_data = NULL;
+    app->action =  NULL;
+    app->action_data = NULL;
     app->arg = app->action_start = app->action_default =
         app->help_printed = app->error = 0;
 
@@ -700,7 +683,16 @@ done:
 //
 
 static Action null_action = {
-    .name = "null",
+    "null", // name
+    NULL, // description
+    NULL, // create
+    NULL, // free
+    NULL, // init
+    NULL, // cleanup
+    NULL, // arg
+    NULL, // run
+    NULL, // help
+    NULL, // usage
 };
 
 
@@ -713,11 +705,12 @@ int main(int argc, const char *argv[])
         &default_action,
         &bytecode_action,
         &bytecodec_action,
+
 #if CHPEG_VM_PROFILE
         &profile_action,
 #endif
+
         &test_action,
-        &test2_action,
         &null_action,
     };
 

@@ -2,6 +2,10 @@
 // chpeg: bytecode.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -188,12 +192,18 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
 {
     int i, j, slen;
 
+    // varname, prefix, and opcodes are optional (set to NULL to omit)
+
+    varname = varname ? varname : basename;
+
     if (prefix == NULL) {
         prefix = "chpeg";
     }
 
+    opcodes = opcodes ? opcodes : "chpeg/opcodes.h";
+
     // guard
-    char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
+    const char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
     for (j = 0; j < 2; j++) {
         fprintf(fp, "%s ", preproc[j]);
         if (prefix) {
@@ -212,10 +222,12 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
         fprintf(fp, "_H\n");
     }
 
-    fprintf(fp, "\n#ifndef CHPEG_AMALGAMATION\n");
+    fprintf(fp, "\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n");
+
+    fprintf(fp, "#ifndef CHPEG_AMALGAMATION\n");
     fprintf(fp, "#include \"chpeg/chpeg_api.h\"\n");
     fprintf(fp, "#include \"chpeg/bytecode.h\"\n");
-    fprintf(fp, "#include \"%s\"\n", opcodes ? opcodes : "chpeg/opcodes.h");
+    fprintf(fp, "#include \"%s\"\n", opcodes);
     fprintf(fp, "#endif\n\n");
 
     // #define for each def name
@@ -237,8 +249,11 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
     }
     fputc('\n', fp);
 
-    fprintf(fp, "CHPEG_API const ChpegByteCode %s;\n\n", varname ? varname : basename);
+    fprintf(fp, "extern const ChpegByteCode %s;\n\n", varname);
 
+    fprintf(fp, "#ifdef __cplusplus\n}\n#endif\n\n");
+
+    // guard: end
     fprintf(fp, "%s ", preproc[2]);
     if (prefix) {
         slen = strlen(prefix);
@@ -257,26 +272,54 @@ void ChpegByteCode_output_h(const ChpegByteCode *self, FILE *fp,
 }
 
 void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
-    const char *basename, const char *varname)
+    const char *basename, const char *varname, const char *prefix, const char *opcodes)
 {
-    int i;
+    int i, j, slen;
     char *str;
+
+    // varname, prefix, and opcodes are optional (set to NULL to omit)
+
+    varname = varname ? varname : basename;
+
+    if (prefix == NULL) {
+        prefix = "chpeg";
+    }
+
+    opcodes = opcodes ? opcodes : "chpeg/opcodes.h";
+
+    // guard (this may seem unusual for a .c file, but this is useful in amalgamation
+    const char *preproc[3] = { "#ifndef", "#define", "#endif // #ifndef" };
+    for (j = 0; j < 2; j++) {
+        fprintf(fp, "%s ", preproc[j]);
+        if (prefix) {
+            slen = strlen(prefix);
+            for (i = 0; i < slen; i++) {
+                fputc(toupper(prefix[i]), fp);
+            }
+            fputc('_', fp);
+        }
+        if (basename) {
+            slen = strlen(basename);
+            for (i = 0; i < slen; i++) {
+                fputc(toupper(basename[i]), fp);
+            }
+        }
+        fprintf(fp, "_C\n");
+    }
+
+    fprintf(fp, "\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n");
 
     fprintf(fp, "#ifndef CHPEG_AMALGAMATION\n#include \"%s.h\"\n#endif\n", basename);
     fprintf(fp, "\n");
 
-    fprintf(fp, "CHPEG_DEF const ChpegByteCode %s = {\n", varname ? varname : basename);
-
-    fprintf(fp, "  .num_defs = %d,\n", self->num_defs);
-
     if (self->num_defs > 0) {
-        fprintf(fp, "  .def_names = (char*[%d]) {", self->num_defs);
+        fprintf(fp, "const char *%s_def_names[%d] = {", varname, self->num_defs);
         for (i = 0; i < self->num_defs; i++) {
             fprintf(fp, "%s\"%s\"", i ? ", " : "", self->def_names[i]);
         }
-        fprintf(fp, "},\n");
+        fprintf(fp, "};\n\n");
 
-        fprintf(fp, "  .def_flags = (int[%d]) {", self->num_defs);
+        fprintf(fp, "int %s_def_flags[%d] = {", varname, self->num_defs);
         for (i = 0; i < self->num_defs; i++) {
             fprintf(fp, "%s", i ? ", " : "");
             int flag_out = 0;
@@ -298,19 +341,17 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
                 fprintf(fp, "0");
             }
         }
-        fprintf(fp, "},\n");
+        fprintf(fp, "};\n\n");
 
-        fprintf(fp, "  .def_addrs = (int[%d]) {", self->num_defs);
+        fprintf(fp, "int %s_def_addrs[%d] = {", varname, self->num_defs);
         for (i = 0; i < self->num_defs; i++) {
             fprintf(fp, "%s%d", i ? ", " : "", self->def_addrs[i]);
         }
-        fprintf(fp, "},\n");
+        fprintf(fp, "};\n\n");
     }
 
-    fprintf(fp, "  .num_instructions = %d,\n", self->num_instructions);
-
     if (self->num_instructions > 0) {
-        fprintf(fp, "  .instructions = (int[%d]) {\n", self->num_instructions);
+        fprintf(fp, "int %s_instructions[%d] = {\n", varname, self->num_instructions);
         const char *arg_str = NULL;
         int op, arg;
         for (int i = 0; i < self->num_instructions; i++) {
@@ -358,42 +399,101 @@ void ChpegByteCode_output_c(const ChpegByteCode *self, FILE *fp,
                         arg);
             }
         }
-        fprintf(fp, "  },\n");
+        fprintf(fp, "  };\n\n");
     }
 
-    fprintf(fp, "  .num_strings = %d,\n", self->num_strings);
-
     if (self->num_strings > 0) {
-        fprintf(fp, "  .strings = (unsigned char**)(char*[%d]) {", self->num_strings);
+        fprintf(fp, "const char *%s_strings[%d] = {", varname, self->num_strings);
         for (i = 0; i < self->num_strings; i++) {
             str = chpeg_esc_bytes(self->strings[i], self->str_len[i], 0);
             fprintf(fp, "%s\"%s\"", i ? ", " : "", str);
             CHPEG_FREE(str);
         }
-        fprintf(fp, "},\n");
+        fprintf(fp, "};\n\n");
 
-        fprintf(fp, "  .str_len = (int[%d]) {", self->num_strings);
+        fprintf(fp, "int %s_str_len[%d] = {", varname, self->num_strings);
         for (i = 0; i < self->num_strings; i++) {
             fprintf(fp, "%s%d", i ? ", " : "", self->str_len[i]);
         }
-        fprintf(fp, "},\n");
+        fprintf(fp, "};\n\n");
     }
 
 #if CHPEG_EXTENSION_REFS
     if (self->num_refs > 0) {
         fprintf(fp, "#if CHPEG_EXTENSION_REFS\n");
-        fprintf(fp, "  .num_refs = %d,\n", self->num_refs);
-
-        fprintf(fp, "  .refs = (char*[%d]) {", self->num_refs);
+        fprintf(fp, "const char *%s_refs[%d] = {", varname, self->num_refs);
         for (i = 0; i < self->num_refs; i++) {
             fprintf(fp, "%s\"%s\"", i ? ", " : "", self->refs[i]);
         }
-        fprintf(fp, "},\n");
-        fprintf(fp, "#endif\n");
+        fprintf(fp, "};\n");
+        fprintf(fp, "#endif\n\n");
     }
 #endif
 
+    fprintf(fp, "const ChpegByteCode %s = {\n", varname);
+
+    fprintf(fp, "  %d, // num_defs\n", self->num_defs);
+    if (self->num_defs > 0) {
+        fprintf(fp, "  (char **)%s_def_names,\n", varname);
+        fprintf(fp, "  %s_def_flags,\n", varname);
+        fprintf(fp, "  %s_def_addrs,\n", varname);
+    }
+    else {
+        fprintf(fp, "  NULL, // def_names\n");
+        fprintf(fp, "  NULL, // def_flags,\n");
+        fprintf(fp, "  NULL, // def_addrs,\n");
+    }
+
+    fprintf(fp, "  %d, // num_instructions\n", self->num_instructions);
+    if (self->num_instructions > 0) {
+        fprintf(fp, "  %s_instructions,\n", varname);
+    }
+    else {
+        fprintf(fp, "  NULL, // instructions,\n");
+    }
+
+    fprintf(fp, "  %d, // num_strings\n", self->num_strings);
+    if (self->num_strings > 0) {
+        fprintf(fp, "  (unsigned char **)%s_strings,\n", varname);
+        fprintf(fp, "  %s_str_len,\n", varname);
+    }
+    else {
+        fprintf(fp, "  NULL, // strings,\n");
+        fprintf(fp, "  NULL, // str_len,\n");
+    }
+
+#if CHPEG_EXTENSION_REFS
+    fprintf(fp, "#if CHPEG_EXTENSION_REFS\n");
+    fprintf(fp, "  %d, // num_refs\n", self->num_refs);
+    if (self->num_refs > 0) {
+        fprintf(fp, "  (char **)%s_refs,\n", varname);
+    }
+    else {
+        fprintf(fp, "  NULL, // refs,\n");
+    }
+    fprintf(fp, "#endif\n");
+#endif
+
     fprintf(fp, "};\n");
+
+    fprintf(fp, "\n#ifdef __cplusplus\n}\n#endif\n\n");
+
+    // guard: end
+    fprintf(fp, "%s ", preproc[2]);
+    if (prefix) {
+        slen = strlen(prefix);
+        for (i = 0; i < slen; i++) {
+            fputc(toupper(prefix[i]), fp);
+        }
+        fputc('_', fp);
+    }
+    if (basename) {
+        slen = strlen(basename);
+        for (i = 0; i < slen; i++) {
+            fputc(toupper(basename[i]), fp);
+        }
+    }
+    fprintf(fp, "_C\n");
 }
 
 int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
@@ -468,6 +568,10 @@ int ChpegByteCode_compare(const ChpegByteCode *a, const ChpegByteCode *b)
 
     return 0;
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // } chpeg: bytecode.c
 

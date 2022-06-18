@@ -5,6 +5,11 @@
 #ifndef CHPEG_PARSER_H
 #define CHPEG_PARSER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #include "chpeg/bytecode.h"
@@ -175,17 +180,7 @@ typedef struct _ChpegParser
     const ChpegByteCode *bc;
     ChpegNode *tree_root;
     int simplification; // run unwrap on parse tree to generate AST (default is 1)
-    int max_tree_depth;
-    int max_stack_size;
     int parse_result;
-
-    /*
-    size_t error_offset;
-    int error_def;
-    int error_parent_def;
-    int error_inst;
-    int error_expected;
-    */
 
     size_t error_offset;
     ChpegErrorInfo *errors;
@@ -224,12 +219,15 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
-CHPEG_API void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc);
 CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE
 CHPEG_API void ChpegParser_print_profile(ChpegParser *self,
     const unsigned char *input, size_t length, FILE *fp);
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
 #endif
 
 #endif // #ifndef CHPEG_PARSER_H

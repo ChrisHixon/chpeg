@@ -12,7 +12,8 @@ ARRAY_DEF void StringArray_cleanup(StringArray *self)
     if (self->data) {
         free(self->data);
     }
-    *self = (StringArray) { 0 };
+    self->data = NULL;
+    self->capacity = 0;
 }
 
 ARRAY_DEF void StringArray_clear(StringArray *self)
@@ -25,11 +26,11 @@ ARRAY_DEF void StringArray_expand(StringArray *self, size_t length)
     while (length > self->capacity) {
         if (self->capacity == 0) {
             self->capacity = 1;
-            self->data = malloc(self->capacity * sizeof(const char *));
+            self->data = (const char **)malloc(self->capacity * sizeof(const char *));
         }
         else {
             self->capacity *= 2;
-            self->data = realloc(self->data, self->capacity * sizeof(const char *));
+            self->data = (const char **)realloc(self->data, self->capacity * sizeof(const char *));
         }
     }
 }
@@ -51,7 +52,8 @@ ARRAY_DEF void GrammarArray_cleanup(GrammarArray *self)
     if (self->data) {
         free(self->data);
     }
-    *self = (GrammarArray) { 0 };
+    self->data = NULL;
+    self->capacity = 0;
 }
 
 ARRAY_DEF void GrammarArray_clear(GrammarArray *self)
@@ -64,11 +66,11 @@ ARRAY_DEF void GrammarArray_expand(GrammarArray *self, size_t length)
     while (length > self->capacity) {
         if (self->capacity == 0) {
             self->capacity = 1;
-            self->data = malloc(self->capacity * sizeof(Grammar));
+            self->data = (Grammar*)malloc(self->capacity * sizeof(Grammar));
         }
         else {
             self->capacity *= 2;
-            self->data = realloc(self->data, self->capacity * sizeof(Grammar));
+            self->data = (Grammar*)realloc(self->data, self->capacity * sizeof(Grammar));
         }
     }
 }
@@ -90,7 +92,8 @@ ARRAY_DEF void ParseArray_cleanup(ParseArray *self)
     if (self->data) {
         free(self->data);
     }
-    *self = (ParseArray) { 0 };
+    self->data = NULL;
+    self->capacity = 0;
 }
 
 ARRAY_DEF void ParseArray_clear(ParseArray *self)
@@ -103,11 +106,11 @@ ARRAY_DEF void ParseArray_expand(ParseArray *self, size_t length)
     while (length > self->capacity) {
         if (self->capacity == 0) {
             self->capacity = 1;
-            self->data = malloc(self->capacity * sizeof(Parse));
+            self->data = (Parse*)malloc(self->capacity * sizeof(Parse));
         }
         else {
             self->capacity *= 2;
-            self->data = realloc(self->data, self->capacity * sizeof(Parse));
+            self->data = (Parse*)realloc(self->data, self->capacity * sizeof(Parse));
         }
     }
 }

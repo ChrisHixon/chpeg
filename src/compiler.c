@@ -2,6 +2,10 @@
 // chpeg: compiler.c {
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -13,11 +17,13 @@
 #include "chpeg/parser.h"
 #include "chpeg/compiler.h"
 #include "chpeg/opcodes.h"
+
 #if CHPEG_USES_EXTENSIONS
 #include "chpeg/chpeg_ext_bytecode.h"
 #else
 #include "chpeg/chpeg_bytecode.h"
 #endif
+
 #endif
 
 #ifndef CHPEG_DEBUG_COMPILER
@@ -285,7 +291,7 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
         if (cident->next->node->def == CHPEG_DEF_OPTIONS) {
             ChpegCNode *coptions = cident->next;
 
-            for (int i = 0; i < coptions->node->length; ++i) {
+            for (int i = 0; i < (int)coptions->node->length; ++i) {
                 switch(cu->input[coptions->node->offset + i]) {
                     case 'C':
                     case 'S':
@@ -1191,7 +1197,8 @@ done:
 
 static int ChpegCU_detect_left_recursion(ChpegCU *cu)
 {
-    ChpegLR lr = (ChpegLR) { 0 };
+    ChpegLR lr;
+    memset(&lr, 0, sizeof(ChpegLR));
 
     lr.bc = cu->bc;
 
@@ -1287,10 +1294,10 @@ CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
     chpeg_sanity_check();
 
     int err = 0;
-    ChpegCU cu = {
-        .parser = ChpegParser_new(chpeg_default_bytecode()),
-        .input = input,
-    };
+    ChpegCU cu;
+    memset(&cu, 0, sizeof(ChpegCU));
+    cu.parser = ChpegParser_new(chpeg_default_bytecode());
+    cu.input = input;
 
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
@@ -1411,8 +1418,16 @@ done:
 
 CHPEG_DEF const ChpegByteCode *chpeg_default_bytecode(void)
 {
+#if CHPEG_USES_EXTENSIONS
+    return &chpeg_ext_bytecode;
+#else
     return &chpeg_bytecode;
+#endif
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 // } chpeg: compiler.c
 

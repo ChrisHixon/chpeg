@@ -82,9 +82,15 @@ int DefaultAction_run(void *_, App *app)
 }
 
 Action default_action = {
-    .name = "ast",
-    .description = "print parse tree/ast (default action)",
-    .run = DefaultAction_run,
-    .usage = DefaultAction_usage,
+    "ast", // name
+    "print AST (default action)", // description
+    NULL, // create
+    NULL, // free
+    NULL, // init
+    NULL, // cleanup
+    NULL, // arg
+    DefaultAction_run, // run
+    NULL, // help
+    DefaultAction_usage, // usage
 };
 

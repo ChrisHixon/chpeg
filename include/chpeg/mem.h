@@ -5,6 +5,11 @@
 #ifndef CHPEG_MEM_H
 #define CHPEG_MEM_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #endif
@@ -32,6 +37,10 @@ CHPEG_API void chpeg_free(void *ptr);
 #define CHPEG_FREE(ptr) free(ptr)
 
 #endif
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
 #endif
 
 #endif // #ifndef CHPEG_MEM_H

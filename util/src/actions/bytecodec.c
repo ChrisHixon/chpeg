@@ -18,6 +18,16 @@ typedef struct _ByteCodeCAction {
     const char *c;
 } ByteCodeCAction;
 
+void *ByteCodeCAction_create(void)
+{
+    return calloc(1, sizeof(ByteCodeCAction));
+}
+
+void ByteCodeCAction_free(void *data)
+{
+    free(data);
+}
+
 // Helper function to get the bytecode from the last grammar specified with -g/-G;
 // if nothing is on grammar stack, return the default chpeg bytecode.
 static int get_bytecode(App *app, const ChpegByteCode **bc)
@@ -138,7 +148,8 @@ int ByteCodeCAction_run(void *data, App *app)
         fp = fp_c;
     }
 
-    ChpegByteCode_output_c(bc, fp, self->basename, self->varname);
+    ChpegByteCode_output_c(bc, fp, self->basename, self->varname,
+        self->prefix, NULL);
 
     err = 0;
 
@@ -152,15 +163,17 @@ done:
     return err;
 }
 
-static ByteCodeCAction template = { 0 };
-
 Action bytecodec_action = {
-    .name          = "bytecodec",
-    .description   = "print bytecode as C language source code",
-    .template      = &template,
-    .template_size = sizeof(ByteCodeCAction),
-    .arg           = ByteCodeCAction_arg,
-    .run           = ByteCodeCAction_run,
-    .usage         = ByteCodeCAction_usage,
+
+    "bytecodec", // name
+    "print bytecode as C language source code", // description
+    ByteCodeCAction_create, // create
+    ByteCodeCAction_free, // free
+    NULL, // init
+    NULL, // cleanup
+    ByteCodeCAction_arg, // arg
+    ByteCodeCAction_run, // run
+    NULL, // help
+    ByteCodeCAction_usage, // usage
 };
 

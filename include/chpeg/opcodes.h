@@ -5,6 +5,10 @@
 #ifndef CHPEG_OPCODES_H
 #define CHPEG_OPCODES_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #endif
@@ -56,12 +60,16 @@ enum ChpegOp
     CHPEG_NUM_OPS
 };
 
-CHPEG_API const char *Chpeg_op_names[CHPEG_NUM_OPS];
+extern const char *Chpeg_op_names[CHPEG_NUM_OPS];
 
 static inline const char *Chpeg_op_name(int op)
 {
     return (op >= 0 && op < CHPEG_NUM_OPS) ? Chpeg_op_names[op] : "N/A";
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif // #ifndef CHPEG_OPCODES_H
 
