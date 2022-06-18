@@ -9,7 +9,7 @@ EXTENSIONS = ALL
 FEATURES = PACKRAT
 
 # set to non-empty value to use the chpeg.c amalgamation instead of separate chpeg library sources
-USE_AMALGAMATION = true
+USE_AMALGAMATION =
 
 CC=gcc
 #CC=g++

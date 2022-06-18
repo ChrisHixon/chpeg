@@ -75,6 +75,8 @@ static ChpegCNode *ChpegCNode_new(void)
     self->parent_next_state = -1;
     self->parent_fail_state = -1;
 
+    self->val.ival = -1;
+
     return self;
 }
 
@@ -896,9 +898,15 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
             }
             break;
 #if CHPEG_EXTENSION_REFS
-// these IDENTIFIER refer to references not definitions
         case CHPEG_DEF_MARK:
+            // cnode->head IDENTIFIER refers to a reference, not a definition
+            // explore MARK content in cnode->head->next
+            if ( (err = ChpegCU_setup_identifiers(cu, cnode->head->next)) != 0) {
+                goto done;
+            }
+            break;
         case CHPEG_DEF_REFERENCE:
+            // this IDENTIFIER refers to a reference, not a definition
             break;
 #endif
         default:
