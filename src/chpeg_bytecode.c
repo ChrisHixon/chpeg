@@ -354,7 +354,6 @@ const ChpegByteCode chpeg_bytecode = {
   0, // num_refs
   NULL, // refs,
 #endif
-
 };
 
 #ifdef __cplusplus

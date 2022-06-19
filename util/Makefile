@@ -7,6 +7,7 @@ EXTENSIONS = ALL
 # list optional features here
 # current features: PACKRAT
 FEATURES = PACKRAT
+
 # set to non-empty value to use the chpeg.c amalgamation instead of separate chpeg library sources
 USE_AMALGAMATION =
 
@@ -62,13 +63,13 @@ TRACE_CHPEG_DEP = $(TRACE_CHPEG_OBJ:%.o=%.d)
 
 all: $(STD_BIN) $(PROFILE_BIN) $(TRACE_BIN)
 
-$(STD_BIN):     $(STD_OBJ)  $(STD_CHPEG_OBJ)
+$(STD_BIN): $(STD_OBJ) $(STD_CHPEG_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@
 
-$(PROFILE_BIN):     $(PROFILE_OBJ)  $(PROFILE_CHPEG_OBJ)
+$(PROFILE_BIN): $(PROFILE_OBJ) $(PROFILE_CHPEG_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@
 
-$(TRACE_BIN):   $(TRACE_OBJ)    $(TRACE_CHPEG_OBJ)
+$(TRACE_BIN): $(TRACE_OBJ) $(TRACE_CHPEG_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 -include $(STD_DEP)

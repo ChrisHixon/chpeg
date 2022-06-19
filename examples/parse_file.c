@@ -84,6 +84,11 @@ int main(int argc, char *argv[])
     parser->vm_print_tree = 0;
 #endif
 
+#if CHPEG_PACKRAT
+    // set to non-zero to enable packrat
+    parser->packrat = 1;
+#endif
+
     size_t consumed = 0;
     parse_result = ChpegParser_parse(parser, input, length, &consumed);
     if (parse_result == 0) {
