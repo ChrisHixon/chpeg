@@ -91,7 +91,7 @@ int parse(const char *grammar, const char *input, int simplification, int packra
         else {
             fprintf(stderr, "Parse failed with result: %d\n", parse_result);
         }
-        ChpegParser_print_errors(parser, data, 0);
+        ChpegParser_print_error(parser, data);
         goto done;
     }
 

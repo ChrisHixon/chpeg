@@ -72,7 +72,7 @@ void help(App *app, FILE *fp)
     fprintf(fp, "  -P STRING       parse STRING, using grammar from -g/-G, if present\n");
     fprintf(fp, "\n");
     fprintf(fp, "Global debugging and verbosity options:\n");
-    fprintf(fp, "  -sN             set AST simplification (0=off; 1=on; default is 1)\n");
+    fprintf(fp, "  -sN             set AST simplification to N: 0=off, 1=unwrap, 2=simplify(default)\n");
     fprintf(fp, "  -d              increase debug level\n");
     fprintf(fp, "  -dN             set debug level to N (use 0 to disable)\n");
     fprintf(fp, "  -v              increase verbosity\n");

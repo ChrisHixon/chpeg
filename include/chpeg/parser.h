@@ -46,7 +46,7 @@ extern "C" {
 
 // limit on sub-tree nodes per packrat entry (sub-trees with more nodes than this amount will not be cached)
 #ifndef CHPEG_PACKRAT_NODE_LIMIT
-#define CHPEG_PACKRAT_NODE_LIMIT 8
+#define CHPEG_PACKRAT_NODE_LIMIT 64
 #endif
 
 #if CHPEG_PACKRAT
@@ -219,7 +219,7 @@ CHPEG_API ChpegParser *ChpegParser_new(const ChpegByteCode *byte_code);
 CHPEG_API void ChpegParser_free(ChpegParser *self);
 CHPEG_API int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed);
 CHPEG_API void ChpegParser_print_tree(ChpegParser *self, const unsigned char *input, FILE *fp);
-CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all);
+CHPEG_API void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int limit);
 CHPEG_API void ChpegParser_print_error(ChpegParser *self, const unsigned char *input);
 #if CHPEG_VM_PROFILE
 CHPEG_API void ChpegParser_print_profile(ChpegParser *self,

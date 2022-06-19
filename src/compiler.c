@@ -1307,6 +1307,11 @@ CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
     cu.parser = ChpegParser_new(chpeg_default_bytecode());
     cu.input = input;
 
+    // with current chpeg grammar(s) and compiler implementation, need to use
+    // original unwrap simplification method to get the AST the compiler
+    // expects.
+    cu.parser->simplification = 1;
+
     size_t consumed = 0;
     int parse_result = ChpegParser_parse(cu.parser, input, length, &consumed);
     err = parse_result;

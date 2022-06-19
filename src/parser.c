@@ -10,6 +10,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <limits.h>
 
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/mem.h"
@@ -691,7 +692,7 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 
     self->bc = bc;
     self->tree_root = NULL;
-    self->simplification = 1;
+    self->simplification = 2;
     self->error_offset = 0;
     self->errors = NULL;
     self->errors_size = 0;
@@ -829,7 +830,7 @@ void ChpegParser_print_profile(ChpegParser *self,
 
 static inline void ChpegParser_expected(ChpegParser *self, size_t offset, int depth, int def, int pc)
 {
-    ChpegErrorInfo *error = NULL; 
+    ChpegErrorInfo *error = NULL;
     if (offset >= self->error_offset) {
         if (offset > self->error_offset) {
             self->error_offset = offset;
@@ -854,16 +855,35 @@ static inline void ChpegParser_expected(ChpegParser *self, size_t offset, int de
     }
 }
 
-void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int all)
+// limit = 0: no limit (print all errors)
+// limit = n: print last n errors
+void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int limit)
 {
 #if ERRORS
     if (self->errors_size == 0) {
-        fprintf(stderr, "No errors detected / tracked.\n");
+        fprintf(stderr, "No errors tracked.\n");
         return;
     }
-
     assert(self->errors_size > 0);
-    for (int i = all ? 0 : self->errors_size - 1; i < self->errors_size; ++i) {
+
+    int start = 0;
+    if (limit > 0) {
+        start = self->errors_size - limit;
+        if (start < 0) {
+            start = 0;
+        }
+    }
+
+    int min_depth = INT_MAX;
+    for (int i = start; i < self->errors_size; ++i) {
+        ChpegErrorInfo *error = &self->errors[i];
+        if (error->depth < min_depth) {
+            min_depth = error->depth;
+        }
+    }
+    assert (min_depth < INT_MAX);
+
+    for (int i = start; i < self->errors_size; ++i) {
         ChpegErrorInfo *error = &self->errors[i];
         const char *def_name = ChpegByteCode_def_name(self->bc, error->def);
         int inst = self->bc->instructions[error->pc];
@@ -873,7 +893,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
         size_t line, col;
         char *esc = NULL;
         const char *str = NULL;
-        int depth_indent = (error->depth - 1) *2;
+        int depth_indent = (error->depth - min_depth) *2;
         const char *expected = "Expected:";
 
         // if a predicate is followed by an instruction case we can display,
@@ -953,7 +973,7 @@ void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int
 
 void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 {
-    ChpegParser_print_errors(self, input, 0);
+    ChpegParser_print_errors(self, input, 1);
 }
 
 // TODO: work on check sanity checks and underflow/overflow/range checks, make macros to make it easier
