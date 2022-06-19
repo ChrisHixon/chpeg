@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>CHPEG Playground</title>
+<link rel="stylesheet" href="style.css" media="all">
+</head>
+<body>
+<div id="main">
+  <div class="editor-container">
+    <ul class="editor-header">
+      <li><span><span id="grammar-validation" class="validation"></span></span></li>
+      <li><span>Grammar</span></li>
+    </ul>
+    <pre id="grammar-editor" class="editor-area">{{syntax}}</pre>
+    <div id="grammar-info" class="editor-info"></div>
+  </div>
+  <div class="editor-container">
+    <ul class="editor-header">
+      <li><span><span id="code-validation" class="validation"></span></span></li>
+      <li><span>Source Code</span></li>
+      <li class="editor-options">
+        <ul class="editor-header-options">
+          <li class="option"><input id="packrat" type="checkbox"><label>Packrat</label></li>
+          <li class="option"><input id="auto-refresh" type="checkbox"><label>Auto Refresh</label></li>
+          <li class="option"><button id="parse" class="parse">Parse</button></li>
+        </ul>
+      </li>
+    </ul>
+    <pre id="code-editor" class="editor-area">{{source}}</pre>
+    <div class="editor-sub-header"><input id="show-ast" class="show-toggle" type="checkbox">AST&nbsp;&nbsp;&nbsp;&nbsp;
+      mode:&nbsp;<select id="opt-mode" type="checkbox"><option value="0">Raw parse tree</option><option value="1">Unwrap</option><option value="2">Simplify</option></select>
+    </div>
+    <pre id="code-ast" class="editor-area"></pre>
+    <div class="editor-sub-header"><input id="show-profile" class="show-toggle" type="checkbox">Profile</div>
+    <div id="code-profile" class="editor-area"></div>
+
+    <div id="code-info" class="editor-info"></div>
+  </div>
+</div>
+<div id="overlay"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="index.js"></script>
+<script src="chpeg-playground.js"></script>
+</body>
+</html>

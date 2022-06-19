@@ -1,0 +1,13 @@
+# src: https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
+# Hidden left-recursion can even be more obscured. Consider this:
+
+        E <- F E '+n' / 'n'
+        F <- A B C / D*
+
+# Because D* matches the empty string, F succeeds without consuming input, and hides left-recursion in E. You can imagine that there is no end to how deep left-recursion can be hidden in your grammar.
+
+# additions needed for undefined Idents
+A<-'a'
+B<-'b'
+C<-'c'
+D<-'d'

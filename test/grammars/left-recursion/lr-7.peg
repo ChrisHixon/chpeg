@@ -1,0 +1,10 @@
+# src: https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
+# Another example: two rules that are mutually left-recursive.
+
+    M <- L eoi
+    L <- P '.x' / 'x'
+    P <- P '(n)' / L
+
+# additional defs needed
+
+    eoi <- !.

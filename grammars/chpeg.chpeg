@@ -1,0 +1,37 @@
+# Extended PEG grammar for chpeg bytecode parser/compiler, defined in its own grammar.
+#
+# The effective grammar is the same as the original PEG grammar from
+# Bryan Ford's paper, but with Options added in front of <- to guide parse tree building.
+#
+# This grammar is optimized for chpeg and generates the AST the compiler expects
+
+# Hierarchical syntax
+Grammar     {S} <- S Definition+ !.
+Definition  { } <- Identifier S ('{' S Options S '}' S)? '<-' S Choice
+Choice      { } <- Sequence ('/' S Sequence)*
+Sequence    { } <- Predicate+
+Predicate   { } <- (PredOp S)? Repeat
+Repeat      { } <- Primary (RepOp S)?
+Primary     { } <- Identifier S ![{<]
+                 / '(' S Choice ')' S
+                 / Literal S
+                 / CharClass S
+                 / Dot S
+
+# Lexical syntax
+Options     { } <- [A-Za-z]*
+Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
+Literal     {S} <- ['] (!['] Char)* [']
+                 / ["] (!["] Char)* ["]
+CharClass   {S} <- '[' (!']' CharRange)+ ']'
+CharRange   { } <- Char '-' !']' Char / Char
+Char        { } <- EscChar / OctChar / PlainChar
+EscChar     {L} <- '\\' [nrt'"\[\]\\]
+OctChar     {L} <- '\\' [0-3][0-7][0-7]
+                 / '\\' [0-7][0-7]?
+PlainChar   {L} <- !'\\' .
+PredOp      {L} <- [&!]
+RepOp       {L} <- [*+?]
+Dot         {L} <- '.'
+
+S           {I} <- ([ \t\r\n]+ / '#' (![\r\n] .)* [\r\n]? )*
