@@ -668,6 +668,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
                 CHPEG_FREE(str);
             }
             break;
+
         case CHPEG_DEF_CHARRANGE:
             {
                 for (ChpegCNode *p = cnode->head; p; p = p->next) {
@@ -679,26 +680,28 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
                 cnode->value_len = 3;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 0);
                 fprintf(stderr, "%s: CHARRANGE [%s]\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_PLAINCHAR:
             {
                 cnode->val.cval[0] = cu->input[cnode->node->offset];
                 cnode->value_len = 1;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 0);
                 fprintf(stderr, "%s: PLAINCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_ESCCHAR:
             {
                 cnode->val.cval[0] = cu->input[cnode->node->offset + 1];
@@ -707,34 +710,94 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
                     case 'n': cnode->val.cval[0] = '\n'; break;
                     case 'r': cnode->val.cval[0] = '\r'; break;
                     case 't': cnode->val.cval[0] = '\t'; break;
+#if CHPEG_EXTENSION_ESCAPES
+                    case 'a': cnode->val.cval[0] = '\a'; break;
+                    case 'b': cnode->val.cval[0] = '\b'; break;
+                    case 'f': cnode->val.cval[0] = '\f'; break;
+                    case 'v': cnode->val.cval[0] = '\v'; break;
+#endif
+                    case '\'':
+                    case '"':
+                    case '[':
+                    case ']':
+                    case '\\':
+                              break;
+                    default:
+                              chpeg_abort("unhandled ESCCHAR case: '%c'\n",
+                                  cnode->val.cval[0]);
+                              break;
                 }
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 0);
                 fprintf(stderr, "%s: ESCCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_OCTCHAR:
             {
-                int val = 0; int len = cnode->node->length - 1;
+                int len = cnode->node->length - 1;
+                unsigned int val = 0;
                 const unsigned char *ip = cu->input + cnode->node->offset + 1;
+                assert(len >= 1 && len <= 3);
                 for (int i = 0; i < len; ++i) {
                     val = (val << 3) | (ip[i] - '0');
                 }
-                cnode->val.cval[0] = val & 255;
+                assert (val < 256);
+                cnode->val.cval[0] = val;
                 cnode->value_len = 1;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 0);
                 fprintf(stderr, "%s: OCTCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
+#if CHPEG_EXTENSION_HEX
+        case CHPEG_DEF_HEXCHAR:
+            {
+                int len = cnode->node->length - 2;
+                unsigned char val = 0;
+                const unsigned char *ip = cu->input + cnode->node->offset + 2;
+                assert(len >= 1 && len <= 2);
+                for (int i = 0; i < len; ++i) {
+                    switch(ip[i]) {
+                        case '0': case '1': case '2': case '3': case '4':
+                        case '5': case '6': case '7': case '8': case '9':
+                            val = (val << 4) | (ip[i] - '0');
+                            break;
+                        case 'a': case 'b': case 'c':
+                        case 'd': case 'e': case 'f':
+                            val = (val << 4) | (10 + ip[i] - 'a');
+                            break;
+                        case 'A': case 'B': case 'C':
+                        case 'D': case 'E': case 'F':
+                            val = (val << 4) | (10 + ip[i] - 'A');
+                            break;
+                        default:
+                            chpeg_abort("unhandled HEXCHAR case: '%c'\n", ip[i]);
+                            break;
+                    }
+                }
+                cnode->val.cval[0] = val;
+                cnode->value_len = 1;
+
+#if CHPEG_DEBUG_COMPILER
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 0);
+                fprintf(stderr, "%s: HEXCHAR '%s'\n", __func__, tmp);
+                CHPEG_FREE(tmp);
+#endif
+
+            }
+            break;
+#endif
+
         default:
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_strings(cu, p);
@@ -1185,7 +1248,7 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
             break;
 
         default:
-            chpeg_abort("unhandled cnode->type case");
+            chpeg_abort("unhandled cnode->type case: %d\n", cnode->type);
             break;
     }
 

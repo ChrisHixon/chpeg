@@ -30,11 +30,12 @@ extern "C" {
 #define CHPEG_DEF_CHAR 16
 #define CHPEG_DEF_ESCCHAR 17
 #define CHPEG_DEF_OCTCHAR 18
-#define CHPEG_DEF_PLAINCHAR 19
-#define CHPEG_DEF_PREDOP 20
-#define CHPEG_DEF_REPOP 21
-#define CHPEG_DEF_DOT 22
-#define CHPEG_DEF_S 23
+#define CHPEG_DEF_HEXCHAR 19
+#define CHPEG_DEF_PLAINCHAR 20
+#define CHPEG_DEF_PREDOP 21
+#define CHPEG_DEF_REPOP 22
+#define CHPEG_DEF_DOT 23
+#define CHPEG_DEF_S 24
 
 extern const ChpegByteCode chpeg_ext_bytecode;
 

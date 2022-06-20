@@ -32,10 +32,11 @@ Literal     {S} <- ['] (!['] Char)* [']
                  / ["] (!["] Char)* ["]
 CharClass   {S} <- '[' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
-Char        { } <- EscChar / OctChar / PlainChar
-EscChar     {L} <- '\\' [nrt'"\[\]\\]
+Char        { } <- EscChar / HexChar / OctChar / PlainChar
+EscChar     {L} <- '\\' [abfvnrt'"\[\]\\]
 OctChar     {L} <- '\\' [0-3][0-7][0-7]
                  / '\\' [0-7][0-7]?
+HexChar     {L} <- '\\x' [0-9a-fA-F][0-9a-fA-F]?
 PlainChar   {L} <- !'\\' .
 PredOp      {L} <- [&!]
 RepOp       {L} <- [*+?]

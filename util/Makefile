@@ -1,12 +1,13 @@
 SHELL=/bin/sh
 
-# list grammar extensions here, or use ALL to include all
-# current extensions: TRIM REFS
+# List grammar extensions to include here; use ALL to include all; or leave blank for none
+# extensions: TRIM REFS ESCAPES HEX
+# WARNING: currently, the only supported option is ALL (or none)
 EXTENSIONS = ALL
 
 # list optional features here
 # current features: PACKRAT
-FEATURES = PACKRAT
+FEATURES = PACKRAT DEBUG_COMPILER
 
 # set to non-empty value to use the chpeg.c amalgamation instead of separate chpeg library sources
 USE_AMALGAMATION =
