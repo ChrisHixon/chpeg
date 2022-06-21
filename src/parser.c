@@ -2044,18 +2044,18 @@ pred_cleanup:
                         int mlen = str_len[arg], i;
                         const unsigned char *mstr = strings[arg];
                         for (i = 0; i < mlen; ++i) {
-                            if (mstr[i] == input[offset]) {
-                                ++offset;
-                                pc += 2;
-                                goto chrcls_done; // need to break two levels
-                            }
-                            if ((i < mlen - 2) && (mstr[i+1] == '-')) {
+                            if ((mstr[i+1] == '-') && (i < mlen - 2)) {
                                 if ((input[offset] >= mstr[i]) && (input[offset] <= mstr[i+2])) {
                                     ++offset;
                                     pc += 2;
                                     goto chrcls_done; // need to break two levels
                                 }
                                 i+=2;
+                            }
+                            else if (mstr[i] == input[offset]) {
+                                ++offset;
+                                pc += 2;
+                                goto chrcls_done; // need to break two levels
                             }
                         }
                     }
@@ -2071,6 +2071,44 @@ pred_cleanup:
                     ++pc; // next instruction (upon failure)
                 }
 chrcls_done:
+                break;
+
+            case CHPEG_OP_NCHRCLS: // Negated CharClass: matching a character in the chrcls is failure
+                                   // arg = chrcls str_id; skip next instruction on success
+                {
+                    if (offset < length) {
+                        int mlen = str_len[arg], i;
+                        const unsigned char *mstr = strings[arg];
+                        for (i = 0; i < mlen; ++i) {
+                            if ((mstr[i+1] == '-') && (i < mlen - 2)) {
+                                if ((input[offset] >= mstr[i]) && (input[offset] <= mstr[i+2])) {
+                                    ++pc; // next instruction (failure)
+                                    goto nchrcls_done; // need to break two levels
+                                }
+                                i+=2;
+                            }
+                            else if (mstr[i] == input[offset]) {
+                                ++pc; // next instruction (failure)
+                                goto nchrcls_done; // need to break two levels
+                            }
+                        }
+                        // success (no matches)
+                        ++offset;
+                        pc += 2;
+                        break;
+                    }
+#if ERRORS && ERRORS_TERMINALS
+                    if (!err_locked) {
+                        ChpegParser_expected(self, offset, tree_top, // offset, depth
+                            tree_stack[tree_top]->def, pc); // def, pc
+#if DEBUG_ERRORS
+                        ChpegParser_print_error(self, input);
+#endif
+                    }
+#endif
+                    ++pc; // next instruction (failure)
+                }
+nchrcls_done:
                 break;
 
 // Literal
@@ -2121,7 +2159,7 @@ chrcls_done:
                 tree_stack[tree_top]->length = offset - tree_stack[tree_top]->offset;
 
 #if CHPEG_EXTENSION_TRIM
-                // if we haven't set token_offset by trimming left, set token_length
+                // if we haven't set token_offset by trimming left, set token_offset
                 if ((tree_stack[tree_top]->flags & CHPEG_FLAG_TRIMMED_LEFT) == 0)
                 {
                     tree_stack[tree_top]->token_offset = tree_stack[tree_top]->offset;

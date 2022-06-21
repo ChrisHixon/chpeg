@@ -435,6 +435,9 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegCNode *cnode)
             break;
         case CHPEG_DEF_IDENTIFIER:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
         case CHPEG_DEF_LITERAL:
 #if CHPEG_EXTENSION_REFS
         case CHPEG_DEF_REFERENCE:
@@ -602,6 +605,12 @@ static int ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, cnode->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_NCHRCLS, cnode->val.ival));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
+            break;
+#endif
         case CHPEG_DEF_LITERAL:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, cnode->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
@@ -645,6 +654,9 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
     switch (cnode->type) {
         case CHPEG_DEF_LITERAL:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
             {
                 int len = 0, offset = 0;
                 for (ChpegCNode *p = cnode->head; p; p = p->next) {
@@ -660,7 +672,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
 
 #if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(str, len, 20);
-                fprintf(stderr, "%s: LITERAL/CHARCLASS str_id=%d, value=\"%s\"\n",
+                fprintf(stderr, "%s: LITERAL/CHARCLASS/NCHARCLASS str_id=%d, value=\"%s\"\n",
                     __func__, cnode->val.ival, tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -1239,6 +1251,9 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_DEF_DOT:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
             consumes = 1;
             break;
 
@@ -1320,6 +1335,14 @@ static void chpeg_sanity_check(void)
 #if CHPEG_EXTENSION_REFS
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_MARK), "Mark") == 0);
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_REFERENCE), "Reference") == 0);
+#endif
+
+#if CHPEG_EXTENSION_HEX
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_HEXCHAR), "HexChar") == 0);
+#endif
+
+#if CHPEG_EXTENSION_NCHRCLS
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_NCHARCLASS), "NCharClass") == 0);
 #endif
 
 }

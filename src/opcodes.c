@@ -54,6 +54,10 @@ const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "REF",
 #endif
 
+#ifdef CHPEG_EXTENSION_NCHRCLS
+    "NCHRCLS",
+#endif
+
 };
 
 #ifdef __cplusplus

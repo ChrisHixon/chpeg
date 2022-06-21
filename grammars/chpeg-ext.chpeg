@@ -16,6 +16,7 @@ Primary     { } <- Identifier S !'{' !'<-'
                  / Mark S
                  / Literal S
                  / CharClass S
+                 / NCharClass S
                  / Dot S
 
 # REFS extension
@@ -30,9 +31,10 @@ Options     { } <- [CSILTPR]*
 Identifier  {L} <- [a-zA-Z_][a-zA-Z_0-9]*
 Literal     {S} <- ['] (!['] Char)* [']
                  / ["] (!["] Char)* ["]
-CharClass   {S} <- '[' (!']' CharRange)+ ']'
+CharClass   {S} <- '[' !'^' (!']' CharRange)+ ']'
+NCharClass  {S} <- '[^' (!']' CharRange)+ ']'
 CharRange   { } <- Char '-' !']' Char / Char
-Char        { } <- EscChar / HexChar / OctChar / PlainChar
+Char        { } <- PlainChar / HexChar / EscChar / OctChar
 EscChar     {L} <- '\\' [abfvnrt'"\[\]\\]
 OctChar     {L} <- '\\' [0-3][0-7][0-7]
                  / '\\' [0-7][0-7]?

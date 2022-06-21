@@ -38,6 +38,7 @@ extern "C" {
 #define CHPEG_EXTENSION_REFS 1
 #define CHPEG_EXTENSION_ESCAPES 1
 #define CHPEG_EXTENSION_HEX 1
+#define CHPEG_EXTENSION_NCHRCLS 1
 #endif
 
 #ifndef CHPEG_EXTENSION_TRIM
@@ -52,11 +53,20 @@ extern "C" {
 #define CHPEG_EXTENSION_ESCAPES 0
 #endif
 
+#ifndef CHPEG_EXTENSION_HEX
+#define CHPEG_EXTENSION_HEX 0
+#endif
+
+#ifndef CHPEG_EXTENSION_NCHRCLS
+#define CHPEG_EXTENSION_NCHRCLS 0
+#endif
+
 // used to check if using ANY extension
 #if CHPEG_EXTENSION_TRIM \
     || CHPEG_EXTENSION_REFS \
     || CHPEG_EXTENSION_ESCAPES \
-    || CHPEG_EXTENSION_HEX
+    || CHPEG_EXTENSION_HEX \
+    || CHPEG_EXTENSION_NCHRCLS
 #define CHPEG_USES_EXTENSIONS 1
 #endif
 
@@ -64,7 +74,8 @@ extern "C" {
     ! CHPEG_EXTENSION_TRIM || \
     ! CHPEG_EXTENSION_REFS || \
     ! CHPEG_EXTENSION_ESCAPES || \
-    ! CHPEG_EXTENSION_HEX )
+    ! CHPEG_EXTENSION_HEX || \
+    ! CHPEG_EXTENSION_NCHRCLS )
 #error "Selective use of grammar extensions is currently not supported. Please define CHPEG_EXTENSION_ALL"
 #endif
 

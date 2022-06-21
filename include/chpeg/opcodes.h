@@ -57,6 +57,10 @@ enum ChpegOp
     CHPEG_OP_REF,
 #endif
 
+#ifdef CHPEG_EXTENSION_NCHRCLS
+    CHPEG_OP_NCHRCLS,
+#endif
+
     CHPEG_NUM_OPS
 };
 
