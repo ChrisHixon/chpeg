@@ -7,7 +7,7 @@ EXTENSIONS = ALL
 
 # list optional features here
 # current features: PACKRAT
-FEATURES = PACKRAT DEBUG_CAN_SIMPLIFY
+FEATURES = PACKRAT
 
 # set to non-empty value to use the chpeg.c amalgamation instead of separate chpeg library sources
 USE_AMALGAMATION =
