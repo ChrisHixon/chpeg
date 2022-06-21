@@ -369,10 +369,24 @@ int ChpegNode_can_simplify(ChpegNode *self)
         assert(p->offset + p->length <= pos);
         if (p->offset + p->length < pos) {
             ++text;                             // a gap is considered a text node
+#ifdef CHPEG_DEBUG_CAN_SIMPLIFY
+            fprintf(stderr, "can't simplify node: (early) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+                self->def, self->offset, self->length, self->flags,
+                cnt, text);
+#endif
+            return 0;
         }
         pos = p->offset;
         if (!(p->flags & CHPEG_FLAG_IGNORE)) {
-            ++cnt;                              // a non-ignore node is candidate
+            // a non-ignore node is candidate
+            if (++cnt > 1) {
+#ifdef CHPEG_DEBUG_CAN_SIMPLIFY
+                fprintf(stderr, "can't simplify node: (early) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+                    self->def, self->offset, self->length, self->flags,
+                    cnt, text);
+#endif
+                return 0;
+            }
         }
         p = p->next;
     }
