@@ -13,9 +13,9 @@ const char *chpeg_ext_bytecode_def_names[29] = {"Grammar", "Definition", "Choice
 
 int chpeg_ext_bytecode_def_flags[29] = {CHPEG_FLAG_STOP, 0, 0, 0, 0, 0, 0, 0, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, CHPEG_FLAG_LEAF, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, CHPEG_FLAG_STOP, 0, 0, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_LEAF, CHPEG_FLAG_IGNORE};
 
-int chpeg_ext_bytecode_def_addrs[29] = {3, 16, 43, 56, 63, 75, 86, 115, 187, 201, 212, 224, 262, 279, 286, 295, 331, 352, 368, 389, 409, 415, 440, 451, 459, 463, 467, 471, 475};
+int chpeg_ext_bytecode_def_addrs[29] = {3, 16, 43, 56, 63, 75, 86, 115, 187, 201, 212, 224, 254, 271, 278, 287, 323, 344, 360, 381, 401, 407, 432, 443, 451, 455, 459, 463, 467};
 
-int chpeg_ext_bytecode_instructions[507] = {
+int chpeg_ext_bytecode_instructions[499] = {
   /*      0 */ CHPEG_INST(CHPEG_OP_IDENT,           0), // Grammar
   /*      1 */ CHPEG_INST(CHPEG_OP_FAIL,            0),
   /*      2 */ CHPEG_INST(CHPEG_OP_SUCC,            0),
@@ -141,7 +141,7 @@ int chpeg_ext_bytecode_instructions[507] = {
   /*    122 */ CHPEG_INST(CHPEG_OP_GOTO,          128),
   /*    123 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
   /*    124 */ CHPEG_INST(CHPEG_OP_GOTO,          128),
-  /*    125 */ CHPEG_INST(CHPEG_OP_CHRCLS,          4), // [A-Z]
+  /*    125 */ CHPEG_INST(CHPEG_OP_CHRCLS,          4), // [CSILTPR]
   /*    126 */ CHPEG_INST(CHPEG_OP_GOTO,          128),
   /*    127 */ CHPEG_INST(CHPEG_OP_PMATCHF,       135),
   /*    128 */ CHPEG_INST(CHPEG_OP_PNOMATS,       135),
@@ -242,301 +242,293 @@ int chpeg_ext_bytecode_instructions[507] = {
   /*    223 */ CHPEG_INST(CHPEG_OP_IFAIL,          10), // Trim
   /*    224 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
   /*    225 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
-  /*    226 */ CHPEG_INST(CHPEG_OP_GOTO,          236),
-  /*    227 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
-  /*    228 */ CHPEG_INST(CHPEG_OP_GOTO,          236),
-  /*    229 */ CHPEG_INST(CHPEG_OP_IDENT,          27), // Comma
-  /*    230 */ CHPEG_INST(CHPEG_OP_GOTO,          236),
-  /*    231 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
-  /*    232 */ CHPEG_INST(CHPEG_OP_GOTO,          236),
-  /*    233 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
-  /*    234 */ CHPEG_INST(CHPEG_OP_GOTO,          236),
-  /*    235 */ CHPEG_INST(CHPEG_OP_CISUCC,        260),
-  /*    236 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    237 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
-  /*    238 */ CHPEG_INST(CHPEG_OP_GOTO,          246),
-  /*    239 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
-  /*    240 */ CHPEG_INST(CHPEG_OP_GOTO,          246),
-  /*    241 */ CHPEG_INST(CHPEG_OP_IDENT,          27), // Comma
-  /*    242 */ CHPEG_INST(CHPEG_OP_GOTO,          246),
-  /*    243 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
-  /*    244 */ CHPEG_INST(CHPEG_OP_GOTO,          246),
-  /*    245 */ CHPEG_INST(CHPEG_OP_CISUCC,        260),
-  /*    246 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    247 */ CHPEG_INST(CHPEG_OP_IDENT,          27), // Comma
-  /*    248 */ CHPEG_INST(CHPEG_OP_GOTO,          254),
-  /*    249 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
-  /*    250 */ CHPEG_INST(CHPEG_OP_GOTO,          254),
-  /*    251 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
-  /*    252 */ CHPEG_INST(CHPEG_OP_GOTO,          254),
-  /*    253 */ CHPEG_INST(CHPEG_OP_CISUCC,        260),
-  /*    254 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    255 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
-  /*    256 */ CHPEG_INST(CHPEG_OP_GOTO,          258),
-  /*    257 */ CHPEG_INST(CHPEG_OP_CISUCC,        260),
-  /*    258 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    259 */ CHPEG_INST(CHPEG_OP_CFAIL,         261),
-  /*    260 */ CHPEG_INST(CHPEG_OP_ISUCC,          11), // MinMax
-  /*    261 */ CHPEG_INST(CHPEG_OP_IFAIL,          11), // MinMax
-  /*    262 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    263 */ CHPEG_INST(CHPEG_OP_CHRCLS,         10), // [1-9]
-  /*    264 */ CHPEG_INST(CHPEG_OP_GOTO,          271),
-  /*    265 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    266 */ CHPEG_INST(CHPEG_OP_CHRCLS,         11), // [0-9]
-  /*    267 */ CHPEG_INST(CHPEG_OP_GOTO,          269),
-  /*    268 */ CHPEG_INST(CHPEG_OP_RSMAT,         266),
-  /*    269 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    270 */ CHPEG_INST(CHPEG_OP_CISUCC,        277),
-  /*    271 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    272 */ CHPEG_INST(CHPEG_OP_LIT,            12), // "0"
+  /*    226 */ CHPEG_INST(CHPEG_OP_GOTO,          242),
+  /*    227 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
+  /*    228 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
+  /*    229 */ CHPEG_INST(CHPEG_OP_GOTO,          240),
+  /*    230 */ CHPEG_INST(CHPEG_OP_IDENT,          27), // Comma
+  /*    231 */ CHPEG_INST(CHPEG_OP_GOTO,          240),
+  /*    232 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
+  /*    233 */ CHPEG_INST(CHPEG_OP_GOTO,          240),
+  /*    234 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
+  /*    235 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
+  /*    236 */ CHPEG_INST(CHPEG_OP_GOTO,          238),
+  /*    237 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
+  /*    238 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
+  /*    239 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
+  /*    240 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
+  /*    241 */ CHPEG_INST(CHPEG_OP_CISUCC,        252),
+  /*    242 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    243 */ CHPEG_INST(CHPEG_OP_IDENT,          27), // Comma
+  /*    244 */ CHPEG_INST(CHPEG_OP_GOTO,          250),
+  /*    245 */ CHPEG_INST(CHPEG_OP_IDENT,          28), // S
+  /*    246 */ CHPEG_INST(CHPEG_OP_GOTO,          250),
+  /*    247 */ CHPEG_INST(CHPEG_OP_IDENT,          12), // MinMaxVal
+  /*    248 */ CHPEG_INST(CHPEG_OP_GOTO,          250),
+  /*    249 */ CHPEG_INST(CHPEG_OP_CISUCC,        252),
+  /*    250 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    251 */ CHPEG_INST(CHPEG_OP_CFAIL,         253),
+  /*    252 */ CHPEG_INST(CHPEG_OP_ISUCC,          11), // MinMax
+  /*    253 */ CHPEG_INST(CHPEG_OP_IFAIL,          11), // MinMax
+  /*    254 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    255 */ CHPEG_INST(CHPEG_OP_CHRCLS,         10), // [1-9]
+  /*    256 */ CHPEG_INST(CHPEG_OP_GOTO,          263),
+  /*    257 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    258 */ CHPEG_INST(CHPEG_OP_CHRCLS,         11), // [0-9]
+  /*    259 */ CHPEG_INST(CHPEG_OP_GOTO,          261),
+  /*    260 */ CHPEG_INST(CHPEG_OP_RSMAT,         258),
+  /*    261 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    262 */ CHPEG_INST(CHPEG_OP_CISUCC,        269),
+  /*    263 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    264 */ CHPEG_INST(CHPEG_OP_LIT,            12), // "0"
+  /*    265 */ CHPEG_INST(CHPEG_OP_GOTO,          267),
+  /*    266 */ CHPEG_INST(CHPEG_OP_CISUCC,        269),
+  /*    267 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    268 */ CHPEG_INST(CHPEG_OP_CFAIL,         270),
+  /*    269 */ CHPEG_INST(CHPEG_OP_ISUCC,          12), // MinMaxVal
+  /*    270 */ CHPEG_INST(CHPEG_OP_IFAIL,          12), // MinMaxVal
+  /*    271 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
+  /*    272 */ CHPEG_INST(CHPEG_OP_CHRCLS,          4), // [CSILTPR]
   /*    273 */ CHPEG_INST(CHPEG_OP_GOTO,          275),
-  /*    274 */ CHPEG_INST(CHPEG_OP_CISUCC,        277),
-  /*    275 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    276 */ CHPEG_INST(CHPEG_OP_CFAIL,         278),
-  /*    277 */ CHPEG_INST(CHPEG_OP_ISUCC,          12), // MinMaxVal
-  /*    278 */ CHPEG_INST(CHPEG_OP_IFAIL,          12), // MinMaxVal
-  /*    279 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
-  /*    280 */ CHPEG_INST(CHPEG_OP_CHRCLS,         13), // [CSILTPR]
-  /*    281 */ CHPEG_INST(CHPEG_OP_GOTO,          283),
-  /*    282 */ CHPEG_INST(CHPEG_OP_RPMAT,         280),
-  /*    283 */ CHPEG_INST(CHPEG_OP_RPDONE,        285),
-  /*    284 */ CHPEG_INST(CHPEG_OP_ISUCC,          13), // Options
-  /*    285 */ CHPEG_INST(CHPEG_OP_IFAIL,          13), // Options
-  /*    286 */ CHPEG_INST(CHPEG_OP_CHRCLS,         14), // [a-zA-Z_]
-  /*    287 */ CHPEG_INST(CHPEG_OP_GOTO,          294),
-  /*    288 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    289 */ CHPEG_INST(CHPEG_OP_CHRCLS,         15), // [a-zA-Z_0-9]
-  /*    290 */ CHPEG_INST(CHPEG_OP_GOTO,          292),
-  /*    291 */ CHPEG_INST(CHPEG_OP_RSMAT,         289),
-  /*    292 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    293 */ CHPEG_INST(CHPEG_OP_ISUCC,          14), // Identifier
-  /*    294 */ CHPEG_INST(CHPEG_OP_IFAIL,          14), // Identifier
-  /*    295 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    296 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [']
-  /*    297 */ CHPEG_INST(CHPEG_OP_GOTO,          311),
-  /*    298 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    299 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    300 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [']
+  /*    274 */ CHPEG_INST(CHPEG_OP_RPMAT,         272),
+  /*    275 */ CHPEG_INST(CHPEG_OP_RPDONE,        277),
+  /*    276 */ CHPEG_INST(CHPEG_OP_ISUCC,          13), // Options
+  /*    277 */ CHPEG_INST(CHPEG_OP_IFAIL,          13), // Options
+  /*    278 */ CHPEG_INST(CHPEG_OP_CHRCLS,         13), // [a-zA-Z_]
+  /*    279 */ CHPEG_INST(CHPEG_OP_GOTO,          286),
+  /*    280 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    281 */ CHPEG_INST(CHPEG_OP_CHRCLS,         14), // [a-zA-Z_0-9]
+  /*    282 */ CHPEG_INST(CHPEG_OP_GOTO,          284),
+  /*    283 */ CHPEG_INST(CHPEG_OP_RSMAT,         281),
+  /*    284 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    285 */ CHPEG_INST(CHPEG_OP_ISUCC,          14), // Identifier
+  /*    286 */ CHPEG_INST(CHPEG_OP_IFAIL,          14), // Identifier
+  /*    287 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    288 */ CHPEG_INST(CHPEG_OP_CHRCLS,         15), // [']
+  /*    289 */ CHPEG_INST(CHPEG_OP_GOTO,          303),
+  /*    290 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    291 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    292 */ CHPEG_INST(CHPEG_OP_CHRCLS,         15), // [']
+  /*    293 */ CHPEG_INST(CHPEG_OP_GOTO,          295),
+  /*    294 */ CHPEG_INST(CHPEG_OP_PMATCHF,       299),
+  /*    295 */ CHPEG_INST(CHPEG_OP_PNOMATS,       299),
+  /*    296 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
+  /*    297 */ CHPEG_INST(CHPEG_OP_GOTO,          299),
+  /*    298 */ CHPEG_INST(CHPEG_OP_RSMAT,         291),
+  /*    299 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    300 */ CHPEG_INST(CHPEG_OP_CHRCLS,         15), // [']
   /*    301 */ CHPEG_INST(CHPEG_OP_GOTO,          303),
-  /*    302 */ CHPEG_INST(CHPEG_OP_PMATCHF,       307),
-  /*    303 */ CHPEG_INST(CHPEG_OP_PNOMATS,       307),
-  /*    304 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
-  /*    305 */ CHPEG_INST(CHPEG_OP_GOTO,          307),
-  /*    306 */ CHPEG_INST(CHPEG_OP_RSMAT,         299),
-  /*    307 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    308 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [']
+  /*    302 */ CHPEG_INST(CHPEG_OP_CISUCC,        321),
+  /*    303 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    304 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [\"]
+  /*    305 */ CHPEG_INST(CHPEG_OP_GOTO,          319),
+  /*    306 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    307 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    308 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [\"]
   /*    309 */ CHPEG_INST(CHPEG_OP_GOTO,          311),
-  /*    310 */ CHPEG_INST(CHPEG_OP_CISUCC,        329),
-  /*    311 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    312 */ CHPEG_INST(CHPEG_OP_CHRCLS,         17), // [\"]
-  /*    313 */ CHPEG_INST(CHPEG_OP_GOTO,          327),
-  /*    314 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    315 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    316 */ CHPEG_INST(CHPEG_OP_CHRCLS,         17), // [\"]
+  /*    310 */ CHPEG_INST(CHPEG_OP_PMATCHF,       315),
+  /*    311 */ CHPEG_INST(CHPEG_OP_PNOMATS,       315),
+  /*    312 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
+  /*    313 */ CHPEG_INST(CHPEG_OP_GOTO,          315),
+  /*    314 */ CHPEG_INST(CHPEG_OP_RSMAT,         307),
+  /*    315 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    316 */ CHPEG_INST(CHPEG_OP_CHRCLS,         16), // [\"]
   /*    317 */ CHPEG_INST(CHPEG_OP_GOTO,          319),
-  /*    318 */ CHPEG_INST(CHPEG_OP_PMATCHF,       323),
-  /*    319 */ CHPEG_INST(CHPEG_OP_PNOMATS,       323),
-  /*    320 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
-  /*    321 */ CHPEG_INST(CHPEG_OP_GOTO,          323),
-  /*    322 */ CHPEG_INST(CHPEG_OP_RSMAT,         315),
-  /*    323 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    324 */ CHPEG_INST(CHPEG_OP_CHRCLS,         17), // [\"]
-  /*    325 */ CHPEG_INST(CHPEG_OP_GOTO,          327),
-  /*    326 */ CHPEG_INST(CHPEG_OP_CISUCC,        329),
-  /*    327 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    328 */ CHPEG_INST(CHPEG_OP_CFAIL,         330),
-  /*    329 */ CHPEG_INST(CHPEG_OP_ISUCC,          15), // Literal
-  /*    330 */ CHPEG_INST(CHPEG_OP_IFAIL,          15), // Literal
-  /*    331 */ CHPEG_INST(CHPEG_OP_LIT,            18), // "["
-  /*    332 */ CHPEG_INST(CHPEG_OP_GOTO,          351),
-  /*    333 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    334 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "^"
-  /*    335 */ CHPEG_INST(CHPEG_OP_GOTO,          337),
-  /*    336 */ CHPEG_INST(CHPEG_OP_PMATCHF,       351),
-  /*    337 */ CHPEG_INST(CHPEG_OP_PNOMATS,       351),
-  /*    338 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
-  /*    339 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    340 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "]"
+  /*    318 */ CHPEG_INST(CHPEG_OP_CISUCC,        321),
+  /*    319 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    320 */ CHPEG_INST(CHPEG_OP_CFAIL,         322),
+  /*    321 */ CHPEG_INST(CHPEG_OP_ISUCC,          15), // Literal
+  /*    322 */ CHPEG_INST(CHPEG_OP_IFAIL,          15), // Literal
+  /*    323 */ CHPEG_INST(CHPEG_OP_LIT,            17), // "["
+  /*    324 */ CHPEG_INST(CHPEG_OP_GOTO,          343),
+  /*    325 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    326 */ CHPEG_INST(CHPEG_OP_LIT,            18), // "^"
+  /*    327 */ CHPEG_INST(CHPEG_OP_GOTO,          329),
+  /*    328 */ CHPEG_INST(CHPEG_OP_PMATCHF,       343),
+  /*    329 */ CHPEG_INST(CHPEG_OP_PNOMATS,       343),
+  /*    330 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
+  /*    331 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    332 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "]"
+  /*    333 */ CHPEG_INST(CHPEG_OP_GOTO,          335),
+  /*    334 */ CHPEG_INST(CHPEG_OP_PMATCHF,       339),
+  /*    335 */ CHPEG_INST(CHPEG_OP_PNOMATS,       339),
+  /*    336 */ CHPEG_INST(CHPEG_OP_IDENT,          18), // CharRange
+  /*    337 */ CHPEG_INST(CHPEG_OP_GOTO,          339),
+  /*    338 */ CHPEG_INST(CHPEG_OP_RPMAT,         331),
+  /*    339 */ CHPEG_INST(CHPEG_OP_RPDONE,        343),
+  /*    340 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "]"
   /*    341 */ CHPEG_INST(CHPEG_OP_GOTO,          343),
-  /*    342 */ CHPEG_INST(CHPEG_OP_PMATCHF,       347),
-  /*    343 */ CHPEG_INST(CHPEG_OP_PNOMATS,       347),
-  /*    344 */ CHPEG_INST(CHPEG_OP_IDENT,          18), // CharRange
-  /*    345 */ CHPEG_INST(CHPEG_OP_GOTO,          347),
-  /*    346 */ CHPEG_INST(CHPEG_OP_RPMAT,         339),
-  /*    347 */ CHPEG_INST(CHPEG_OP_RPDONE,        351),
-  /*    348 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "]"
+  /*    342 */ CHPEG_INST(CHPEG_OP_ISUCC,          16), // CharClass
+  /*    343 */ CHPEG_INST(CHPEG_OP_IFAIL,          16), // CharClass
+  /*    344 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "[^"
+  /*    345 */ CHPEG_INST(CHPEG_OP_GOTO,          359),
+  /*    346 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
+  /*    347 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    348 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "]"
   /*    349 */ CHPEG_INST(CHPEG_OP_GOTO,          351),
-  /*    350 */ CHPEG_INST(CHPEG_OP_ISUCC,          16), // CharClass
-  /*    351 */ CHPEG_INST(CHPEG_OP_IFAIL,          16), // CharClass
-  /*    352 */ CHPEG_INST(CHPEG_OP_LIT,            21), // "[^"
-  /*    353 */ CHPEG_INST(CHPEG_OP_GOTO,          367),
-  /*    354 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
-  /*    355 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    356 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "]"
+  /*    350 */ CHPEG_INST(CHPEG_OP_PMATCHF,       355),
+  /*    351 */ CHPEG_INST(CHPEG_OP_PNOMATS,       355),
+  /*    352 */ CHPEG_INST(CHPEG_OP_IDENT,          18), // CharRange
+  /*    353 */ CHPEG_INST(CHPEG_OP_GOTO,          355),
+  /*    354 */ CHPEG_INST(CHPEG_OP_RPMAT,         347),
+  /*    355 */ CHPEG_INST(CHPEG_OP_RPDONE,        359),
+  /*    356 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "]"
   /*    357 */ CHPEG_INST(CHPEG_OP_GOTO,          359),
-  /*    358 */ CHPEG_INST(CHPEG_OP_PMATCHF,       363),
-  /*    359 */ CHPEG_INST(CHPEG_OP_PNOMATS,       363),
-  /*    360 */ CHPEG_INST(CHPEG_OP_IDENT,          18), // CharRange
-  /*    361 */ CHPEG_INST(CHPEG_OP_GOTO,          363),
-  /*    362 */ CHPEG_INST(CHPEG_OP_RPMAT,         355),
-  /*    363 */ CHPEG_INST(CHPEG_OP_RPDONE,        367),
-  /*    364 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "]"
-  /*    365 */ CHPEG_INST(CHPEG_OP_GOTO,          367),
-  /*    366 */ CHPEG_INST(CHPEG_OP_ISUCC,          17), // NCharClass
-  /*    367 */ CHPEG_INST(CHPEG_OP_IFAIL,          17), // NCharClass
-  /*    368 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    369 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
-  /*    370 */ CHPEG_INST(CHPEG_OP_GOTO,          381),
-  /*    371 */ CHPEG_INST(CHPEG_OP_LIT,            22), // "-"
-  /*    372 */ CHPEG_INST(CHPEG_OP_GOTO,          381),
-  /*    373 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    374 */ CHPEG_INST(CHPEG_OP_LIT,            20), // "]"
+  /*    358 */ CHPEG_INST(CHPEG_OP_ISUCC,          17), // NCharClass
+  /*    359 */ CHPEG_INST(CHPEG_OP_IFAIL,          17), // NCharClass
+  /*    360 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    361 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
+  /*    362 */ CHPEG_INST(CHPEG_OP_GOTO,          373),
+  /*    363 */ CHPEG_INST(CHPEG_OP_LIT,            21), // "-"
+  /*    364 */ CHPEG_INST(CHPEG_OP_GOTO,          373),
+  /*    365 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    366 */ CHPEG_INST(CHPEG_OP_LIT,            19), // "]"
+  /*    367 */ CHPEG_INST(CHPEG_OP_GOTO,          369),
+  /*    368 */ CHPEG_INST(CHPEG_OP_PMATCHF,       373),
+  /*    369 */ CHPEG_INST(CHPEG_OP_PNOMATS,       373),
+  /*    370 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
+  /*    371 */ CHPEG_INST(CHPEG_OP_GOTO,          373),
+  /*    372 */ CHPEG_INST(CHPEG_OP_CISUCC,        379),
+  /*    373 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    374 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
   /*    375 */ CHPEG_INST(CHPEG_OP_GOTO,          377),
-  /*    376 */ CHPEG_INST(CHPEG_OP_PMATCHF,       381),
-  /*    377 */ CHPEG_INST(CHPEG_OP_PNOMATS,       381),
-  /*    378 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
-  /*    379 */ CHPEG_INST(CHPEG_OP_GOTO,          381),
-  /*    380 */ CHPEG_INST(CHPEG_OP_CISUCC,        387),
-  /*    381 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    382 */ CHPEG_INST(CHPEG_OP_IDENT,          19), // Char
+  /*    376 */ CHPEG_INST(CHPEG_OP_CISUCC,        379),
+  /*    377 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    378 */ CHPEG_INST(CHPEG_OP_CFAIL,         380),
+  /*    379 */ CHPEG_INST(CHPEG_OP_ISUCC,          18), // CharRange
+  /*    380 */ CHPEG_INST(CHPEG_OP_IFAIL,          18), // CharRange
+  /*    381 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    382 */ CHPEG_INST(CHPEG_OP_IDENT,          23), // PlainChar
   /*    383 */ CHPEG_INST(CHPEG_OP_GOTO,          385),
-  /*    384 */ CHPEG_INST(CHPEG_OP_CISUCC,        387),
+  /*    384 */ CHPEG_INST(CHPEG_OP_CISUCC,        399),
   /*    385 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    386 */ CHPEG_INST(CHPEG_OP_CFAIL,         388),
-  /*    387 */ CHPEG_INST(CHPEG_OP_ISUCC,          18), // CharRange
-  /*    388 */ CHPEG_INST(CHPEG_OP_IFAIL,          18), // CharRange
-  /*    389 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    390 */ CHPEG_INST(CHPEG_OP_IDENT,          23), // PlainChar
+  /*    386 */ CHPEG_INST(CHPEG_OP_IDENT,          22), // HexChar
+  /*    387 */ CHPEG_INST(CHPEG_OP_GOTO,          389),
+  /*    388 */ CHPEG_INST(CHPEG_OP_CISUCC,        399),
+  /*    389 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    390 */ CHPEG_INST(CHPEG_OP_IDENT,          20), // EscChar
   /*    391 */ CHPEG_INST(CHPEG_OP_GOTO,          393),
-  /*    392 */ CHPEG_INST(CHPEG_OP_CISUCC,        407),
+  /*    392 */ CHPEG_INST(CHPEG_OP_CISUCC,        399),
   /*    393 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    394 */ CHPEG_INST(CHPEG_OP_IDENT,          22), // HexChar
+  /*    394 */ CHPEG_INST(CHPEG_OP_IDENT,          21), // OctChar
   /*    395 */ CHPEG_INST(CHPEG_OP_GOTO,          397),
-  /*    396 */ CHPEG_INST(CHPEG_OP_CISUCC,        407),
+  /*    396 */ CHPEG_INST(CHPEG_OP_CISUCC,        399),
   /*    397 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    398 */ CHPEG_INST(CHPEG_OP_IDENT,          20), // EscChar
-  /*    399 */ CHPEG_INST(CHPEG_OP_GOTO,          401),
-  /*    400 */ CHPEG_INST(CHPEG_OP_CISUCC,        407),
-  /*    401 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    402 */ CHPEG_INST(CHPEG_OP_IDENT,          21), // OctChar
-  /*    403 */ CHPEG_INST(CHPEG_OP_GOTO,          405),
-  /*    404 */ CHPEG_INST(CHPEG_OP_CISUCC,        407),
-  /*    405 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    406 */ CHPEG_INST(CHPEG_OP_CFAIL,         408),
-  /*    407 */ CHPEG_INST(CHPEG_OP_ISUCC,          19), // Char
-  /*    408 */ CHPEG_INST(CHPEG_OP_IFAIL,          19), // Char
-  /*    409 */ CHPEG_INST(CHPEG_OP_LIT,            23), // "\\"
-  /*    410 */ CHPEG_INST(CHPEG_OP_GOTO,          414),
-  /*    411 */ CHPEG_INST(CHPEG_OP_CHRCLS,         24), // [ntr'\"[]\\fvab]
-  /*    412 */ CHPEG_INST(CHPEG_OP_GOTO,          414),
-  /*    413 */ CHPEG_INST(CHPEG_OP_ISUCC,          20), // EscChar
-  /*    414 */ CHPEG_INST(CHPEG_OP_IFAIL,          20), // EscChar
-  /*    415 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    416 */ CHPEG_INST(CHPEG_OP_LIT,            23), // "\\"
-  /*    417 */ CHPEG_INST(CHPEG_OP_GOTO,          425),
-  /*    418 */ CHPEG_INST(CHPEG_OP_CHRCLS,         25), // [0-3]
-  /*    419 */ CHPEG_INST(CHPEG_OP_GOTO,          425),
-  /*    420 */ CHPEG_INST(CHPEG_OP_CHRCLS,         26), // [0-7]
-  /*    421 */ CHPEG_INST(CHPEG_OP_GOTO,          425),
-  /*    422 */ CHPEG_INST(CHPEG_OP_CHRCLS,         26), // [0-7]
-  /*    423 */ CHPEG_INST(CHPEG_OP_GOTO,          425),
-  /*    424 */ CHPEG_INST(CHPEG_OP_CISUCC,        438),
-  /*    425 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    426 */ CHPEG_INST(CHPEG_OP_LIT,            23), // "\\"
-  /*    427 */ CHPEG_INST(CHPEG_OP_GOTO,          436),
-  /*    428 */ CHPEG_INST(CHPEG_OP_CHRCLS,         26), // [0-7]
-  /*    429 */ CHPEG_INST(CHPEG_OP_GOTO,          436),
-  /*    430 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
-  /*    431 */ CHPEG_INST(CHPEG_OP_CHRCLS,         26), // [0-7]
-  /*    432 */ CHPEG_INST(CHPEG_OP_GOTO,          434),
-  /*    433 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
-  /*    434 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
-  /*    435 */ CHPEG_INST(CHPEG_OP_CISUCC,        438),
-  /*    436 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    437 */ CHPEG_INST(CHPEG_OP_CFAIL,         439),
-  /*    438 */ CHPEG_INST(CHPEG_OP_ISUCC,          21), // OctChar
-  /*    439 */ CHPEG_INST(CHPEG_OP_IFAIL,          21), // OctChar
-  /*    440 */ CHPEG_INST(CHPEG_OP_LIT,            27), // "\\x"
-  /*    441 */ CHPEG_INST(CHPEG_OP_GOTO,          450),
-  /*    442 */ CHPEG_INST(CHPEG_OP_CHRCLS,         28), // [0-9a-fA-F]
-  /*    443 */ CHPEG_INST(CHPEG_OP_GOTO,          450),
-  /*    444 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
-  /*    445 */ CHPEG_INST(CHPEG_OP_CHRCLS,         28), // [0-9a-fA-F]
-  /*    446 */ CHPEG_INST(CHPEG_OP_GOTO,          448),
-  /*    447 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
-  /*    448 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
-  /*    449 */ CHPEG_INST(CHPEG_OP_ISUCC,          22), // HexChar
-  /*    450 */ CHPEG_INST(CHPEG_OP_IFAIL,          22), // HexChar
-  /*    451 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    452 */ CHPEG_INST(CHPEG_OP_LIT,            23), // "\\"
-  /*    453 */ CHPEG_INST(CHPEG_OP_GOTO,          455),
-  /*    454 */ CHPEG_INST(CHPEG_OP_PMATCHF,       458),
-  /*    455 */ CHPEG_INST(CHPEG_OP_PNOMATS,       458),
-  /*    456 */ CHPEG_INST(CHPEG_OP_DOT,           458),
-  /*    457 */ CHPEG_INST(CHPEG_OP_ISUCC,          23), // PlainChar
-  /*    458 */ CHPEG_INST(CHPEG_OP_IFAIL,          23), // PlainChar
-  /*    459 */ CHPEG_INST(CHPEG_OP_CHRCLS,         29), // [&!]
+  /*    398 */ CHPEG_INST(CHPEG_OP_CFAIL,         400),
+  /*    399 */ CHPEG_INST(CHPEG_OP_ISUCC,          19), // Char
+  /*    400 */ CHPEG_INST(CHPEG_OP_IFAIL,          19), // Char
+  /*    401 */ CHPEG_INST(CHPEG_OP_LIT,            22), // "\\"
+  /*    402 */ CHPEG_INST(CHPEG_OP_GOTO,          406),
+  /*    403 */ CHPEG_INST(CHPEG_OP_CHRCLS,         23), // [ntr'\"[]\\fvab]
+  /*    404 */ CHPEG_INST(CHPEG_OP_GOTO,          406),
+  /*    405 */ CHPEG_INST(CHPEG_OP_ISUCC,          20), // EscChar
+  /*    406 */ CHPEG_INST(CHPEG_OP_IFAIL,          20), // EscChar
+  /*    407 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    408 */ CHPEG_INST(CHPEG_OP_LIT,            22), // "\\"
+  /*    409 */ CHPEG_INST(CHPEG_OP_GOTO,          417),
+  /*    410 */ CHPEG_INST(CHPEG_OP_CHRCLS,         24), // [0-3]
+  /*    411 */ CHPEG_INST(CHPEG_OP_GOTO,          417),
+  /*    412 */ CHPEG_INST(CHPEG_OP_CHRCLS,         25), // [0-7]
+  /*    413 */ CHPEG_INST(CHPEG_OP_GOTO,          417),
+  /*    414 */ CHPEG_INST(CHPEG_OP_CHRCLS,         25), // [0-7]
+  /*    415 */ CHPEG_INST(CHPEG_OP_GOTO,          417),
+  /*    416 */ CHPEG_INST(CHPEG_OP_CISUCC,        430),
+  /*    417 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    418 */ CHPEG_INST(CHPEG_OP_LIT,            22), // "\\"
+  /*    419 */ CHPEG_INST(CHPEG_OP_GOTO,          428),
+  /*    420 */ CHPEG_INST(CHPEG_OP_CHRCLS,         25), // [0-7]
+  /*    421 */ CHPEG_INST(CHPEG_OP_GOTO,          428),
+  /*    422 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
+  /*    423 */ CHPEG_INST(CHPEG_OP_CHRCLS,         25), // [0-7]
+  /*    424 */ CHPEG_INST(CHPEG_OP_GOTO,          426),
+  /*    425 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
+  /*    426 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
+  /*    427 */ CHPEG_INST(CHPEG_OP_CISUCC,        430),
+  /*    428 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    429 */ CHPEG_INST(CHPEG_OP_CFAIL,         431),
+  /*    430 */ CHPEG_INST(CHPEG_OP_ISUCC,          21), // OctChar
+  /*    431 */ CHPEG_INST(CHPEG_OP_IFAIL,          21), // OctChar
+  /*    432 */ CHPEG_INST(CHPEG_OP_LIT,            26), // "\\x"
+  /*    433 */ CHPEG_INST(CHPEG_OP_GOTO,          442),
+  /*    434 */ CHPEG_INST(CHPEG_OP_CHRCLS,         27), // [0-9a-fA-F]
+  /*    435 */ CHPEG_INST(CHPEG_OP_GOTO,          442),
+  /*    436 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
+  /*    437 */ CHPEG_INST(CHPEG_OP_CHRCLS,         27), // [0-9a-fA-F]
+  /*    438 */ CHPEG_INST(CHPEG_OP_GOTO,          440),
+  /*    439 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
+  /*    440 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
+  /*    441 */ CHPEG_INST(CHPEG_OP_ISUCC,          22), // HexChar
+  /*    442 */ CHPEG_INST(CHPEG_OP_IFAIL,          22), // HexChar
+  /*    443 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    444 */ CHPEG_INST(CHPEG_OP_LIT,            22), // "\\"
+  /*    445 */ CHPEG_INST(CHPEG_OP_GOTO,          447),
+  /*    446 */ CHPEG_INST(CHPEG_OP_PMATCHF,       450),
+  /*    447 */ CHPEG_INST(CHPEG_OP_PNOMATS,       450),
+  /*    448 */ CHPEG_INST(CHPEG_OP_DOT,           450),
+  /*    449 */ CHPEG_INST(CHPEG_OP_ISUCC,          23), // PlainChar
+  /*    450 */ CHPEG_INST(CHPEG_OP_IFAIL,          23), // PlainChar
+  /*    451 */ CHPEG_INST(CHPEG_OP_CHRCLS,         28), // [&!]
+  /*    452 */ CHPEG_INST(CHPEG_OP_GOTO,          454),
+  /*    453 */ CHPEG_INST(CHPEG_OP_ISUCC,          24), // PredOp
+  /*    454 */ CHPEG_INST(CHPEG_OP_IFAIL,          24), // PredOp
+  /*    455 */ CHPEG_INST(CHPEG_OP_CHRCLS,         29), // [*+?]
+  /*    456 */ CHPEG_INST(CHPEG_OP_GOTO,          458),
+  /*    457 */ CHPEG_INST(CHPEG_OP_ISUCC,          25), // RepOp
+  /*    458 */ CHPEG_INST(CHPEG_OP_IFAIL,          25), // RepOp
+  /*    459 */ CHPEG_INST(CHPEG_OP_LIT,            30), // "."
   /*    460 */ CHPEG_INST(CHPEG_OP_GOTO,          462),
-  /*    461 */ CHPEG_INST(CHPEG_OP_ISUCC,          24), // PredOp
-  /*    462 */ CHPEG_INST(CHPEG_OP_IFAIL,          24), // PredOp
-  /*    463 */ CHPEG_INST(CHPEG_OP_CHRCLS,         30), // [*+?]
+  /*    461 */ CHPEG_INST(CHPEG_OP_ISUCC,          26), // Dot
+  /*    462 */ CHPEG_INST(CHPEG_OP_IFAIL,          26), // Dot
+  /*    463 */ CHPEG_INST(CHPEG_OP_LIT,            31), // ","
   /*    464 */ CHPEG_INST(CHPEG_OP_GOTO,          466),
-  /*    465 */ CHPEG_INST(CHPEG_OP_ISUCC,          25), // RepOp
-  /*    466 */ CHPEG_INST(CHPEG_OP_IFAIL,          25), // RepOp
-  /*    467 */ CHPEG_INST(CHPEG_OP_LIT,            31), // "."
-  /*    468 */ CHPEG_INST(CHPEG_OP_GOTO,          470),
-  /*    469 */ CHPEG_INST(CHPEG_OP_ISUCC,          26), // Dot
-  /*    470 */ CHPEG_INST(CHPEG_OP_IFAIL,          26), // Dot
-  /*    471 */ CHPEG_INST(CHPEG_OP_LIT,            32), // ","
-  /*    472 */ CHPEG_INST(CHPEG_OP_GOTO,          474),
-  /*    473 */ CHPEG_INST(CHPEG_OP_ISUCC,          27), // Comma
-  /*    474 */ CHPEG_INST(CHPEG_OP_IFAIL,          27), // Comma
-  /*    475 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    476 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
-  /*    477 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
-  /*    478 */ CHPEG_INST(CHPEG_OP_CHRCLS,         33), // [ \t\r\n]
-  /*    479 */ CHPEG_INST(CHPEG_OP_GOTO,          481),
-  /*    480 */ CHPEG_INST(CHPEG_OP_RPMAT,         478),
-  /*    481 */ CHPEG_INST(CHPEG_OP_RPDONE,        483),
-  /*    482 */ CHPEG_INST(CHPEG_OP_CISUCC,        503),
-  /*    483 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    484 */ CHPEG_INST(CHPEG_OP_LIT,            34), // "#"
-  /*    485 */ CHPEG_INST(CHPEG_OP_GOTO,          501),
-  /*    486 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
-  /*    487 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
-  /*    488 */ CHPEG_INST(CHPEG_OP_CHRCLS,         35), // [\r\n]
+  /*    465 */ CHPEG_INST(CHPEG_OP_ISUCC,          27), // Comma
+  /*    466 */ CHPEG_INST(CHPEG_OP_IFAIL,          27), // Comma
+  /*    467 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    468 */ CHPEG_INST(CHPEG_OP_CHOICE,          0),
+  /*    469 */ CHPEG_INST(CHPEG_OP_RPBEG,           0),
+  /*    470 */ CHPEG_INST(CHPEG_OP_CHRCLS,         32), // [ \t\r\n]
+  /*    471 */ CHPEG_INST(CHPEG_OP_GOTO,          473),
+  /*    472 */ CHPEG_INST(CHPEG_OP_RPMAT,         470),
+  /*    473 */ CHPEG_INST(CHPEG_OP_RPDONE,        475),
+  /*    474 */ CHPEG_INST(CHPEG_OP_CISUCC,        495),
+  /*    475 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    476 */ CHPEG_INST(CHPEG_OP_LIT,            33), // "#"
+  /*    477 */ CHPEG_INST(CHPEG_OP_GOTO,          493),
+  /*    478 */ CHPEG_INST(CHPEG_OP_RSBEG,           0),
+  /*    479 */ CHPEG_INST(CHPEG_OP_PREDN,           0),
+  /*    480 */ CHPEG_INST(CHPEG_OP_CHRCLS,         34), // [\r\n]
+  /*    481 */ CHPEG_INST(CHPEG_OP_GOTO,          483),
+  /*    482 */ CHPEG_INST(CHPEG_OP_PMATCHF,       486),
+  /*    483 */ CHPEG_INST(CHPEG_OP_PNOMATS,       486),
+  /*    484 */ CHPEG_INST(CHPEG_OP_DOT,           486),
+  /*    485 */ CHPEG_INST(CHPEG_OP_RSMAT,         479),
+  /*    486 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    487 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
+  /*    488 */ CHPEG_INST(CHPEG_OP_CHRCLS,         34), // [\r\n]
   /*    489 */ CHPEG_INST(CHPEG_OP_GOTO,          491),
-  /*    490 */ CHPEG_INST(CHPEG_OP_PMATCHF,       494),
-  /*    491 */ CHPEG_INST(CHPEG_OP_PNOMATS,       494),
-  /*    492 */ CHPEG_INST(CHPEG_OP_DOT,           494),
-  /*    493 */ CHPEG_INST(CHPEG_OP_RSMAT,         487),
-  /*    494 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    495 */ CHPEG_INST(CHPEG_OP_RQBEG,           0),
-  /*    496 */ CHPEG_INST(CHPEG_OP_CHRCLS,         35), // [\r\n]
-  /*    497 */ CHPEG_INST(CHPEG_OP_GOTO,          499),
-  /*    498 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
-  /*    499 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
-  /*    500 */ CHPEG_INST(CHPEG_OP_CISUCC,        503),
-  /*    501 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
-  /*    502 */ CHPEG_INST(CHPEG_OP_CFAIL,         504),
-  /*    503 */ CHPEG_INST(CHPEG_OP_RSMAT,         476),
-  /*    504 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
-  /*    505 */ CHPEG_INST(CHPEG_OP_ISUCC,          28), // S
-  /*    506 */ CHPEG_INST(CHPEG_OP_IFAIL,          28), // S
+  /*    490 */ CHPEG_INST(CHPEG_OP_RQMAT,           0),
+  /*    491 */ CHPEG_INST(CHPEG_OP_RQDONE,          0),
+  /*    492 */ CHPEG_INST(CHPEG_OP_CISUCC,        495),
+  /*    493 */ CHPEG_INST(CHPEG_OP_CIFAIL,          0),
+  /*    494 */ CHPEG_INST(CHPEG_OP_CFAIL,         496),
+  /*    495 */ CHPEG_INST(CHPEG_OP_RSMAT,         468),
+  /*    496 */ CHPEG_INST(CHPEG_OP_RSDONE,          0),
+  /*    497 */ CHPEG_INST(CHPEG_OP_ISUCC,          28), // S
+  /*    498 */ CHPEG_INST(CHPEG_OP_IFAIL,          28), // S
   };
 
-const char *chpeg_ext_bytecode_strings[36] = {"{", "}", "<-", "/", "A-Z", "(", ")", "$", "<", ">", "1-9", "0-9", "0", "CSILTPR", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "^", "]", "[^", "-", "\\", "ntr'\"[]\\fvab", "0-3", "0-7", "\\x", "0-9a-fA-F", "&!", "*+?", ".", ",", " \t\r\n", "#", "\r\n"};
+const char *chpeg_ext_bytecode_strings[35] = {"{", "}", "<-", "/", "CSILTPR", "(", ")", "$", "<", ">", "1-9", "0-9", "0", "a-zA-Z_", "a-zA-Z_0-9", "'", "\"", "[", "^", "]", "[^", "-", "\\", "ntr'\"[]\\fvab", "0-3", "0-7", "\\x", "0-9a-fA-F", "&!", "*+?", ".", ",", " \t\r\n", "#", "\r\n"};
 
-int chpeg_ext_bytecode_str_len[36] = {1, 1, 2, 1, 3, 1, 1, 1, 1, 1, 3, 3, 1, 7, 7, 10, 1, 1, 1, 1, 1, 2, 1, 1, 12, 3, 3, 2, 9, 2, 3, 1, 1, 4, 1, 2};
+int chpeg_ext_bytecode_str_len[35] = {1, 1, 2, 1, 7, 1, 1, 1, 1, 1, 3, 3, 1, 7, 10, 1, 1, 1, 1, 1, 2, 1, 1, 12, 3, 3, 2, 9, 2, 3, 1, 1, 4, 1, 2};
 
 const ChpegByteCode chpeg_ext_bytecode = {
   29, // num_defs
   (char **)chpeg_ext_bytecode_def_names,
   chpeg_ext_bytecode_def_flags,
   chpeg_ext_bytecode_def_addrs,
-  507, // num_instructions
+  499, // num_instructions
   chpeg_ext_bytecode_instructions,
-  36, // num_strings
+  35, // num_strings
   (unsigned char **)chpeg_ext_bytecode_strings,
   chpeg_ext_bytecode_str_len,
 #if CHPEG_EXTENSION_REFS
