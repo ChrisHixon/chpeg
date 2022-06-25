@@ -15,10 +15,11 @@ extern "C" {
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 // escape bytes like a C literal string, optionally truncating to limit, adding "..." at the end
 // caller must free() returned value
-char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
+CHPEG_DEF char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
 {
     static const char *hex_digit = "0123456789ABCDEF";
     static const char *esc_chars = "\\\"\t\r\n";
@@ -91,7 +92,7 @@ char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit)
 #define CHPEG_READ_FILE_INITIAL_SIZE 4096 * 4
 #endif
 
-int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
+CHPEG_DEF int chpeg_read_file(const char *filename, unsigned char **data, size_t *length)
 {
     int ret = 0;
     size_t bsize = 0, remain = 0, bytes_read = 0, len = 0;
@@ -186,7 +187,7 @@ cleanup:
     return ret;
 }
 
-char *chpeg_flags(char *buf, int flags)
+CHPEG_DEF char *chpeg_flags(char *buf, int flags)
 {
     buf[CHPEG_FLAGS_DISPLAY_LENGTH] = '\0';
 
@@ -219,7 +220,7 @@ char *chpeg_flags(char *buf, int flags)
     return buf;
 }
 
-void chpeg_line_col(const unsigned char *input, size_t offset, size_t *line_out, size_t *col_out)
+CHPEG_DEF void chpeg_line_col(const unsigned char *input, size_t offset, size_t *line_out, size_t *col_out)
 {
     size_t i, line = 1;
 
@@ -238,6 +239,35 @@ void chpeg_line_col(const unsigned char *input, size_t offset, size_t *line_out,
 
     *line_out = line;
     *col_out = 1 + offset - i;
+}
+
+// Convert `length` bytes containing '0'-'9', from `input`, to an unsigned int
+// `*uint_out`, with `max` value. This is meant to convert a known detected
+// chunk of '0'-'9' to an unsigned int.
+// Returns: 0 on success; non-zero on error; unsigned int result is returned via *uint_out
+CHPEG_DEF int chpeg_bytes2uint(const unsigned char *input, size_t length,
+    unsigned int max, unsigned int *uint_out)
+{
+    if (!uint_out) { return 1; }
+    if (!length) { *uint_out = 0; return 2; }
+
+    unsigned int val = 0, digit = 0, max_div_10 = max/10, max_mod_10 = max%10;
+
+    for (size_t z = 0; z < length; ++z, ++input) {
+        if (*input < '0' || *input > '9') {
+            *uint_out = 0;
+            return 3;
+        }
+        digit = (*input - '0');
+        if (val > max_div_10 || (val == max_div_10 && digit > max_mod_10)) {
+            *uint_out = 0;
+            return 4;
+        }
+        val = val*10 + digit;
+    }
+    assert(val <= max);
+    *uint_out = val;
+    return 0;
 }
 
 #ifdef __cplusplus

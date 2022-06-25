@@ -1729,6 +1729,84 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 ++pc; // next instruction
                 break;
 
+#if CHPEG_EXTENSION_MINMAX
+//
+// Repeat {min, max}
+//
+            case CHPEG_OP_RMMBEG: // Repeat Min/Max BEGin
+                                  // arg=min
+                if (CHPEG_CHECK_STACK_OVERFLOW(CHPEG_RMM_PUSHES)) {
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
+                // save info needed to backtrack
+#if CHPEG_UNDO
+                stack[++top] = tree_stack[tree_top]->num_undo; // num_undo (top-5)
+#endif
+                stack[++top] = tree_stack[tree_top]->num_children; // num_children (top-4)
+                stack[++top] = offset; // offset (top-3)
+
+                stack[++top] = pc+1; // loop address (top-2)
+                stack[++top] = arg; // min (top-1)
+                stack[++top] = 0; // match count (top)
+                ++pc; // next instruction
+                break;
+
+            case CHPEG_OP_RMMMAT: // Repeat Min/Max MATch; arg = max
+                ++stack[top]; // incr match count
+                // loop if consuming and have not met max matches
+                if (offset != stack[top-3] && stack[top] < (size_t)arg) {
+                    // update backtrack info
+#if CHPEG_UNDO
+                    stack[top-5] = tree_stack[tree_top]->num_undo;
+#endif
+                    stack[top-4] = tree_stack[tree_top]->num_children;
+                    stack[top-3] = offset;
+
+                    pc = stack[top-2]; // continue looping
+                }
+                else {
+                    ++pc; // next instruction (will be RMMDONE)
+                }
+                break;
+
+            case CHPEG_OP_RMMDONE: // Repeat Min/Max DONE; arg = max
+                                   // on success, skip next instruction
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_RMM_PUSHES)) {
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+
+                // min/max test
+                if (stack[top] >= stack[top-1] && stack[top] <= (size_t)arg) {
+                    // SUCCESS
+                    top -= CHPEG_RMM_PUSHES;
+                    pc += 2; // skip next instruction
+                }
+                else {
+                    // FAIL
+                    // backtrack to point where match failed
+                    offset = stack[top-3];
+                    // restore children to previous state
+                    for (i = tree_stack[tree_top]->num_children - stack[top-4]; i > 0; --i)
+                        CHPEG_NODE_FAIL_POP_CHILD(tree_stack[tree_top]);
+#if CHPEG_UNDO
+                    // undo until previous state
+                    for (i = tree_stack[tree_top]->num_undo - stack[top-5]; i > 0; --i) {
+                        ChpegNode_pop_undo(tree_stack[tree_top]);
+                    }
+#endif
+                    top -= CHPEG_RMM_PUSHES;
+                    ++pc; // next instruction
+                }
+
+#if CHPEG_VM_PRINT_TREE
+                tree_changed = 1;
+#endif
+                break;
+
+#endif // if CHPEG_EXTENSION_MINMAX
+
 #if CHPEG_EXTENSION_TRIM
 //
 // Trim
@@ -2087,6 +2165,7 @@ pred_cleanup:
 chrcls_done:
                 break;
 
+#if CHPEG_EXTENSION_NCHRCLS
             case CHPEG_OP_NCHRCLS: // Negated CharClass: matching a character in the chrcls is failure
                                    // arg = chrcls str_id; skip next instruction on success
                 {
@@ -2124,6 +2203,7 @@ chrcls_done:
                 }
 nchrcls_done:
                 break;
+#endif
 
 // Literal
             case CHPEG_OP_LIT: // arg = str_id; match literal string; skip next instruction on match

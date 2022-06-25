@@ -18,9 +18,10 @@ extern "C" {
 
 CHPEG_API char *chpeg_esc_bytes(const unsigned char *bytes, int length, int limit);
 CHPEG_API int chpeg_read_file(const char *filename, unsigned char **data, size_t *length);
+CHPEG_API char *chpeg_flags(char *buf, int flags);
 CHPEG_API void chpeg_line_col(const unsigned char *input, size_t offset,
     size_t *line_out, size_t *col_out);
-CHPEG_API char *chpeg_flags(char *buf, int flags);
+CHPEG_API int chpeg_bytes2uint(const unsigned char *input, size_t length, unsigned int max, unsigned int *uint_out);
 
 // chpeg_abort() should only be used to abort upon internal/programming errors, not
 // errors that can occur from user input, similar to how assert() should be used.
