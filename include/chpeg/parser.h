@@ -128,12 +128,12 @@ typedef struct _ChpegNode
     int def;
     int flags;
 
-    size_t offset; // full match offset
-    size_t length; // full match length
+    size_t offset; // full match offset (without TRIM) / token offset (with TRIM)
+    size_t length; // full match length (without TRIM) / token length (with TRIM)
 
 #if CHPEG_EXTENSION_TRIM
-    size_t token_offset; // token offset (adjusted by trim '<')
-    size_t token_length; // token length (adjusted by trim '>')
+    size_t match_offset; // full match offset
+    size_t match_length; // full match length
 #endif
 
     struct _ChpegNode *parent;
