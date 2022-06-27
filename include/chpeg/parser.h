@@ -190,7 +190,10 @@ typedef struct _ChpegParser
 {
     const ChpegByteCode *bc;
     ChpegNode *tree_root;
-    int simplification; // run unwrap on parse tree to generate AST (default is 1)
+    const unsigned char *input;
+    size_t length;
+
+    int simplification; // 0=none; 1=unwrap; 2=simplify
     int parse_result;
 
     size_t error_offset;
@@ -220,7 +223,8 @@ typedef struct _ChpegParser
 #endif
 
 #if CHPEG_PACKRAT
-    int packrat;
+    struct _ChpegPackrat *packrat;
+    int packrat_enabled;
     int packrat_window_size;
 #endif
 

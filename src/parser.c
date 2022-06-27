@@ -724,6 +724,206 @@ static void ChpegPNode_print(ChpegPNode *self, ChpegParser *parser,
 }
 #endif
 
+// packrat_no_match is a negative cache (attempted match, but match failed)
+static ChpegPNode *packrat_no_match = (ChpegPNode *)-1;
+
+typedef struct _ChpegPackrat
+{
+    ChpegParser *parser;
+    int num_defs;
+    size_t window_size;
+    size_t window_end;
+    int selective;
+    ChpegPNode **pnodes;
+} ChpegPackrat;
+
+int ChpegPackrat_init(ChpegPackrat *self, ChpegParser *parser)
+{
+    self->parser = parser;
+    self->num_defs = parser->bc->num_defs;
+    self->window_size = parser->packrat_window_size ?
+        parser->packrat_window_size : parser->length + 1;
+    self->window_end = self->window_size - 1;
+
+    self->pnodes = (ChpegPNode **)CHPEG_CALLOC(
+        self->num_defs * self->window_size, sizeof(ChpegPNode **));
+
+    for (int i = 0; i < self->num_defs; ++i) {
+        if (self->parser->bc->def_flags[i] & CHPEG_FLAG_PACKRAT) {
+            self->selective = 1;
+            break;
+        }
+    }
+    return 0;
+}
+
+int ChpegPackrat_cleanup(ChpegPackrat *self)
+{
+    int num_defs = self->parser->bc->num_defs;
+    size_t loop_end = num_defs * self->window_size, z = 0;
+
+    for (z = 0; z < loop_end; ++z) {
+        ChpegPNode *pnode = self->pnodes[z];
+        if (pnode && pnode != packrat_no_match) {
+            assert(pnode->node->ref_count > 0);
+            ChpegPNode_free(pnode);
+        }
+    }
+    CHPEG_FREE(self->pnodes);
+    return 0;
+}
+
+int ChpegPackrat_slide_window(ChpegPackrat *self, size_t offset)
+{
+    size_t z, loop_end;
+    int num_defs = self->parser->bc->num_defs;
+
+    if (offset > self->window_end) {
+        if (offset - self->window_end >= self->window_size) {
+#if CHPEG_VM_TRACE
+            if (self->parser->vm_trace & 2) {
+                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
+                    "(CLEAR ENTIRE WINDOW)\n", self->window_end, offset);
+            }
+#endif
+            loop_end = self->window_size * num_defs;
+            for (z = 0; z < loop_end; ++z) {
+                ChpegPNode *pnode = self->pnodes[z];
+                if (pnode && pnode != packrat_no_match) {
+                    ChpegPNode_free(pnode);
+                }
+            }
+            memset(self->pnodes, 0, self->window_size * num_defs * sizeof(ChpegPNode **));
+        }
+        else {
+#if CHPEG_VM_TRACE
+            if (self->parser->vm_trace & 2) {
+                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
+                    "(CLEAR WINDOW from %zu to %zu)\n",
+                    self->window_end, offset,
+                    (self->window_end + 1) % self->window_size, offset % self->window_size);
+            }
+#endif
+            loop_end = (offset + 1) * num_defs;
+            for (z = (self->window_end + 1) * num_defs; z < loop_end; ++z) {
+                size_t packrat_index = z % (self->window_size * num_defs);
+                ChpegPNode *pnode = self->pnodes[packrat_index];
+                if (pnode && pnode != packrat_no_match) {
+                    ChpegPNode_free(pnode);
+                }
+                self->pnodes[packrat_index] = NULL;
+            }
+        }
+        self->window_end = offset;
+    }
+    return 0;
+}
+
+ChpegPNode *ChpegPackrat_lookup(ChpegPackrat *self, size_t offset, int def_id)
+{
+    int num_defs = self->parser->bc->num_defs;
+    size_t packrat_index = 0;
+    ChpegPNode *packrat_lookup = NULL;
+
+    if (offset >= self->window_end - self->window_size + 1 && offset <= self->window_end) {
+        packrat_index = (offset % self->window_size) * (size_t)num_defs + (size_t)def_id;
+        packrat_lookup = self->pnodes[packrat_index];
+    }
+    else {
+        packrat_lookup = NULL;
+    }
+
+#if CHPEG_VM_TRACE
+    if (self->parser->vm_trace & 2) {
+        char *esc_str = NULL;
+        if (packrat_lookup && packrat_lookup != packrat_no_match) {
+            esc_str = chpeg_esc_bytes(self->parser->input + offset,
+#if CHPEG_EXTENSION_TRIM
+                packrat_lookup->node->match_length,
+#else
+                packrat_lookup->node->length,
+#endif
+                40);
+        }
+        fprintf(stderr, "packrat LOOKUP %7s %6zu %4d %20s %s%s%s\n",
+            packrat_lookup == NULL ? "<NULL>" :
+            (packrat_lookup == packrat_no_match ? "NEG" : "FOUND"),
+            offset, def_id,
+            ChpegByteCode_def_name(self->parser->bc, def_id),
+            esc_str ? " \"" : "",
+            esc_str ? esc_str : "",
+            esc_str ? "\"" : ""
+            );
+        if (esc_str) { CHPEG_FREE(esc_str); esc_str = NULL; }
+    }
+#endif
+
+    return packrat_lookup;
+}
+
+int ChpegPackrat_memoize(ChpegPackrat *self, size_t offset, int def_id, ChpegNode *node)
+{
+    int num_defs = self->parser->bc->num_defs;
+    size_t packrat_index = 0;
+
+    int cache_node = !self->selective ||
+        (self->parser->bc->def_flags[def_id] & CHPEG_FLAG_PACKRAT);
+
+#if CHPEG_VM_TRACE
+    if (self->parser->vm_trace & 2) {
+        char *esc_str = chpeg_esc_bytes(self->parser->input + offset,
+#if CHPEG_EXTENSION_TRIM
+            node->match_length,
+#else
+            node->length,
+#endif
+            40);
+
+        fprintf(stderr, "packrat MEMOIZE %6s %6zu %4d %20s \"%s\"\n",
+            cache_node ? "CACHE" : "--", offset, def_id,
+            ChpegByteCode_def_name(self->parser->bc, def_id), esc_str);
+        if (esc_str) { CHPEG_FREE(esc_str); esc_str = NULL; }
+    }
+#endif
+
+    if (cache_node &&
+        offset >= self->window_end - self->window_size + 1 && offset <= self->window_end)
+    {
+        packrat_index = (offset % self->window_size) * (size_t)num_defs + (size_t)def_id;
+        self->pnodes[packrat_index] = ChpegPNode_from_node(
+            NULL, node, 0, self->parser);
+
+#if CHPEG_VM_TRACE
+        if (self->parser->vm_trace & 4) {
+            ChpegPNode_print(self->pnodes[packrat_index],
+                self->parser, self->parser->input, 0, stderr);
+        }
+#endif
+    }
+
+    return 0;
+}
+
+int ChpegPackrat_memoize_neg(ChpegPackrat *self, size_t offset, int def_id)
+{
+    int num_defs = self->parser->bc->num_defs;
+    size_t packrat_index = 0;
+
+#if CHPEG_VM_TRACE
+    if (self->parser->vm_trace & 2) {
+        fprintf(stderr, "packrat MEMOIZE %6s %6zu %4d %20s\n",
+            "NEG", offset, def_id,
+            ChpegByteCode_def_name(self->parser->bc, def_id));
+    }
+#endif
+    if (offset >= self->window_end - self->window_size + 1 && offset <= self->window_end) {
+        packrat_index = ((int)offset % self->window_size) * num_defs + def_id;
+        self->pnodes[packrat_index] = packrat_no_match;
+    }
+    return 0;
+}
+
+
 #endif // #if CHPEG_PACKRAT
 
 #if CHPEG_EXTENSION_REFS
@@ -771,9 +971,11 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
 #if CHPEG_VM_TRACE
     self->vm_trace = 0;
 #endif
+
 #if CHPEG_VM_PRINT_TREE
     self->vm_print_tree = 0;
 #endif
+
 #if CHPEG_VM_PROFILE
     self->vm_profile = 0;
     self->prof_inst_cnt = 0;
@@ -785,10 +987,13 @@ ChpegParser *ChpegParser_new(const ChpegByteCode *bc)
     self->prof_cifail_cnt = (int *)CHPEG_MALLOC(bc->num_defs * sizeof(int));
     self->farthest_backtrack = 0;
 #endif
+
 #if CHPEG_PACKRAT
     self->packrat = 0;
+    self->packrat_enabled = 0;
     self->packrat_window_size = 0;
 #endif
+
     return self;
 }
 
@@ -1078,6 +1283,9 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 
 int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t length, size_t *consumed)
 {
+    self->input = input;
+    self->length = length;
+
     int locked = 0, cur_def = -1, retval = 0, i = 0;
 
 #if ERRORS
@@ -1098,10 +1306,6 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     int tree_changed = 0;
 #endif
 
-#if CHPEG_PACKRAT
-    const int num_defs = self->bc->num_defs;
-#endif
-
 #if CHPEG_EXTENSION_REFS
     const int num_refs = self->bc->num_refs;
     assert(num_refs >= 0);
@@ -1111,6 +1315,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
 #endif
 
+    //const int num_defs = self->bc->num_defs;
     //const char **def_names = (const char **)self->bc->def_names;
     const int *def_flags = self->bc->def_flags;
     const int *def_addrs = self->bc->def_addrs;
@@ -1120,36 +1325,14 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
     const int *str_len = self->bc->str_len;
 
 #if CHPEG_PACKRAT
-    ChpegPNode **packrat = NULL;
-    ChpegPNode *packrat_no_match = NULL;
     ChpegPNode *packrat_lookup = NULL;
-    int packrat_index = 0;
-    int packrat_flags = 0;
-    size_t window_size = 0;
-    size_t window_end = 0;
-    size_t poffset = 0, loop_end = 0, z = 0;
-
-    if (self->packrat) {
-        if (self->packrat_window_size) {
-            window_size = self->packrat_window_size;
-            window_end = window_size - 1;
-        }
-        else {
-            window_size = length + 1;
-            window_end = length + 1;
-        }
-        packrat = (ChpegPNode **)CHPEG_CALLOC(num_defs * window_size, sizeof(ChpegPNode **));
-
-        // packrat_no_match is a negative cache meaning match failure (attempted match, but match failed)
-        packrat_no_match = (ChpegPNode *)&packrat_no_match; // need a unique, non-valid PNode pointer
-        assert(packrat_no_match != NULL);
+    size_t poffset = 0;
+    if (self->packrat_enabled) {
+        self->packrat = (ChpegPackrat *)CHPEG_CALLOC(1, sizeof(ChpegPackrat));
+        ChpegPackrat_init(self->packrat, self);
     }
-
-    for (i = 0; i < num_defs; ++i) {
-        if (def_flags[i] & CHPEG_FLAG_PACKRAT) {
-            packrat_flags = 1;
-            break;
-        }
+    else {
+        self->packrat = NULL;
     }
 #endif
 
@@ -1284,77 +1467,12 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
 
 #if CHPEG_PACKRAT
-                if (self->packrat) {
-                    if (offset > window_end) {
-                        if (offset - window_end >= window_size) {
-#if CHPEG_VM_TRACE
-                            if (self->vm_trace & 2) {
-                                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
-                                    "(CLEAR ENTIRE WINDOW)\n", window_end, offset);
-                            }
-#endif
-                            loop_end = window_size * num_defs;
-                            for (z = 0; z < loop_end; ++z) {
-                                ChpegPNode *pnode = packrat[z];
-                                if (pnode && pnode != packrat_no_match) {
-                                    ChpegPNode_free(pnode);
-                                }
-                            }
-                            memset(packrat, 0, window_size * num_defs * sizeof(ChpegPNode **));
-                        }
-                        else {
-#if CHPEG_VM_TRACE
-                            if (self->vm_trace & 2) {
-                                fprintf(stderr, "packrat MOVE WINDOW END from %zu to %zu "
-                                    "(CLEAR WINDOW from %zu to %zu)\n",
-                                    window_end, offset,
-                                    (window_end + 1) % window_size, offset % window_size);
-                            }
-#endif
-                            loop_end = (offset + 1) * num_defs;
-                            for (z = (window_end + 1) * num_defs; z < loop_end; ++z) {
-                                packrat_index = z % (window_size * num_defs);
-                                ChpegPNode *pnode = packrat[packrat_index];
-                                if (pnode && pnode != packrat_no_match) {
-                                    ChpegPNode_free(pnode);
-                                }
-                                packrat[packrat_index] = NULL;
-                            }
-                        }
-                        window_end = offset;
-                    }
-                    if (offset >= window_end - window_size + 1 && offset <= window_end) {
-                        packrat_index = ((int)offset % window_size) * num_defs + arg;
-                        packrat_lookup = packrat[packrat_index];
-                    }
-                    else {
-                        packrat_lookup = NULL;
-                    }
+                if (self->packrat_enabled) {
 
-#if CHPEG_VM_TRACE
-                    if (self->vm_trace & 2) {
-                        esc_str = NULL;
-                        if (packrat_lookup && packrat_lookup != packrat_no_match) {
-                            esc_str = chpeg_esc_bytes(input + offset,
-#if CHPEG_EXTENSION_TRIM
-                                packrat_lookup->node->match_length,
-#else
-                                packrat_lookup->node->length,
-#endif
-                                40);
-                        }
-                        fprintf(stderr, "packrat IDENT %6d %4d %12s %s%s%s%s\n",
-                            (int)offset, arg,
-                            ChpegByteCode_def_name(self->bc, arg),
-                            packrat_lookup == NULL ? "<NOT FOUND>" :
-                            (packrat_lookup == packrat_no_match ? "<FAIL>" : "<FOUND>"),
-                            esc_str ? " \"" : "",
-                            esc_str ? esc_str : "",
-                            esc_str ? "\"" : ""
-                            );
-                        if (esc_str) { CHPEG_FREE(esc_str); esc_str = NULL; }
-                    }
-#endif
+                    ChpegPackrat_slide_window(self->packrat, offset);
+
+                    packrat_lookup = ChpegPackrat_lookup(self->packrat, offset, arg);
+
                     if (packrat_lookup) {
                         if (packrat_lookup != packrat_no_match) {
                             if (!locked) {
@@ -1493,41 +1611,11 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
 
 #if CHPEG_PACKRAT
-                    if (self->packrat) {
-                        packrat_index = !packrat_flags || (def_flags[arg] & CHPEG_FLAG_PACKRAT);
-#if CHPEG_VM_TRACE
-                        if (self->vm_trace & 2) {
-                            esc_str = chpeg_esc_bytes(input + poffset,
-#if CHPEG_EXTENSION_TRIM
-                                tree_stack[tree_top]->match_length,
-#else
-                                tree_stack[tree_top]->length,
-#endif
-                                40);
-                            fprintf(stderr, "packrat ISUCC %6zu %4d %12s \"%s\" %s\n",
-                                poffset, arg,
-                                ChpegByteCode_def_name(self->bc, arg), esc_str,
-                                packrat_index ? "CACHE" : "NOCACHE");
-                            if (esc_str) { CHPEG_FREE(esc_str); esc_str = NULL; }
-                        }
-#endif
-
-                        if (packrat_index &&
-                            poffset >= window_end - window_size + 1 && poffset <= window_end)
-                        {
-                            packrat_index = (poffset % window_size) * num_defs + arg;
-                            packrat[packrat_index] = ChpegPNode_from_node(
-                                NULL, tree_stack[tree_top], 0, self);
-#if CHPEG_VM_TRACE
-                            if (self->vm_trace & 4) {
-                                ChpegPNode_print(packrat[packrat_index],
-                                    self, input, 0, stderr);
-                            }
-#endif
-                        }
-
+                    if (self->packrat_enabled) {
+                        ChpegPackrat_memoize(self->packrat, poffset, arg, tree_stack[tree_top]);
                     }
 #endif
+
                     if (self->simplification == 2) {
                         // drop zero-length ignore nodes now
                         if ((def_flags[arg] & CHPEG_FLAG_IGNORE) &&
@@ -1578,19 +1666,8 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 cur_def = stack[top--]; // top=s+1: locked
 
 #if CHPEG_PACKRAT
-                if (self->packrat) {
-#if CHPEG_VM_TRACE
-                    if (self->vm_trace & 2) {
-                        fprintf(stderr, "packrat IFAIL %6d %4d %12s %s\n",
-                            (int)offset, arg,
-                            ChpegByteCode_def_name(self->bc, arg), "CACHE NEG");
-                    }
-#endif
-                    if (offset >= window_end - window_size + 1 && offset <= window_end) {
-                        packrat_index = ((int)offset % window_size) * num_defs + arg;
-                        packrat[packrat_index] = packrat_no_match;
-                    }
-
+                if (self->packrat_enabled) {
+                    ChpegPackrat_memoize_neg(self->packrat, offset, arg);
                 }
 #endif
 
@@ -2434,16 +2511,10 @@ nchrcls_done:
 done:
 
 #if CHPEG_PACKRAT
-    if (packrat) {
-        loop_end = num_defs * window_size;
-        for (z = 0; z < loop_end; ++z) {
-            ChpegPNode *pnode = packrat[z];
-            if (pnode && pnode != packrat_no_match) {
-                assert(pnode->node->ref_count > 0);
-                ChpegPNode_free(pnode);
-            }
-        }
-        CHPEG_FREE(packrat);
+    if (self->packrat_enabled) {
+        ChpegPackrat_cleanup(self->packrat);
+        CHPEG_FREE(self->packrat);
+        self->packrat = NULL;
     }
 #endif
 
