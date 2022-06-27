@@ -36,7 +36,8 @@ GENERATED=generated
 TESTS=bytecode_output_c_pt1_output \
       bytecode_output_c_pt2_compare \
       compare_bytecode_with_internal \
-      line_col
+      line_col \
+      bytes2uint
 TESTS_SOURCES=$(patsubst %,%.c,$(TESTS))
 TESTS_OBJECTS=$(patsubst %.c,$(TESTS_OBJDIR)/%.o,$(TESTS_SOURCES))
 TESTS_DEP = $(TESTS_OBJECTS:%.o=%.d)
@@ -79,6 +80,9 @@ $(TESTS_OBJDIR)/%.o: %.c
 # binaries
 
 line_col: %: $(TESTS_OBJDIR)/%.o $(CHPEG_OBJ)
+	$(CC) $(LDFLAGS) $< $(CHPEG_OBJ) -o $@
+
+bytes2uint: %: $(TESTS_OBJDIR)/%.o $(CHPEG_OBJ)
 	$(CC) $(LDFLAGS) $< $(CHPEG_OBJ) -o $@
 
 compare_bytecode_with_internal: %: $(TESTS_OBJDIR)/%.o $(CHPEG_OBJ)

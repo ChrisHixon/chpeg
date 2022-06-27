@@ -54,20 +54,31 @@ extern "C" {
 #endif
 
 // Undo action support
+// TODO: enable only if needed as dependency (REFS extension)
 #ifndef CHPEG_UNDO
 #define CHPEG_UNDO 1
 #endif
 
 #if CHPEG_UNDO
+
 #define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child_undo
 #define CHPEG_CHOICE_PUSHES 3
 #define CHPEG_RP_PUSHES 4
 #define CHPEG_RSQ_PUSHES 3
+#if CHPEG_EXTENSION_MINMAX
+#define CHPEG_RMM_PUSHES 6
+#endif
+
 #else
+
 #define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child
 #define CHPEG_CHOICE_PUSHES 2
 #define CHPEG_RP_PUSHES 3
 #define CHPEG_RSQ_PUSHES 2
+#if CHPEG_EXTENSION_MINMAX
+#define CHPEG_RMM_PUSHES 5
+#endif
+
 #endif
 
 // parser error codes
@@ -117,12 +128,12 @@ typedef struct _ChpegNode
     int def;
     int flags;
 
-    size_t offset; // full match offset
-    size_t length; // full match length
+    size_t offset; // full match offset (without TRIM) / token offset (with TRIM)
+    size_t length; // full match length (without TRIM) / token length (with TRIM)
 
 #if CHPEG_EXTENSION_TRIM
-    size_t token_offset; // token offset (adjusted by trim '<')
-    size_t token_length; // token length (adjusted by trim '>')
+    size_t match_offset; // full match offset
+    size_t match_length; // full match length
 #endif
 
     struct _ChpegNode *parent;

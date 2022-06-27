@@ -41,17 +41,27 @@ const char *Chpeg_op_names[CHPEG_NUM_OPS] =
     "SUCC",
     "FAIL",
 
-#ifdef CHPEG_EXTENSION_TRIM
+#if CHPEG_EXTENSION_TRIM
     "TRIM",
     "TRIMS",
     "TRIMF",
 #endif
 
-#ifdef CHPEG_EXTENSION_REFS
+#if CHPEG_EXTENSION_REFS
     "MARK",
     "MARKS",
     "MARKF",
     "REF",
+#endif
+
+#if CHPEG_EXTENSION_NCHRCLS
+    "NCHRCLS",
+#endif
+
+#if CHPEG_EXTENSION_MINMAX
+    "RMMBEG",
+    "RMMMAT",
+    "RMMDONE",
 #endif
 
 };

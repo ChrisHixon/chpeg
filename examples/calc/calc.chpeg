@@ -1,0 +1,14 @@
+Expr            <- _ Sum EOF
+
+Sum             <- Product (PLUS_MINUS Product)*
+Product         <- Value (MUL_DIV Value)*
+Value           <- NUMBER / ParenExpr
+ParenExpr       <- LPAREN Sum RPAREN
+
+PLUS_MINUS      <- < [+-] > _
+MUL_DIV         <- < [*/] > _
+NUMBER          <- < '-'? ("0" / [1-9][0-9]*) > _
+LPAREN      {I} <- < '(' > _
+RPAREN      {I} <- < ')' > _
+_           {I} <- [ \t\r\n]*
+EOF             <- !.

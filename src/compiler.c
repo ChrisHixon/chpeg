@@ -30,6 +30,10 @@ extern "C" {
 #define CHPEG_DEBUG_COMPILER 0
 #endif
 
+#if CHPEG_EXTENSION_MINMAX
+#define CHPEG_MINMAX_MAX ((1<<23)-1)
+#endif
+
 //
 // CNode: compilation unit node
 //
@@ -50,12 +54,15 @@ typedef struct _ChpegCNode
     int parent_next_state;
     int parent_fail_state;
 
-    // various use
+    // various use value storage
     union {
         unsigned char cval[4];
         int ival;
     } val;
-    int value_len;
+    union {
+        unsigned char cval[4];
+        int ival;
+    } val2;
 
     int bits; // various use
 
@@ -272,7 +279,7 @@ static int ChpegCU_setup_defs(ChpegCU *cu)
             size_t line, col;
             chpeg_line_col(cu->input, cident->node->offset, &line, &col);
             char *tmp = chpeg_esc_bytes(cu->input + cident->node->offset, cident->node->length, 0);
-            fprintf(stderr, "input:%zu:%zu: Error: Definition '%s' is already defined.\n",
+            fprintf(stderr, "input:%zu:%zu: Error: '%s' is already defined.\n",
                 line, col, tmp);
             CHPEG_FREE(tmp);
             err = 1;
@@ -419,10 +426,21 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegCNode *cnode)
             break;
 #endif
         case CHPEG_DEF_REPEAT:
-            cnode->parse_state = ChpegCU_alloc_inst(cu);
-            ChpegCU_alloc_instructions(cu, cnode->head);
-            cnode->head->parent_next_state = ChpegCU_alloc_inst(cu);
-            cnode->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            if (cnode->head->next->type == CHPEG_DEF_REPOP) {
+                cnode->parse_state = ChpegCU_alloc_inst(cu);
+                ChpegCU_alloc_instructions(cu, cnode->head);
+                cnode->head->parent_next_state = ChpegCU_alloc_inst(cu);
+                cnode->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+            }
+#if CHPEG_EXTENSION_MINMAX
+            else if (cnode->head->next->type == CHPEG_DEF_MINMAX) {
+                cnode->parse_state = ChpegCU_alloc_inst(cu);
+                ChpegCU_alloc_instructions(cu, cnode->head);
+                cnode->head->parent_next_state = ChpegCU_alloc_inst(cu);
+                cnode->head->parent_fail_state = ChpegCU_alloc_inst(cu);
+                ChpegCU_alloc_inst(cu);
+            }
+#endif
             break;
         case CHPEG_DEF_PREDICATE:
             cnode->parse_state = ChpegCU_alloc_inst(cu);
@@ -435,6 +453,9 @@ static void ChpegCU_alloc_instructions(ChpegCU *cu, ChpegCNode *cnode)
             break;
         case CHPEG_DEF_IDENTIFIER:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
         case CHPEG_DEF_LITERAL:
 #if CHPEG_EXTENSION_REFS
         case CHPEG_DEF_REFERENCE:
@@ -536,7 +557,7 @@ static int ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             break;
 #endif
         case CHPEG_DEF_REPEAT:
-            {
+            if (cnode->head->next->type == CHPEG_DEF_REPOP) {
                 unsigned char op = cu->input[cnode->head->next->node->offset];
                 switch (op) {
                     case '+':
@@ -565,6 +586,24 @@ static int ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
                         break;
                 }
             }
+#if CHPEG_EXTENSION_MINMAX
+            else if (cnode->head->next->type == CHPEG_DEF_MINMAX) {
+#if CHPEG_DEBUG_COMPILER
+                fprintf(stderr, "%s: MINMAX: offset=%zu min=%d, max=%d\n", __func__,
+                    cnode->head->next->head->node->offset,
+                    cnode->val.ival, cnode->val2.ival);
+#endif
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RMMBEG, cnode->val.ival));
+                if ((err = ChpegCU_add_instructions(cu, cnode->head)) != 0) {
+                    goto done;
+                }
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RMMMAT, cnode->val2.ival));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_RMMDONE, cnode->val2.ival));
+                ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
+                assert(cu->bc->num_instructions == cnode->parent_next_state);
+                break;
+            }
+#endif
             break;
         case CHPEG_DEF_PREDICATE:
             {
@@ -602,6 +641,12 @@ static int ChpegCU_add_instructions(ChpegCU *cu, ChpegCNode *cnode)
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_CHRCLS, cnode->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
             break;
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_NCHRCLS, cnode->val.ival));
+            ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
+            break;
+#endif
         case CHPEG_DEF_LITERAL:
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_LIT, cnode->val.ival));
             ChpegCU_add_inst(cu, CHPEG_INST(CHPEG_OP_GOTO, cnode->parent_fail_state));
@@ -645,22 +690,25 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
     switch (cnode->type) {
         case CHPEG_DEF_LITERAL:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
             {
                 int len = 0, offset = 0;
                 for (ChpegCNode *p = cnode->head; p; p = p->next) {
                     ChpegCU_alloc_strings(cu, p);
-                    len += p->value_len;
+                    len += p->val.cval[3];
                 }
                 unsigned char *str = (unsigned char *)CHPEG_MALLOC(len);
                 for (ChpegCNode *p = cnode->head; p; p = p->next) {
-                    memcpy(str+offset, p->val.cval, p->value_len);
-                    offset += p->value_len;
+                    memcpy(str+offset, p->val.cval, p->val.cval[3]);
+                    offset += p->val.cval[3];
                 }
                 cnode->val.ival = ChpegCU_alloc_string(cu, str, len);
 
 #if CHPEG_DEBUG_COMPILER
                 char *tmp = chpeg_esc_bytes(str, len, 20);
-                fprintf(stderr, "%s: LITERAL/CHARCLASS str_id=%d, value=\"%s\"\n",
+                fprintf(stderr, "%s: LITERAL/CHARCLASS/NCHARCLASS str_id=%d, value=\"%s\"\n",
                     __func__, cnode->val.ival, tmp);
                 CHPEG_FREE(tmp);
 #endif
@@ -668,6 +716,7 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
                 CHPEG_FREE(str);
             }
             break;
+
         case CHPEG_DEF_CHARRANGE:
             {
                 for (ChpegCNode *p = cnode->head; p; p = p->next) {
@@ -676,65 +725,127 @@ static void ChpegCU_alloc_strings(ChpegCU *cu, ChpegCNode *cnode)
                 cnode->val.cval[0] = cnode->head->val.cval[0];
                 cnode->val.cval[1] = '-';
                 cnode->val.cval[2] = cnode->head->next->val.cval[0];
-                cnode->value_len = 3;
+                cnode->val.cval[3] = 3;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->val.cval[3], 0);
                 fprintf(stderr, "%s: CHARRANGE [%s]\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_PLAINCHAR:
             {
                 cnode->val.cval[0] = cu->input[cnode->node->offset];
-                cnode->value_len = 1;
+                cnode->val.cval[3] = 1;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->val.cval[3], 0);
                 fprintf(stderr, "%s: PLAINCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_ESCCHAR:
             {
                 cnode->val.cval[0] = cu->input[cnode->node->offset + 1];
-                cnode->value_len = 1;
+                cnode->val.cval[3] = 1;
                 switch (cnode->val.cval[0]) {
                     case 'n': cnode->val.cval[0] = '\n'; break;
-                    case 'r': cnode->val.cval[0] = '\r'; break;
                     case 't': cnode->val.cval[0] = '\t'; break;
+                    case 'r': cnode->val.cval[0] = '\r'; break;
+#if CHPEG_EXTENSION_ESCAPES
+                    case 'f': cnode->val.cval[0] = '\f'; break;
+                    case 'v': cnode->val.cval[0] = '\v'; break;
+                    case 'a': cnode->val.cval[0] = '\a'; break;
+                    case 'b': cnode->val.cval[0] = '\b'; break;
+#endif
+                    case '\'':
+                    case '"':
+                    case '[':
+                    case ']':
+                    case '\\':
+                              break;
+                    default:
+                              chpeg_abort("unhandled ESCCHAR case: '%c'\n",
+                                  cnode->val.cval[0]);
+                              break;
                 }
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->val.cval[3], 0);
                 fprintf(stderr, "%s: ESCCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
         case CHPEG_DEF_OCTCHAR:
             {
-                int val = 0; int len = cnode->node->length - 1;
+                int len = cnode->node->length - 1;
+                unsigned int val = 0;
                 const unsigned char *ip = cu->input + cnode->node->offset + 1;
+                assert(len >= 1 && len <= 3);
                 for (int i = 0; i < len; ++i) {
                     val = (val << 3) | (ip[i] - '0');
                 }
-                cnode->val.cval[0] = val & 255;
-                cnode->value_len = 1;
+                assert (val < 256);
+                cnode->val.cval[0] = val;
+                cnode->val.cval[3] = 1;
 
 #if CHPEG_DEBUG_COMPILER
-                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->value_len, 10);
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->val.cval[3], 0);
                 fprintf(stderr, "%s: OCTCHAR '%s'\n", __func__, tmp);
                 CHPEG_FREE(tmp);
 #endif
 
             }
             break;
+
+#if CHPEG_EXTENSION_HEX
+        case CHPEG_DEF_HEXCHAR:
+            {
+                int len = cnode->node->length - 2;
+                unsigned char val = 0;
+                const unsigned char *ip = cu->input + cnode->node->offset + 2;
+                assert(len >= 1 && len <= 2);
+                for (int i = 0; i < len; ++i) {
+                    switch(ip[i]) {
+                        case '0': case '1': case '2': case '3': case '4':
+                        case '5': case '6': case '7': case '8': case '9':
+                            val = (val << 4) | (ip[i] - '0');
+                            break;
+                        case 'a': case 'b': case 'c':
+                        case 'd': case 'e': case 'f':
+                            val = (val << 4) | (10 + ip[i] - 'a');
+                            break;
+                        case 'A': case 'B': case 'C':
+                        case 'D': case 'E': case 'F':
+                            val = (val << 4) | (10 + ip[i] - 'A');
+                            break;
+                        default:
+                            chpeg_abort("unhandled HEXCHAR case: '%c'\n", ip[i]);
+                            break;
+                    }
+                }
+                cnode->val.cval[0] = val;
+                cnode->val.cval[3] = 1;
+
+#if CHPEG_DEBUG_COMPILER
+                char *tmp = chpeg_esc_bytes(cnode->val.cval, cnode->val.cval[3], 0);
+                fprintf(stderr, "%s: HEXCHAR '%s'\n", __func__, tmp);
+                CHPEG_FREE(tmp);
+#endif
+
+            }
+            break;
+#endif
+
         default:
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
                 ChpegCU_alloc_strings(cu, p);
@@ -854,10 +965,34 @@ static ChpegCNode *ChpegCU_find_def_node(ChpegCU *cu, int def_id)
     return NULL;
 }
 
-// marks identifiers with the definition id they refer to
-// detects undefined identifiers
-// marks definitions as referenced
-static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
+#if CHPEG_EXTENSION_MINMAX
+// helper function to convert a MinMaxVal to int, and print an error message upon error
+static inline int minmax_value(ChpegCU *cu, ChpegCNode *cnode, int *val_out)
+{
+    int err = 0;
+    unsigned int val = 0;
+
+    assert(cnode->type == CHPEG_DEF_MINMAXVAL);
+    if ( (err = chpeg_bytes2uint(cu->input + cnode->node->offset,
+        cnode->node->length, CHPEG_MINMAX_MAX, &val)) != 0)
+    {
+        size_t line, col;
+        chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+        assert(err == 4);
+        fprintf(stderr, "input:%zu:%zu: Error: invalid value in { min, max }.\n", line, col);
+    }
+    assert(val_out);
+    *val_out = val;
+    return err;
+}
+#endif
+
+// Set up values from the parsed input; detect some errors in the process.
+// - mark identifiers with the definition id they refer to
+// - detects undefined identifiers
+// - mark definitions as referenced
+// - set min/max values for repeat {min, max} extension
+static int ChpegCU_setup_values(ChpegCU *cu, ChpegCNode *cnode)
 {
     int err = 0;
 
@@ -868,7 +1003,7 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
             // This is an override of default case that recursively explores the AST...
             // We want to explore the rule definition (cnode->head->next), but not
             // the definition name Identifier (cnode->head).
-            if ( (err = ChpegCU_setup_identifiers(cu, cnode->head->next)) != 0) {
+            if ( (err = ChpegCU_setup_values(cu, cnode->head->next)) != 0) {
                 goto done;
             }
             break;
@@ -901,7 +1036,7 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
         case CHPEG_DEF_MARK:
             // cnode->head IDENTIFIER refers to a reference, not a definition
             // explore MARK content in cnode->head->next
-            if ( (err = ChpegCU_setup_identifiers(cu, cnode->head->next)) != 0) {
+            if ( (err = ChpegCU_setup_values(cu, cnode->head->next)) != 0) {
                 goto done;
             }
             break;
@@ -909,9 +1044,77 @@ static int ChpegCU_setup_identifiers(ChpegCU *cu, ChpegCNode *cnode)
             // this IDENTIFIER refers to a reference, not a definition
             break;
 #endif
+
+        case CHPEG_DEF_REPEAT:
+            if ( (err = ChpegCU_setup_values(cu, cnode->head)) != 0) {
+                goto done;
+            }
+#if CHPEG_EXTENSION_MINMAX
+            if (cnode->head->next->type == CHPEG_DEF_MINMAX) {
+#if CHPEG_DEBUG_COMPILER
+                fprintf(stderr, "%s: MINMAX nc=%d\n", __func__, cnode->head->next->num_children);
+#endif
+                int min = 0, max = 0;
+                ChpegCNode *cminmax = cnode->head->next;
+
+                // { Num }: min = max = Num
+                if (cminmax->num_children == 1) {
+                    if ( (err = minmax_value(cu, cminmax->head, &min)) != 0) {
+                        goto done;
+                    }
+                    max = min;
+                }
+                else if (cminmax->num_children == 2) {
+                    // { , Num }: min = 0; max = Num
+                    if (cminmax->head->type == CHPEG_DEF_COMMA)
+                    {
+                        min = 0;
+                        if ( (err = minmax_value(cu, cminmax->head->next, &max)) != 0) {
+                            goto done;
+                        }
+                    }
+                    // { Num , }: min = Num; max = -1
+                    else if (cminmax->head->next->type == CHPEG_DEF_COMMA)
+                    {
+                        max = -1;
+                        if ( (err = minmax_value(cu, cminmax->head, &min)) != 0) {
+                            goto done;
+                        }
+                    }
+                }
+                // { Min , Max }
+                else if (cminmax->num_children == 3) {
+                    assert(cminmax->head->next->type == CHPEG_DEF_COMMA);
+                    if ( (err = minmax_value(cu, cminmax->head, &min)) != 0) {
+                        goto done;
+                    }
+                    if ( (err = minmax_value(cu, cminmax->head->next->next, &max)) != 0) {
+                        goto done;
+                    }
+                    if (max < min) {
+                        size_t line, col;
+                        chpeg_line_col(cu->input, cminmax->head->next->next->node->offset,
+                            &line, &col);
+                        fprintf(stderr, "input:%zu:%zu: Error: max < min in { min, max }.\n",
+                            line, col);
+                        err = CHPEG_ERR_COMPILE;
+                        goto done;
+                    }
+                }
+                else {
+                    chpeg_abort("%s\n", "unhandled MINMAX case");
+                }
+
+                // store the min/max values in the REPEAT node
+                cnode->val.ival = min;
+                cnode->val2.ival = max;
+            }
+            break;
+#endif
+
         default:
             for (ChpegCNode *p = cnode->head; p; p = p->next) {
-                if ( (err = ChpegCU_setup_identifiers(cu, p)) != 0) {
+                if ( (err = ChpegCU_setup_values(cu, p)) != 0) {
                     goto done;
                 }
             }
@@ -1142,11 +1345,14 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 #endif
 
         case CHPEG_DEF_REPEAT:
-            {
-                ChpegLR_push(lr, cnode, 0);
-                consumes = ChpegCU_consumes(cu, cnode->head, lr);
-                ChpegLR_pop(lr);
+            ChpegLR_push(lr, cnode, 0);
+            consumes = ChpegCU_consumes(cu, cnode->head, lr);
+            ChpegLR_pop(lr);
+
+            if (cnode->head->next->type == CHPEG_DEF_REPOP) {
                 unsigned char op = cu->input[cnode->head->next->node->offset];
+                // infinite loop if no consumption and repeat has no maximum
+                // (ops * and +, but not ?)
                 if (!consumes && op != '?') {
                     size_t line, col;
                     chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
@@ -1156,16 +1362,31 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
                     consumes = 0;
                     break;
                 }
-                switch (op) {
-                    case '+':
-                        consumes = 1;
-                        break;
-                    default:
-                        consumes = 0;
-                        break;
-                }
-                break;
+                // this REPEAT consumes only if minimum > 0, which is only '+' operator
+                consumes = (op == '+');
             }
+
+#if CHPEG_EXTENSION_MINMAX
+            else if (cnode->head->next->type == CHPEG_DEF_MINMAX) {
+                // infinite loop if no consumption and repeat has no maximum
+                // (val2.ival == -1 means 'no maximum')
+                if (!consumes && cnode->val2.ival < 0) {
+                    size_t line, col;
+                    chpeg_line_col(cu->input, cnode->node->offset, &line, &col);
+                    fprintf(stderr, "input:%zu:%zu: Error: Infinite loop detected.\n",
+                        line, col);
+                    lr->errors++;
+                    consumes = 0;
+                    break;
+                }
+                // this REPEAT consumes only if minimum > 0
+                consumes = (cnode->val.ival > 0);
+            }
+#endif
+            else {
+                chpeg_abort("%s\n", "unhandled REPEAT case");
+            }
+            break;
 
         case CHPEG_DEF_PREDICATE:
             ChpegLR_push(lr, cnode, 0);
@@ -1176,6 +1397,9 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
 
         case CHPEG_DEF_DOT:
         case CHPEG_DEF_CHARCLASS:
+#if CHPEG_EXTENSION_NCHRCLS
+        case CHPEG_DEF_NCHARCLASS:
+#endif
             consumes = 1;
             break;
 
@@ -1185,7 +1409,7 @@ static int ChpegCU_consumes(ChpegCU *cu, ChpegCNode *cnode, ChpegLR *lr)
             break;
 
         default:
-            chpeg_abort("unhandled cnode->type case");
+            chpeg_abort("unhandled cnode->type case: %d\n", cnode->type);
             break;
     }
 
@@ -1259,6 +1483,14 @@ static void chpeg_sanity_check(void)
     assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_REFERENCE), "Reference") == 0);
 #endif
 
+#if CHPEG_EXTENSION_HEX
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_HEXCHAR), "HexChar") == 0);
+#endif
+
+#if CHPEG_EXTENSION_NCHRCLS
+    assert(strcmp(ChpegByteCode_def_name(bc, CHPEG_DEF_NCHARCLASS), "NCharClass") == 0);
+#endif
+
 }
 
 
@@ -1283,22 +1515,6 @@ static void chpeg_sanity_check(void)
 CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
-    if (verbose & 3) {
-#if CHPEG_USES_EXTENSIONS
-        fprintf(stderr, "Using extensions:");
-
-#if CHPEG_EXTENSION_TRIM
-        fprintf(stderr, " TRIM");
-#endif
-#if CHPEG_EXTENSION_REFS
-        fprintf(stderr, " REFS");
-#endif
-        fprintf(stderr, "\n");
-
-#else
-        fprintf(stderr, "Not using extensions.\n");
-#endif
-    }
     chpeg_sanity_check();
 
     int err = 0;
@@ -1357,7 +1573,7 @@ CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
         goto done;
     }
 
-    if ( (err = ChpegCU_setup_identifiers(&cu, NULL)) ) {
+    if ( (err = ChpegCU_setup_values(&cu, NULL)) ) {
         err = CHPEG_ERR_COMPILE;
         goto done;
     }
