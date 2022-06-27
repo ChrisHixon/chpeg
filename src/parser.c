@@ -27,33 +27,35 @@ extern "C" {
 #endif
 
 
-#ifndef SANITY_CHECKS
-#define SANITY_CHECKS 1
+#ifndef CHPEG_SANITY_CHECKS
+#define CHPEG_SANITY_CHECKS 1
 #endif
 
-#ifndef DEBUG_ERRORS
-#define DEBUG_ERRORS 0
+#ifndef CHPEG_DEBUG_ERRORS
+#define CHPEG_DEBUG_ERRORS 0
 #endif
 
-// Set ERRORS to non-zero to enable error tracking. Without error tracking, errors are still detected, but it can't tell you where an error occurred.
-#ifndef ERRORS
-#define ERRORS 1
+// Set CHPEG_ERRORS to non-zero to enable error tracking. Without error
+// tracking, failure is detected, but it can't tell you where an error
+// occurred.
+#ifndef CHPEG_ERRORS
+#define CHPEG_ERRORS 1
 #endif
 
-#ifndef ERRORS_PRED
-#define ERRORS_PRED 1
+#ifndef CHPEG_ERRORS_PRED
+#define CHPEG_ERRORS_PRED 1
 #endif
 
-#ifndef ERRORS_IDENT
-#define ERRORS_IDENT 1
+#ifndef CHPEG_ERRORS_IDENT
+#define CHPEG_ERRORS_IDENT 1
 #endif
 
-#ifndef ERRORS_TERMINALS
-#define ERRORS_TERMINALS 1
+#ifndef CHPEG_ERRORS_TERMINALS
+#define CHPEG_ERRORS_TERMINALS 1
 #endif
 
-#ifndef ERRORS_REFS
-#define ERRORS_REFS 1
+#ifndef CHPEG_ERRORS_REFS
+#define CHPEG_ERRORS_REFS 1
 #endif
 
 //
@@ -1004,7 +1006,7 @@ void ChpegParser_free(ChpegParser *self)
             ChpegNode_free(self->tree_root);
             self->tree_root = NULL;
         }
-#if ERRORS
+#if CHPEG_ERRORS
         if (self->errors) {
             CHPEG_FREE(self->errors);
             self->errors = NULL;
@@ -1134,7 +1136,7 @@ static inline void ChpegParser_expected(ChpegParser *self, size_t offset, int de
 // limit = n: print last n errors
 void ChpegParser_print_errors(ChpegParser *self, const unsigned char *input, int limit)
 {
-#if ERRORS
+#if CHPEG_ERRORS
     if (self->errors_size == 0) {
         fprintf(stderr, "No errors tracked.\n");
         return;
@@ -1253,17 +1255,17 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 
 // TODO: work on check sanity checks and underflow/overflow/range checks, make macros to make it easier
 //
-// SANITY_CHECKS should only contain checks for conditions that should never
+// CHPEG_SANITY_CHECKS should only contain checks for conditions that should never
 // occur, and if they do occur, it's a bug/programming error. It shouldn't
 // cover any cases that can be triggered by user input (grammar or input data)
 // Same idea for any assert() in the code.
 //
-// SANITY_CHECKS and assert() are enabled by default, but this may change
+// CHPEG_SANITY_CHECKS and assert() are enabled by default, but this may change
 // later. Stack overflow (either stack) can happen due to user input (grammar
 // and/or input), so checks for that should never be removed (don't include
-// within SANITY_CHECKS)
+// within CHPEG_SANITY_CHECKS)
 //
-// Things that should be checked for in SANITY_CHECKS:
+// Things that should be checked for in CHPEG_SANITY_CHECKS:
 // - Stack underflow
 // - Accessing anything out of range (stack, arrays)
 //
@@ -1273,7 +1275,7 @@ void ChpegParser_print_error(ChpegParser *self, const unsigned char *input)
 // compiler. If the user is creating their own bytecode, it's on them to
 // make sure it's correct.
 //
-// TODO: cnt_max/RUNAWAY may not fit SANITY_CHECKS rules (pondering how to deal
+// TODO: cnt_max/RUNAWAY may not fit CHPEG_SANITY_CHECKS rules (pondering how to deal
 // with things this is meant to detect)
 
 #define CHPEG_CHECK_STACK_OVERFLOW(size) (top + (size) >= CHPEG_STACK_SIZE)
@@ -1288,12 +1290,15 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
     int locked = 0, cur_def = -1, retval = 0, i = 0;
 
-#if ERRORS
+#if CHPEG_ERRORS
     int err_locked = 0;
 #endif
 
-#if SANITY_CHECKS || CHPEG_VM_TRACE
+#if CHPEG_SANITY_CHECKS || CHPEG_VM_TRACE
     unsigned long long cnt = 0, cnt_max = 0;
+#endif
+
+#if CHPEG_SANITY_CHECKS
     const int num_instructions = self->bc->num_instructions;
 #endif
 
@@ -1376,7 +1381,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
     tree_stack[tree_top] = self->tree_root;
 
-#if SANITY_CHECKS || CHPEG_VM_TRACE
+#if CHPEG_SANITY_CHECKS || CHPEG_VM_TRACE
     cnt_max = (length <= 2642245) ? (length < 128 ? 2097152 : length * length * length) : (unsigned long long)-1LL;
     for(cnt = 0; cnt < cnt_max; ++cnt)
 #else
@@ -1384,7 +1389,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
     {
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
         if (offset > length) { retval = CHPEG_ERR_INVALID_OFFSET; goto done; }
         if (pc < 0 || pc > num_instructions) { retval = CHPEG_ERR_INVALID_PC; goto done; }
         if (top >= CHPEG_STACK_SIZE) { retval = CHPEG_ERR_STACK_RANGE; goto done; }
@@ -1456,7 +1461,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 // Identifier
             case CHPEG_OP_IDENT: // arg = def; Identifier "call"
                                  // on success, next instruction is skipped (See ISUCC, IFAIL)
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (arg < 0) {
                     pc = -1; retval = CHPEG_ERR_INVALID_IDENTIFIER; break;
                 }
@@ -1563,7 +1568,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_ISUCC: // arg = def; Identifier "call" match success, "return"
                                  // pc restored to pc+2, skipping next instruction
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 assert(cur_def == arg);
                 if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
@@ -1586,7 +1591,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 if (stack[top--] == 1) { locked = 0; } // top=s+0: done popping stack
                 if (!locked) {
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                     if (CHPEG_CHECK_TSTACK_UNDERFLOW(1)) {
                         pc = -1; retval = CHPEG_ERR_TSTACK_UNDERFLOW; break;
                     }
@@ -1651,7 +1656,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_IFAIL: // Identifier "call" match failure, "return"
                                  // pc restored +1 (next instruction not skipped)
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 assert(cur_def == arg);
                 if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
@@ -1671,11 +1676,11 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 }
 #endif
 
-#if ERRORS && ERRORS_IDENT
+#if CHPEG_ERRORS && CHPEG_ERRORS_IDENT
                 if (!err_locked) { // Tracking errors here is probably bare minimum of usefulness
                     ChpegParser_expected(self, offset, tree_top, // offset, depth
                         tree_top > 0 ? tree_stack[tree_top-1]->def : -1, pc); // parent def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
                 }
@@ -1683,7 +1688,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
                 if (stack[top--] == 1) { locked = 0; } // top=s+0 (done popping)
                 if (!locked) {
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                     if (CHPEG_CHECK_TSTACK_UNDERFLOW(1)) {
                         pc = -1; retval = CHPEG_ERR_TSTACK_UNDERFLOW; break;
                     }
@@ -1720,7 +1725,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #if CHPEG_VM_PROFILE
                 ++self->prof_cisucc_cnt[cur_def];
 #endif
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_CHOICE_PUSHES)) {
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -1753,7 +1758,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 
             case CHPEG_OP_CFAIL: // Choice FAIL; arg: pc
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_CHOICE_PUSHES)) {
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -1798,7 +1803,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                 break;
 
             case CHPEG_OP_RPDONE: // Repeat Plus DONE; arg = match fail pc addr
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_RP_PUSHES)) {
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -1864,7 +1869,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_RSDONE: // Repeat Star DONE (*): always succeeds, proceeds to next instr.
             case CHPEG_OP_RQDONE: // Repeat Question DONE (?): always succeeds, proceeds to next instr.
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_RSQ_PUSHES)) {
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -1941,7 +1946,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
             case CHPEG_OP_RMMDONE: // Repeat Min/Max DONE; arg = max
                                    // on success, skip next instruction
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(CHPEG_RMM_PUSHES)) {
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -2006,7 +2011,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
                                  // arg = next pc
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -2029,7 +2034,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIMF: // TRIM Failed ('>'): the contents inside ('<' ... '>') did not match
                                  // arg = next pc
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -2073,7 +2078,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_MARKS: // MARK Success: the contents inside ($name'<' ... '>') matched
                                  // arg = next pc
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -2121,7 +2126,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_MARKF: // MARK Failed: the contents inside ($name'<' ... '>') did not match
                                  // arg = next pc
 
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(2)) { // pops 2 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
@@ -2215,11 +2220,11 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     CHPEG_FREE(esc);
                 }
 #endif
-#if ERRORS && ERRORS_REFS
+#if CHPEG_ERRORS && CHPEG_ERRORS_REFS
                 if (!err_locked) {
                     ChpegParser_expected(self, offset, tree_top, // offset, depth
                         tree_stack[tree_top]->def, pc); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
                 }
@@ -2239,8 +2244,8 @@ op_ref_done:
                 }
                 stack[++top] = tree_stack[tree_top]->num_children; // num_children - backtrack point
                 stack[++top] = offset; // save offset for backtrack
-#if ERRORS
-#if ERRORS_PRED
+#if CHPEG_ERRORS
+#if CHPEG_ERRORS_PRED
                 //stack[++top] = pc + 1; // 1st child inst address for error
                 stack[++top] = pc; // save pc for error
 #endif
@@ -2256,11 +2261,11 @@ op_ref_done:
 
             case CHPEG_OP_PMATCHF: // Predicate matched, match is considered failure, arg = failure address
             case CHPEG_OP_PNOMATF: // Predicate not matched, not match is considered failure, arg = failure address
-#if ERRORS && ERRORS_PRED
+#if CHPEG_ERRORS && CHPEG_ERRORS_PRED
                 if (stack[top]) {
                     ChpegParser_expected(self, stack[top-2], tree_top, // offset, depth
                         tree_stack[tree_top]->def, stack[top-1]); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
                 }
@@ -2277,16 +2282,16 @@ op_ref_done:
 
                 // pc is expected to be set when hitting pred_cleanup (and thus should not change)
 pred_cleanup:
-#if SANITY_CHECKS
+#if CHPEG_SANITY_CHECKS
                 if (CHPEG_CHECK_STACK_UNDERFLOW(4)) { // pops 4 items
                     pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
                 }
 #endif
-#if ERRORS
+#if CHPEG_ERRORS
                 if (stack[top--]) {
                     err_locked = 0;
                 }
-#if ERRORS_PRED
+#if CHPEG_ERRORS_PRED
                 --top;
 #endif
 #endif
@@ -2321,11 +2326,11 @@ pred_cleanup:
                             }
                         }
                     }
-#if ERRORS && ERRORS_TERMINALS
+#if CHPEG_ERRORS && CHPEG_ERRORS_TERMINALS
                     if (!err_locked) {
                         ChpegParser_expected(self, offset, tree_top, // offset, depth
                             tree_stack[tree_top]->def, pc); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                         ChpegParser_print_error(self, input);
 #endif
                     }
@@ -2360,11 +2365,11 @@ chrcls_done:
                         pc += 2;
                         break;
                     }
-#if ERRORS && ERRORS_TERMINALS
+#if CHPEG_ERRORS && CHPEG_ERRORS_TERMINALS
                     if (!err_locked) {
                         ChpegParser_expected(self, offset, tree_top, // offset, depth
                             tree_stack[tree_top]->def, pc); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                         ChpegParser_print_error(self, input);
 #endif
                     }
@@ -2385,11 +2390,11 @@ nchrcls_done:
                         break;
                     }
                 }
-#if ERRORS && ERRORS_TERMINALS
+#if CHPEG_ERRORS && CHPEG_ERRORS_TERMINALS
                 if (!err_locked) {
                     ChpegParser_expected(self, offset, tree_top, // offset, depth
                         tree_stack[tree_top]->def, pc); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
                 }
@@ -2404,11 +2409,11 @@ nchrcls_done:
                     ++pc; // next instruction
                     break;
                 }
-#if ERRORS && ERRORS_TERMINALS
+#if CHPEG_ERRORS && CHPEG_ERRORS_TERMINALS
                 if (!err_locked) {
                     ChpegParser_expected(self, offset, tree_top, // offset, depth
                         tree_stack[tree_top]->def, pc); // def, pc
-#if DEBUG_ERRORS
+#if CHPEG_DEBUG_ERRORS
                     ChpegParser_print_error(self, input);
 #endif
                 }

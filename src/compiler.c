@@ -1446,6 +1446,7 @@ static int ChpegCU_detect_left_recursion(ChpegCU *cu)
     return lr.errors;
 }
 
+#ifndef NDEBUG
 // Compiler sanity check: assert def names looked up via CHPEG_DEF_* macros
 // match what is expected. This might help detect mismatches of included
 // bytecode header vs. linked bytecode.
@@ -1492,6 +1493,7 @@ static void chpeg_sanity_check(void)
 #endif
 
 }
+#endif
 
 
 // int chpeg_compile(
@@ -1515,7 +1517,9 @@ static void chpeg_sanity_check(void)
 CHPEG_DEF int chpeg_compile(const unsigned char *input, size_t length,
     ChpegByteCode **bytecode_return, int verbose)
 {
+#ifndef NDEBUG
     chpeg_sanity_check();
+#endif
 
     int err = 0;
     ChpegCU cu;
