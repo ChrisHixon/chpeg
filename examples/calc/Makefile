@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 
 CC=gcc
-CFLAGS=-Wall -Wno-unused-function -std=c99 -g -DCHPEG_EXTENSION_ALL -DCHPEG_PACKRAT
+CFLAGS=-Wall -Wno-unused-function -std=c99 -O3 -DCHPEG_EXTENSION_ALL
 LDFLAGS=
 
 CHPEG_UTIL=../../util/chpeg

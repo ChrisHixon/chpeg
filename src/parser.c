@@ -2211,7 +2211,7 @@ pred_cleanup:
             case CHPEG_OP_CHRCLS: // arg = str_id; match CharClass; skip next instruction on match
                 {
                     if (offset < length) {
-                        int mlen = str_len[arg], i;
+                        int mlen = str_len[arg];
                         const unsigned char *mstr = strings[arg];
                         for (i = 0; i < mlen; ++i) {
                             if ((mstr[i+1] == '-') && (i < mlen - 2)) {
@@ -2248,7 +2248,7 @@ chrcls_done:
                                    // arg = chrcls str_id; skip next instruction on success
                 {
                     if (offset < length) {
-                        int mlen = str_len[arg], i;
+                        int mlen = str_len[arg];
                         const unsigned char *mstr = strings[arg];
                         for (i = 0; i < mlen; ++i) {
                             if ((mstr[i+1] == '-') && (i < mlen - 2)) {
@@ -2368,7 +2368,6 @@ nchrcls_done:
                         break;
                 }
 
-
 #if CHPEG_VM_PRINT_TREE
                 tree_changed = 1;
 #endif
@@ -2423,7 +2422,7 @@ done:
     if (packrat) {
         loop_end = num_defs * window_size;
         for (z = 0; z < loop_end; ++z) {
-            ChpegPNode *pnode = packrat[i];
+            ChpegPNode *pnode = packrat[z];
             if (pnode && pnode != packrat_no_match) {
                 assert(pnode->node->ref_count > 0);
                 ChpegPNode_free(pnode);
@@ -2435,7 +2434,6 @@ done:
 
     self->parse_result = retval;
     return retval;
-
 }
 
 #undef CHPEG_CHECK_STACK_OVERFLOW
