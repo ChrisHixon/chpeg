@@ -1372,18 +1372,7 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 
                                         // if we can simplify, unpack the node in-place
                                         if (ChpegNode_can_simplify(tree_stack[tree_top]->head)) {
-#if CHPEG_VM_TRACE
-                                            if (self->vm_trace & 2) {
-                                                fprintf(stderr, "packrat CAN SIMPLIFY offset=%zu\n", offset);
-                                                ChpegNode_print(tree_stack[tree_top], self, input, 0, stderr);
-                                            }
-#endif
                                             ChpegNode_unpack_child(tree_stack[tree_top]);
-#if CHPEG_VM_TRACE
-                                            if (self->vm_trace & 2) {
-                                                ChpegNode_print(tree_stack[tree_top], self, input, 0, stderr);
-                                            }
-#endif
                                         }
                                     }
                                 }
