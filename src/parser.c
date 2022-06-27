@@ -386,7 +386,7 @@ int ChpegNode_can_simplify(ChpegNode *self)
         {
             ++text;                             // a gap is considered a text node
 #if CHPEG_DEBUG_CAN_SIMPLIFY
-            fprintf(stderr, "can't simplify node: (early) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+            fprintf(stderr, "can't simplify node: (early, text) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
                 self->def,
 #if CHPEG_EXTENSION_TRIM
                 self->match_offset, self->match_length,
@@ -409,7 +409,7 @@ int ChpegNode_can_simplify(ChpegNode *self)
             // a non-ignore node is candidate
             if (++cnt > 1) {
 #if CHPEG_DEBUG_CAN_SIMPLIFY
-                fprintf(stderr, "can't simplify node: (early) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
+                fprintf(stderr, "can't simplify node: (early, node) <d:%d o:%zu l:%zu f:%d>, cnt=%d, text=%d\n",
                     self->def,
 #if CHPEG_EXTENSION_TRIM
                     self->match_offset, self->match_length,
@@ -1358,16 +1358,42 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
                     if (packrat_lookup) {
                         if (packrat_lookup != packrat_no_match) {
                             if (!locked) {
-                                if ((packrat_lookup->node->flags & CHPEG_FLAG_IGNORE) == 0) {
-                                    ChpegNode_push_child(tree_stack[tree_top],
-                                        ChpegPNode_export(self, packrat_lookup));
-                                    if (self->simplification == 2) {
+                                if (self->simplification == 2) {
+                                    if (!(packrat_lookup->node->flags & CHPEG_FLAG_IGNORE) ||
+#if CHPEG_EXTENSION_TRIM
+                                        packrat_lookup->node->match_length
+#else
+                                        packrat_lookup->node->length
+#endif
+                                       )
+                                    {
+                                        ChpegNode_push_child(tree_stack[tree_top],
+                                            ChpegPNode_export(self, packrat_lookup));
+
                                         // if we can simplify, unpack the node in-place
                                         if (ChpegNode_can_simplify(tree_stack[tree_top]->head)) {
+#if CHPEG_VM_TRACE
+                                            if (self->vm_trace & 2) {
+                                                fprintf(stderr, "packrat CAN SIMPLIFY offset=%zu\n", offset);
+                                                ChpegNode_print(tree_stack[tree_top], self, input, 0, stderr);
+                                            }
+#endif
                                             ChpegNode_unpack_child(tree_stack[tree_top]);
+#if CHPEG_VM_TRACE
+                                            if (self->vm_trace & 2) {
+                                                ChpegNode_print(tree_stack[tree_top], self, input, 0, stderr);
+                                            }
+#endif
                                         }
                                     }
                                 }
+                                else {
+                                    if ((packrat_lookup->node->flags & CHPEG_FLAG_IGNORE) == 0) {
+                                        ChpegNode_push_child(tree_stack[tree_top],
+                                            ChpegPNode_export(self, packrat_lookup));
+                                    }
+                                }
+
 #if CHPEG_VM_PRINT_TREE
                                 tree_changed = 1;
 #endif
