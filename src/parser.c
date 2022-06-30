@@ -1614,13 +1614,16 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
 #endif
 
 #if CHPEG_EXTENSION_TRIM
+                    // set match_length
                     tree_stack[tree_top]->match_length = offset -
                         tree_stack[tree_top]->match_offset;
 
+                    // if trimmed left, set offset to token_offset
                     tree_stack[tree_top]->offset = token_offset == -1 ?
                         tree_stack[tree_top]->match_offset :
                         token_offset;
 
+                    // if trimmed right, set length to token_length
                     tree_stack[tree_top]->length = token_length == -1 ?
                         tree_stack[tree_top]->match_length :
                         token_length;
@@ -2013,7 +2016,18 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIM: // TRIM start ('<')
                                 // arg: unused
 
+                if (CHPEG_CHECK_STACK_OVERFLOW(2)) {
+                    pc = -1; retval = CHPEG_ERR_STACK_OVERFLOW; break;
+                }
+
+                // Save original offset
+                stack[++top] = token_offset;
+
+                // Trim on left
                 token_offset = offset;
+
+                // Save changed offset
+                stack[++top] = token_offset;
 
                 ++pc; // next instruction
                 break;
@@ -2021,7 +2035,19 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIMS: // TRIM Success ('>'): the contents inside ('<' ... '>') matched
                                  // arg = next pc
 
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) {
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+                // Restore the changed offset values from the stack
+                token_offset = stack[top--];
+
+                // Trim on right
                 token_length = offset - token_offset;
+
+                // Discard the original flags and offset values saved on stack
+                --top;
 
                 pc = arg;
                 break;
@@ -2029,7 +2055,18 @@ int ChpegParser_parse(ChpegParser *self, const unsigned char *input, size_t leng
             case CHPEG_OP_TRIMF: // TRIM Failed ('>'): the contents inside ('<' ... '>') did not match
                                  // arg = next pc
 
-                token_length = token_offset = -1;
+#if SANITY_CHECKS
+                if (CHPEG_CHECK_STACK_UNDERFLOW(2)) {
+                    pc = -1; retval = CHPEG_ERR_STACK_UNDERFLOW; break;
+                }
+#endif
+
+                // Discard the changed offset saved on stack
+                top--;
+
+                // Restore original offset
+                token_offset = stack[top--];
+
                 pc = arg;
                 break;
 
