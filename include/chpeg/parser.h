@@ -81,6 +81,12 @@ extern "C" {
 
 #endif
 
+#if CHPEG_EXTENSION_TRIM
+#define CHPEG_IDENT_PUSHES 6
+#else
+#define CHPEG_IDENT_PUSHES 4
+#endif
+
 // parser error codes
 enum ChpegErrorCodes
 {
