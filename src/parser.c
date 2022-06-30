@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #ifndef CHPEG_STACK_SIZE
-#define CHPEG_STACK_SIZE 1024
+#define CHPEG_STACK_SIZE 2048
 #endif
 
 #ifndef CHPEG_TSTACK_SIZE
