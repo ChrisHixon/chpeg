@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 
 #if CHPEG_PACKRAT
     // set to non-zero to enable packrat
-    parser->packrat = 1;
+    parser->packrat_enabled = 1;
 #endif
 
     size_t consumed = 0;

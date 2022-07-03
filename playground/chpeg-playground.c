@@ -68,7 +68,7 @@ int parse(const char *grammar, const char *input, int simplification, int packra
     parser = ChpegParser_new(bc);
 
     parser->simplification = simplification;
-    parser->packrat = packrat;
+    parser->packrat_enabled = packrat;
 #ifdef CHPEG_VM_PROFILE
     parser->vm_profile = profile;
 #endif

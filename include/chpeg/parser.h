@@ -9,7 +9,6 @@
 extern "C" {
 #endif
 
-
 #ifndef CHPEG_AMALGAMATION
 #include "chpeg/chpeg_api.h"
 #include "chpeg/bytecode.h"
@@ -17,6 +16,46 @@ extern "C" {
 #endif
 
 #include <stdio.h>
+
+#ifndef CHPEG_STACK_SIZE
+#define CHPEG_STACK_SIZE 2048
+#endif
+
+#ifndef CHPEG_TSTACK_SIZE
+#define CHPEG_TSTACK_SIZE 256
+#endif
+
+
+#ifndef CHPEG_SANITY_CHECKS
+#define CHPEG_SANITY_CHECKS 1
+#endif
+
+#ifndef CHPEG_DEBUG_ERRORS
+#define CHPEG_DEBUG_ERRORS 0
+#endif
+
+// Set CHPEG_ERRORS to non-zero to enable error tracking. Without error
+// tracking, failure is detected, but it can't tell you where an error
+// occurred.
+#ifndef CHPEG_ERRORS
+#define CHPEG_ERRORS 1
+#endif
+
+#ifndef CHPEG_ERRORS_PRED
+#define CHPEG_ERRORS_PRED 1
+#endif
+
+#ifndef CHPEG_ERRORS_IDENT
+#define CHPEG_ERRORS_IDENT 1
+#endif
+
+#ifndef CHPEG_ERRORS_TERMINALS
+#define CHPEG_ERRORS_TERMINALS 1
+#endif
+
+#ifndef CHPEG_ERRORS_REFS
+#define CHPEG_ERRORS_REFS 1
+#endif
 
 // CHPEG_VM_TRACE:
 // Set to non-zero to compile in support for tracing parser VM instruction execution.
@@ -53,15 +92,23 @@ extern "C" {
 #define CHPEG_NODE_REF_COUNT 1
 #endif
 
-// Undo action support
-// TODO: enable only if needed as dependency (REFS extension)
-#ifndef CHPEG_UNDO
+// Undo action support (enable if needed as a dependency)
+#if CHPEG_EXTENSION_REFS
 #define CHPEG_UNDO 1
 #endif
 
 #if CHPEG_UNDO
-
 #define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child_undo
+#else
+#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child
+#endif
+
+//
+// stack push counts
+//
+
+#if CHPEG_UNDO
+
 #define CHPEG_CHOICE_PUSHES 3
 #define CHPEG_RP_PUSHES 4
 #define CHPEG_RSQ_PUSHES 3
@@ -71,7 +118,6 @@ extern "C" {
 
 #else
 
-#define CHPEG_NODE_FAIL_POP_CHILD ChpegNode_pop_child
 #define CHPEG_CHOICE_PUSHES 2
 #define CHPEG_RP_PUSHES 3
 #define CHPEG_RSQ_PUSHES 2
@@ -80,6 +126,28 @@ extern "C" {
 #endif
 
 #endif
+
+#if CHPEG_EXTENSION_TRIM
+#define CHPEG_IDENT_PUSHES 6
+#define CHPEG_TRIM_PUSHES 2
+#else
+#define CHPEG_IDENT_PUSHES 4
+#endif
+
+#if CHPEG_EXTENSION_REFS
+#define CHPEG_MARK_PUSHES 2
+#endif
+
+#if CHPEG_ERRORS
+  #if CHPEG_ERRORS_PRED
+    #define CHPEG_PRED_PUSHES 4
+  #else
+    #define CHPEG_PRED_PUSHES 3
+  #endif
+#else
+  #define CHPEG_PRED_PUSHES 2
+#endif
+
 
 // parser error codes
 enum ChpegErrorCodes
@@ -190,7 +258,10 @@ typedef struct _ChpegParser
 {
     const ChpegByteCode *bc;
     ChpegNode *tree_root;
-    int simplification; // run unwrap on parse tree to generate AST (default is 1)
+    const unsigned char *input;
+    size_t length;
+
+    int simplification; // 0=none; 1=unwrap; 2=simplify
     int parse_result;
 
     size_t error_offset;
@@ -220,7 +291,8 @@ typedef struct _ChpegParser
 #endif
 
 #if CHPEG_PACKRAT
-    int packrat;
+    struct _ChpegPackrat *packrat;
+    int packrat_enabled;
     int packrat_window_size;
 #endif
 
